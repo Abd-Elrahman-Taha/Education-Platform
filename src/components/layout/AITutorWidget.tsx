@@ -9,12 +9,18 @@ export const AITutorWidget: React.FC = () => {
     {
       id: '1',
       sender: 'bot',
-      text: 'أهلاً بك! أنا مساعد Syntax AI للفيزياء والرياضيات. كيف يمكنني مساعدتك في درس اليوم؟',
+      text: 'أهلاً بك! أنا مساعد Syntax AI المتخصص في التفاضل والتكامل والهندسة الفراغية. كيف يمكنني مساعدتك في حل مسألة أو شرح قاعدة اليوم؟',
       timestamp: 'الآن',
     },
   ]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOpenAI = () => setIsOpen(true);
+    window.addEventListener('openAITutor', handleOpenAI);
+    return () => window.removeEventListener('openAITutor', handleOpenAI);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -35,13 +41,13 @@ export const AITutorWidget: React.FC = () => {
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
 
-    // Simulated RAG model response
+    // Simulated RAG model response for Calculus & 3D Geometry
     setTimeout(() => {
       const responses = [
-        "بناءً على محتوى المحاضرة الثانية في الفيزياء الحديثة، فإن معادلة أينشتاين للظاهرة الكهرودوئية تعتمد على تردد الضوء الساقط ودالة الشغل للمعدن (E = hν - Ww).",
-        "سؤال ممتاز! يمكنك مراجعة قانون أوم للدائرة المغلقة في الصفحة 14 من الكتاب، أو يمكنني توليد 3 أسئلة سريعة لك للتدريب عليها الآن.",
-        "تم تحليل سؤالك بواسطة نموذج Syntax AI RAG: التغير في الفيض المغناطيسي يولد قوة دافعة كهربية مستحثة حسب قانون فاراداي (emf = -N ΔΦm/Δt).",
-        "أهلاً يا بطل! تم تحديث تقريرك وإخطار ولي الأمر بنجاحك في امتحان الدرس السابق بنسبة 95%.",
+        "بناءً على محتوى المحاضرة في التفاضل والتكامل، فإن مشتقة الدالة e^(f(x)) هي f'(x) · e^(f(x)).",
+        "سؤال ممتاز في الهندسة الفراغية! لإيجاد زاوية اتجاه المتجه AB، نقسم المركبات (x, y, z) على طول المتجه |AB|.",
+        "تم تحليل مسألتك بواسطة نموذج Syntax Math RAG: نقطة الانقلاب تحدث عندما تتغير إشارة المشتقة الثانية f''(x) وتكون f''(x) = 0.",
+        "أهلاً يا بطل! يمكنك استخدام قانون حجم الجسم الناشئ عن الدوران: V = π ∫ [f(x)]² dx لتقييم التكامل المحدد.",
       ];
       const botResponseText = responses[Math.floor(Math.random() * responses.length)];
 
@@ -62,7 +68,7 @@ export const AITutorWidget: React.FC = () => {
       <button
         className="ai-trigger-btn"
         onClick={() => setIsOpen(!isOpen)}
-        title="المساعد الذكي 24/7"
+        title="مساعد الرياضيات الذكي 24/7"
       >
         {isOpen ? <X size={26} /> : <Bot size={28} />}
       </button>
@@ -73,8 +79,8 @@ export const AITutorWidget: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <Sparkles size={20} color="var(--accent-light)" />
             <div>
-              <strong style={{ fontSize: '0.95rem', display: 'block' }}>مساعد Syntax AI الذكي</strong>
-              <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>متصل الان • RAG Engine v3</span>
+              <strong style={{ fontSize: '0.95rem', display: 'block' }}>مساعد Syntax Math AI</strong>
+              <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>متصل الآن • التفاضل والهندسة الفراغية</span>
             </div>
           </div>
           <button onClick={() => setIsOpen(false)} style={{ background: 'transparent', color: '#FFF' }}>
@@ -98,7 +104,7 @@ export const AITutorWidget: React.FC = () => {
         <div className="ai-chat-input-area">
           <input
             type="text"
-            placeholder="اسأل المعلم الذكي عن أي قاعدة أو قانون..."
+            placeholder="اسأل المعلم الذكي عن مسألة تفاضل أو فراغية..."
             className="input-field"
             style={{ fontSize: '0.85rem' }}
             value={inputText}

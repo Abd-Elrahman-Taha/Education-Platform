@@ -10,6 +10,7 @@ export type AppView =
   | 'view-homework'
   | 'view-pdfs'
   | 'view-live'
+  | 'view-ai'
   | 'view-subject-calculus'
   | 'view-subject-geometry';
 
