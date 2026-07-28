@@ -1,163 +1,314 @@
 import React, { useState } from 'react';
-import { Sliders, CreditCard, FileSpreadsheet, Ban, Plus, CheckCircle2, Search } from 'lucide-react';
-import { RosterStudent } from '../../types';
+import {
+  Sliders, Search, Users, TrendingUp, DollarSign, Activity,
+  Edit2, Trash2, Ban, Shield, ShieldOff, CheckCircle2, XCircle,
+  ArrowUp, ArrowDown, UserCheck, Plus, UserPlus
+} from 'lucide-react';
+import { User, UserRole } from '../../types';
 import { useToast } from '../../context/ToastContext';
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  student: 'طالب (Student)',
+  parent:  'ولي أمر (Parent)',
+  admin:   'مدير (Admin)',
+  teacher: 'معلم (Teacher)',
+};
+
+const initialUsers: User[] = [
+  { id: 'u1', name: 'أحمد طالب (طالب)', email: 'student.demo@edulearn.com', phone: '01012345678', role: 'student', status: 'active', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80', registrationDate: '2026-01-15' },
+  { id: 'u2', name: 'محمود عبد الله (ولي أمر)', email: 'parent.demo@edulearn.com', phone: '01198765432', role: 'parent', status: 'active', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80', registrationDate: '2026-01-20' },
+  { id: 'u3', name: 'أ. د. محمد الشريف (معلم)', email: 'teacher.demo@edulearn.com', phone: '01055544332', role: 'teacher', status: 'active', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80', registrationDate: '2025-09-15' },
+  { id: 'u4', name: 'المهندس طارق (مدير النظام)', email: 'admin.demo@edulearn.com', phone: '01000000001', role: 'admin', status: 'active', avatar: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=100&q=80', registrationDate: '2025-09-01' },
+  { id: 'u5', name: 'مريم إبراهيم حسن', email: 'maryam@edulearn.com', phone: '01599887766', role: 'student', status: 'active', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80', registrationDate: '2026-01-18' },
+  { id: 'u6', name: 'مصطفى حسين مصطفى', email: 'mostafa@edulearn.com', phone: '01122334455', role: 'student', status: 'blocked', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80', registrationDate: '2026-02-01' },
+  { id: 'u7', name: 'د. سارة عبد الفتاح', email: 'sara.math@edulearn.com', phone: '01211223344', role: 'teacher', status: 'active', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=100&q=80', registrationDate: '2025-10-10' },
+];
+
+const enrollmentData = [
+  { month: 'يناير', value: 45 },
+  { month: 'فبراير', value: 62 },
+  { month: 'مارس', value: 88 },
+  { month: 'أبريل', value: 75 },
+  { month: 'مايو', value: 110 },
+  { month: 'يونيو', value: 95 },
+  { month: 'يوليو', value: 130 },
+];
+
+const maxVal = Math.max(...enrollmentData.map(d => d.value));
 
 export const AdminView: React.FC = () => {
   const { showToast } = useToast();
-  const [scratchCardCount, setScratchCardCount] = useState<number>(100);
-  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const [students, setStudents] = useState<RosterStudent[]>([
-    { id: 's1', code: '94021', name: 'أحمد محمد محمود', phone: '01012345678', parentPhone: '01198765432', grade: 'الصف الثالث الثانوي', attendance: '96%', averageScore: 94.2, status: 'active' },
-    { id: 's2', code: '94022', name: 'محمود السيد علي', phone: '01055544332', parentPhone: '01211223344', grade: 'الصف الثالث الثانوي', attendance: '72%', averageScore: 65.0, status: 'active' },
-    { id: 's3', code: '94023', name: 'مريم إبراهيم حسن', phone: '01599887766', parentPhone: '01033445566', grade: 'الصف الثاني الثانوي', attendance: '98%', averageScore: 98.5, status: 'active' },
-    { id: 's4', code: '94024', name: 'مصطفى حسين مصطفى', phone: '01122334455', parentPhone: '01299887711', grade: 'الصف الثالث الثانوي', attendance: '45%', averageScore: 40.0, status: 'blocked' },
-  ]);
+  const stats = [
+    { label: 'إجمالي المستخدمين', value: users.length, icon: Users, color: '#22D3EE', bg: 'rgba(34,211,238,.12)', delta: '+15%', up: true },
+    { label: 'الطلاب النشطين', value: users.filter(u => u.role === 'student' && u.status === 'active').length, icon: TrendingUp, color: '#10B981', bg: 'rgba(16,185,129,.12)', delta: '+10%', up: true },
+    { label: 'إيرادات الشهر (ج.م)', value: '34,500', icon: DollarSign, color: '#F59E0B', bg: 'rgba(245,158,11,.12)', delta: '+22%', up: true },
+    { label: 'سجلات اليوم', value: 42, icon: Activity, color: '#EF4444', bg: 'rgba(239,68,68,.12)', delta: '+5%', up: true },
+  ];
 
-  const handleToggleStatus = (id: string) => {
-    setStudents(prev => prev.map(s => {
-      if (s.id === id) {
-        const nextStatus = s.status === 'active' ? 'blocked' : 'active';
-        showToast(nextStatus === 'blocked' ? `تم حظر الطالب (${s.name}) وتجميد وصوله للمحاضرات` : `تم تفعيل حساب الطالب (${s.name}) بنجاح`, nextStatus === 'blocked' ? 'warning' : 'success');
-        return { ...s, status: nextStatus };
-      }
-      return s;
+  const roleDist: { role: UserRole; color: string }[] = [
+    { role: 'student', color: '#10B981' },
+    { role: 'parent', color: '#F59E0B' },
+    { role: 'teacher', color: '#22D3EE' },
+    { role: 'admin', color: '#EF4444' },
+  ];
+
+  const filteredUsers = users.filter(u => {
+    const q = searchQuery.toLowerCase();
+    const matchQ = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.phone.includes(q);
+    const matchRole = roleFilter === 'all' || u.role === roleFilter;
+    const matchStatus = statusFilter === 'all' || u.status === statusFilter;
+    return matchQ && matchRole && matchStatus;
+  });
+
+  const toggleStatus = (id: string) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id !== id) return u;
+      const next = u.status === 'active' ? 'blocked' : 'active';
+      showToast(next === 'blocked' ? `تم حظر المستخدم (${u.name})` : `تم تفعيل حساب (${u.name})`, next === 'blocked' ? 'warning' : 'success');
+      return { ...u, status: next };
     }));
   };
 
-  const handleGenerateScratchCards = () => {
-    showToast(`تم توليد ${scratchCardCount} كارت شحن للسنتر وتصدير الكشوفات بتنسيق Excel!`, 'success');
+  const deleteUser = (id: string) => {
+    const u = users.find(x => x.id === id);
+    setUsers(prev => prev.filter(x => x.id !== id));
+    showToast(`تم حذف المستخدم (${u?.name}) من المنصة`, 'danger');
   };
 
-  const handleExportExcel = () => {
-    showToast('جاري تصدير كشوفات الطلاب مفلترة وطباعة النماذج...', 'info');
+  const toggleRole = (id: string, targetRole: UserRole) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id !== id) return u;
+      const newRole: UserRole = u.role === targetRole ? 'student' : targetRole;
+      showToast(`تم تغيير دور (${u.name}) إلى ${ROLE_LABELS[newRole]}`, 'info');
+      return { ...u, role: newRole };
+    }));
   };
-
-  const filteredStudents = students.filter(s =>
-    s.name.includes(studentSearchQuery) ||
-    s.code.includes(studentSearchQuery) ||
-    s.phone.includes(studentSearchQuery)
-  );
 
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem 1.5rem' }}>
       {/* Header */}
-      <div className="glass-card" style={{ padding: '2rem', marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Sliders size={26} />
+      <div className="glass-card" style={{ padding: '1.75rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+            <div style={{ width: '50px', height: '50px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px var(--primary-glow)' }}>
+              <Sliders size={26} />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-bright)' }}>Admin Dashboard (لوحة تحكم الأدمن)</h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>إدارة المستخدمين • أدوار الصلاحيات • إحصائيات منصة التفاضل والهندسة الفراغية</p>
+            </div>
           </div>
-          <div>
-            <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>لوحة أدمن المنصة ومساعدي المعلم (Assistants)</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>إدارة كروت السنتر، رصد حضور وحظر الطلاب، وتوليد التقارير</p>
-          </div>
-        </div>
-      </div>
 
-      {/* Control Tools Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2.5rem' }}>
-        {/* Scratch Card Generator */}
-        <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <CreditCard size={20} color="var(--primary-light)" /> مولد كروت الشحن (الأكواد للسنتر)
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-            توليد كروت شحن بأكواد عشوائية مشفرة لتوزيعها في السنتر للمجموعات الحضورية.
-          </p>
-
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <input
-              type="number"
-              className="input-field"
-              value={scratchCardCount}
-              onChange={(e) => setScratchCardCount(Number(e.target.value))}
-              style={{ width: '120px' }}
-            />
-            <button className="btn btn-primary" onClick={handleGenerateScratchCards}>
-              <Plus size={16} /> توليد الكروت الان
-            </button>
-          </div>
-        </div>
-
-        {/* Excel & Roster Exports */}
-        <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileSpreadsheet size={20} color="var(--success)" /> تصدير الكشوفات والتقارير
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-            تصدير بيانات الطلاب، نسب الحضور، ودرجات البابل شيت طبقاً لـ 60+ فلتر محدد.
-          </p>
-
-          <button className="btn btn-secondary" onClick={handleExportExcel} style={{ width: '100%' }}>
-            <FileSpreadsheet size={18} color="var(--success)" /> تصدير ملفات Excel الشاملة
+          <button className="btn btn-primary" onClick={() => showToast('إضافة مستخدم جديد...', 'info')}>
+            <Plus size={16} /> إضافة مستخدم جديد
           </button>
         </div>
       </div>
 
-      {/* Roster Table */}
-      <div className="glass-card" style={{ padding: '1.75rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>سجل الطلاب والتحكم بالحظر والحسابات</h3>
+      {/* Stats Cards */}
+      <div className="admin-stats-grid">
+        {stats.map((s, i) => {
+          const IconComp = s.icon;
+          return (
+            <div key={i} className="glass-card admin-stat-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div className="admin-stat-icon" style={{ background: s.bg }}>
+                  <IconComp size={22} color={s.color} />
+                </div>
+                <span className={`admin-stat-delta ${s.up ? 'up' : 'down'}`}>
+                  {s.up ? <ArrowUp size={13} /> : <ArrowDown size={13} />} {s.delta}
+                </span>
+              </div>
+              <div className="admin-stat-value">{s.value}</div>
+              <div className="admin-stat-label">{s.label}</div>
+            </div>
+          );
+        })}
+      </div>
 
-          <div style={{ position: 'relative', width: '320px' }}>
-            <Search size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              className="input-field"
-              placeholder="البحث باسم الطالب أو الكود..."
-              style={{ width: '100%', paddingRight: '36px', fontSize: '0.85rem' }}
-              value={studentSearchQuery}
-              onChange={(e) => setStudentSearchQuery(e.target.value)}
-            />
+      {/* Charts Grid */}
+      <div className="admin-charts-grid">
+        <div className="glass-card chart-card">
+          <div className="chart-title">منحنى التسجيلات والاشتراكات الشهرية</div>
+          <div className="bar-chart">
+            {enrollmentData.map((d, i) => (
+              <div key={i} className="bar-chart-col">
+                <div
+                  className="bar"
+                  style={{ height: `${(d.value / maxVal) * 140}px` }}
+                  title={`${d.month}: ${d.value} مشترك`}
+                />
+                <span className="bar-label">{d.month}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '0.9rem' }}>
+        <div className="glass-card chart-card">
+          <div className="chart-title">توزيع أدوار المنصة (User Roles)</div>
+          <div className="role-pie">
+            {roleDist.map(({ role, color }) => {
+              const count = users.filter(u => u.role === role).length;
+              const pct = Math.round((count / users.length) * 100) || 0;
+              return (
+                <div key={role} className="role-pie-item">
+                  <span className="role-pie-label" style={{ color }}>{ROLE_LABELS[role]}</span>
+                  <div className="role-pie-bar-wrap">
+                    <div className="role-pie-bar" style={{ width: `${pct}%`, background: color }} />
+                  </div>
+                  <span className="role-pie-val">{count} ({pct}%)</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* User Management Table */}
+      <div className="glass-card" style={{ padding: '1.75rem' }}>
+        <div className="table-toolbar">
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-bright)' }}>User Management (إدارة المستخدمين)</h2>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div className="table-search-wrap">
+              <Search size={16} />
+              <input
+                type="text"
+                className="input-field table-search-input"
+                placeholder="بحث بالاسم، البريد أو الهاتف..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{ fontSize: '0.85rem' }}
+              />
+            </div>
+            <select
+              className="input-field"
+              style={{ width: 'auto', fontSize: '0.85rem' }}
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+            >
+              <option value="all">جميع الأدوار (All Roles)</option>
+              <option value="student">Student</option>
+              <option value="parent">Parent</option>
+              <option value="teacher">Teacher</option>
+              <option value="admin">Admin</option>
+            </select>
+            <select
+              className="input-field"
+              style={{ width: 'auto', fontSize: '0.85rem' }}
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              <option value="all">جميع الحالات</option>
+              <option value="active">نشط (Active)</option>
+              <option value="blocked">محظور (Blocked)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="user-table-wrapper">
+          <table className="user-table">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-glass)', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '0.85rem 1rem' }}>كود الطالب</th>
-                <th style={{ padding: '0.85rem 1rem' }}>الاسم بالكامل</th>
-                <th style={{ padding: '0.85rem 1rem' }}>الهاتف</th>
-                <th style={{ padding: '0.85rem 1rem' }}>المرحلة الدراسية</th>
-                <th style={{ padding: '0.85rem 1rem' }}>النسبة والتفوق</th>
-                <th style={{ padding: '0.85rem 1rem' }}>حالة الحساب</th>
-                <th style={{ padding: '0.85rem 1rem' }}>إجراءات الأدمن</th>
+              <tr>
+                <th>المستخدم (User)</th>
+                <th>البريد الإلكتروني</th>
+                <th>الهاتف</th>
+                <th>الدور (Role)</th>
+                <th>الحالة</th>
+                <th>تاريخ التسجيل</th>
+                <th>الإجراءات (Actions)</th>
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.map(student => (
-                <tr key={student.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '1rem', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary-light)' }}>#{student.code}</td>
-                  <td style={{ padding: '1rem', fontWeight: 700 }}>{student.name}</td>
-                  <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>{student.phone}</td>
-                  <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>{student.grade}</td>
-                  <td style={{ padding: '1rem', fontWeight: 700, color: 'var(--success)' }}>{student.averageScore}%</td>
-                  <td style={{ padding: '1rem' }}>
-                    {student.status === 'active' ? (
-                      <span style={{ color: 'var(--success)', background: 'rgba(16, 185, 129, 0.15)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <CheckCircle2 size={12} /> مفعل
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--danger)', background: 'rgba(239, 68, 68, 0.15)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <Ban size={12} /> محظور
-                      </span>
-                    )}
+              {filteredUsers.map(user => (
+                <tr key={user.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <img src={user.avatar} className="user-table-avatar" alt={user.name} />
+                      <span style={{ fontWeight: 600, color: 'var(--text-bright)', fontSize: '0.875rem' }}>{user.name}</span>
+                    </div>
                   </td>
-                  <td style={{ padding: '1rem' }}>
-                    <button
-                      className={`btn ${student.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                      style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
-                      onClick={() => handleToggleStatus(student.id)}
-                    >
-                      {student.status === 'active' ? 'حظر الطالب' : 'تفعيل الحساب'}
-                    </button>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.83rem' }}>{user.email}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.83rem', fontFamily: 'monospace' }}>{user.phone}</td>
+                  <td>
+                    <span className={`role-badge role-badge--${user.role}`}>
+                      {ROLE_LABELS[user.role]}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status-badge status-badge--${user.status}`}>
+                      {user.status === 'active' ? <><CheckCircle2 size={11} /> نشط</> : <><XCircle size={11} /> محظور</>}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{user.registrationDate}</td>
+                  <td>
+                    <div className="user-actions-cell">
+                      {/* Edit */}
+                      <button
+                        className="action-btn btn-secondary"
+                        onClick={() => showToast(`تعديل بيانات: ${user.name}`, 'info')}
+                        title="تعديل البيانات"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-glass)', color: 'var(--text-muted)' }}
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      {/* Block/Unblock */}
+                      <button
+                        className={`action-btn ${user.status === 'active' ? 'btn-warning' : 'btn-secondary'}`}
+                        onClick={() => toggleStatus(user.id)}
+                        title={user.status === 'active' ? 'حظر الحساب' : 'تفعيل الحساب'}
+                        style={user.status === 'active'
+                          ? { background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#F59E0B' }
+                          : { background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10B981' }
+                        }
+                      >
+                        {user.status === 'active' ? <Ban size={13} /> : <CheckCircle2 size={13} />}
+                      </button>
+                      {/* Assign Admin / Remove Admin */}
+                      <button
+                        className="action-btn"
+                        onClick={() => toggleRole(user.id, 'admin')}
+                        title={user.role === 'admin' ? 'إزالة دور الأدمن' : 'تعيين أدمن (Make Admin)'}
+                        style={user.role === 'admin'
+                          ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444' }
+                          : { background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', color: '#22D3EE' }
+                        }
+                      >
+                        {user.role === 'admin' ? <ShieldOff size={13} /> : <Shield size={13} />}
+                      </button>
+                      {/* Assign Teacher */}
+                      <button
+                        className="action-btn"
+                        onClick={() => toggleRole(user.id, 'teacher')}
+                        title="تعيين معلم (Make Teacher)"
+                        style={{ background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.3)', color: 'var(--primary-light)' }}
+                      >
+                        <UserCheck size={13} />
+                      </button>
+                      {/* Delete */}
+                      <button
+                        className="action-btn btn-danger"
+                        onClick={() => deleteUser(user.id)}
+                        title="حذف المستخدم"
+                        style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {filteredUsers.length === 0 && (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              لا توجد نتائج تطابق فلاتر البحث
+            </div>
+          )}
         </div>
       </div>
     </div>

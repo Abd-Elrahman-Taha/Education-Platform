@@ -1,31 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles,
-  Rocket,
-  PlayCircle,
-  Star,
-  Play,
-  Award,
-  TrendingUp,
-  Users,
-  BookOpen,
-  UserCheck,
-  Smile,
-  Atom,
-  CheckSquare,
-  FlaskConical,
-  Dna,
-  Lock,
-  FileCheck,
-  Bot,
-  MessageSquare,
-  ChevronDown,
-  Check,
-  ArrowLeft,
-  Clock
+  Sparkles, Rocket, Star, Award, TrendingUp, Users, BookOpen, UserCheck, Smile,
+  CheckSquare, Lock, FileCheck, Bot, MessageSquare, ChevronDown, Check, ArrowLeft,
+  Clock, Sigma, Box, Play, Video, ClipboardList, Radio, FileText, BarChart2
 } from 'lucide-react';
 import { AppView, Course } from '../../types';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface LandingViewProps {
   onNavigateView: (view: AppView) => void;
@@ -34,12 +15,12 @@ interface LandingViewProps {
 
 export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpenAuthModal }) => {
   const { showToast } = useToast();
-  const [activeCourseTab, setActiveCourseTab] = useState<string>('all');
+  const { isAuthenticated } = useAuth();
   const [isYearlyBilling, setIsYearlyBilling] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   // Animated counters
-  const [counters, setCounters] = useState({ students: 0, courses: 0, teachers: 0, rating: 0 });
+  const [counters, setCounters] = useState({ students: 0, lessons: 0, score: 0, rating: 0 });
 
   useEffect(() => {
     const duration = 1500;
@@ -49,118 +30,79 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
 
     const timer = setInterval(() => {
       step++;
-      const progress = step / steps;
+      const p = step / steps;
       setCounters({
-        students: Math.floor(100000 * progress),
-        courses: Math.floor(500 * progress),
-        teachers: Math.floor(150 * progress),
-        rating: Math.floor(98 * progress),
+        students: Math.floor(18500 * p),
+        lessons:  Math.floor(320 * p),
+        score:    Math.floor(97 * p),
+        rating:   Math.floor(99 * p),
       });
 
       if (step >= steps) {
         clearInterval(timer);
-        setCounters({ students: 100000, courses: 500, teachers: 150, rating: 98 });
+        setCounters({ students: 18500, lessons: 320, score: 97, rating: 99 });
       }
     }, intervalTime);
 
     return () => clearInterval(timer);
   }, []);
 
-  const sampleCourses: Course[] = [
-    {
-      id: 'c1',
-      title: 'الفيزياء الحديثة وقوانين كيرشوف والكهربية للمرحلة الثانوية',
-      category: 'physics',
-      level: 'الصف الثالث الثانوي',
-      instructor: { name: 'أ.د. محمود فاروق', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80', role: 'خبير الفيزياء' },
-      duration: '42 ساعة',
-      lessonsCount: 36,
-      examsCount: 12,
-      rating: 4.9,
-      studentsCount: 14200,
-      price: '350 ج.م',
-      image: 'https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=600&q=80',
-      tag: 'مباشر حصري',
-    },
-    {
-      id: 'c2',
-      title: 'التفاضل والتكامل والهندسة الفراغية - مراجعة ليلة الامتحان',
-      category: 'math',
-      level: 'الصف الثالث الثانوي',
-      instructor: { name: 'م. أحمد الشريف', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80', role: 'كبير معلمي الرياضيات' },
-      duration: '50 ساعة',
-      lessonsCount: 45,
-      examsCount: 18,
-      rating: 5.0,
-      studentsCount: 18900,
-      price: '400 ج.م',
-      image: 'https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&w=600&q=80',
-      tag: 'الأعلى طلباً',
-    },
-    {
-      id: 'c3',
-      title: 'الكيمياء العضوية والتجميعات والمخططات السريعة',
-      category: 'chemistry',
-      level: 'الصف الثاني الثانوي',
-      instructor: { name: 'د. سارة عبد الفتاح', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80', role: 'استشاري المادة' },
-      duration: '38 ساعة',
-      lessonsCount: 30,
-      examsCount: 10,
-      rating: 4.8,
-      studentsCount: 9400,
-      price: '300 ج.م',
-      image: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80',
-      tag: 'تأسيس مكثف',
-    },
-  ];
-
-  const filteredCourses = activeCourseTab === 'all'
-    ? sampleCourses
-    : sampleCourses.filter(c => c.category === activeCourseTab);
-
   const faqs = [
     {
-      q: 'كيف تضمن منصة Syntax EdTech حماية الفيديوهات من التسريب؟',
-      a: 'تعتمد المنصة على تقنية DRM المتقدمة مع طباعة علامة مائية ديناميكية تتبع حركة العين والشاشة وتحتوي على اسم الطالب، كوده الخاص، وعنوان الـ IP لمنع أي تصوير أو تسجيل.',
+      q: 'ما هي المواد الدراسية المتاحة على المنصة؟',
+      a: 'تتخصص المنصة حصريًا في مادتي التفاضل والتكامل (Calculus) والهندسة الفراغية (3D Geometry) للمرحلة الثانوية بكل مستوياتها، مع شرح مفصّل وامتحانات تفاعلية وملازم PDF.',
     },
     {
-      q: 'ما هو نظام امتحانات البابل شيت والتصحيح بالذكاء الاصطناعي؟',
-      a: 'يتيح للطلاب حل الامتحانات عبر واجهة تفاعلية شاشة منقسمة (Split View)، أو رفع ورقة البابل شيت الورقية ليتم تصحيحها فورياً واستخراج تقرير بنقاط القوة والضعف.',
+      q: 'كيف تضمن المنصة حماية الفيديوهات من التسريب؟',
+      a: 'تعتمد المنصة على تقنية DRM المتقدمة مع طباعة علامة مائية ديناميكية تتبع حركة العين والشاشة وتحتوي على اسم الطالب وكوده وعنوان الـ IP لمنع أي تصوير أو تسجيل.',
     },
     {
       q: 'كيف يستفيد ولي الأمر من المنصة؟',
-      a: 'يحصل ولي الأمر على كود متابعة خاص لبوابة ولي الأمر لرؤية منحنى أداء الطالب، نسبة الحضور، ودرجات الاختبارات مع إمكانية استلام تقرير شامل تلقائي عبر WhatsApp.',
+      a: 'يحصل ولي الأمر على كود متابعة خاص لبوابة ولي الأمر لرؤية منحنى أداء الطالب في مادتي التفاضل والهندسة الفراغية، نسبة الحضور، ودرجات الاختبارات مع إمكانية استلام تقرير شامل تلقائي.',
     },
     {
-      q: 'هل يمكنني استخدام المساعد الذكي AI Tutor على مدار 24 ساعة؟',
-      a: 'نعم! مساعد Syntax AI متصل بقواعد بيانات المنهج التعليمي ويستجيب فورياً لأسئلتك واستفساراتك مع توليد تدريبات ومسائل مشابهة.',
+      q: 'هل يمكنني استخدام المساعد الذكي AI Tutor لحل مسائل الرياضيات؟',
+      a: 'نعم! مساعد Syntax AI متخصص في مسائل التفاضل والتكامل والهندسة الفراغية ويستجيب فوراً مع توليد خطوات الحل التفصيلية ورسوم بيانية توضيحية.',
     },
   ];
 
   return (
     <div className="fade-in-up">
-      {/* HERO SECTION */}
+      {/* ── HERO SECTION ─────────────────────────────────── */}
       <section className="hero-section">
         <div className="container hero-grid">
+          {/* Left: Content */}
           <div className="hero-content">
             <div className="gradient-badge">
-              <Sparkles size={16} /> المنصة الأولى المعتمدة بالذكاء الاصطناعي في مصر
+              <Sparkles size={15} /> منصة التفاضل والهندسة الفراغية الأولى في مصر
             </div>
-            <h1>تعلم المهارات التي <span className="gradient-text">تشكل مستقبلك الدراسي</span></h1>
+
+            <h1>
+              أتقن{' '}
+              <span className="gradient-text">التفاضل والتكامل</span>{' '}
+              و<span className="gradient-text">الهندسة الفراغية</span>{' '}
+              بأسلوب عصري
+            </h1>
+
             <p className="hero-subtitle">
-              تجربة تعليمية متكاملة تجمع بين حماية الفيديوهات DRM، امتحانات البابل شيت والتصحيح التلقائي، ومساعد الذكاء الاصطناعي الذكي المتاح 24/7 لمتابعة الطلاب وأولياء الأمور لحظياً.
+              تجربة تعليمية متكاملة في مادتي التفاضل والتكامل والهندسة الفراغية تجمع بين شرح الفيديو المحمي DRM،
+              امتحانات تفاعلية، ومساعد الذكاء الاصطناعي المتاح 24/7.
             </p>
 
             <div className="hero-cta-group">
-              <button className="btn btn-primary btn-lg" onClick={onOpenAuthModal} style={{ padding: '0.9rem 1.8rem', fontSize: '1.05rem' }}>
-                <Rocket size={20} /> ابدأ التعلم مجاناً الان
+              <button
+                className="btn btn-primary btn-lg"
+                onClick={isAuthenticated ? () => onNavigateView('view-drm-player') : onOpenAuthModal}
+                style={{ padding: '0.9rem 2rem', fontSize: '1.05rem' }}
+              >
+                <Rocket size={20} /> ابدأ التعلم الآن
               </button>
               <button
                 className="btn btn-secondary btn-lg"
-                onClick={() => onNavigateView('view-drm-player')}
-                style={{ padding: '0.9rem 1.8rem', fontSize: '1.05rem' }}
+                onClick={() => onNavigateView('view-assessment')}
+                style={{ padding: '0.9rem 2rem', fontSize: '1.05rem' }}
               >
-                <PlayCircle size={20} /> تجربة المشغل DRM
+                <Play size={18} /> جرّب امتحان مجاني
               </button>
             </div>
 
@@ -176,271 +118,255 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
                   <Star size={14} fill="currentColor" />
                   <Star size={14} fill="currentColor" />
                   <Star size={14} fill="currentColor" />
-                  <Star size={14} fill="currentColor" /> (4.9/5)
+                  <Star size={14} fill="currentColor" />
+                  <span style={{ marginRight: '4px' }}>(4.9/5)</span>
                 </div>
-                <span className="trust-text">محل ثقة أكثر من 100,000 طالب وطالبة بجمهورية مصر العربية</span>
+                <span className="trust-text">محل ثقة أكثر من 18,000 طالب في التفاضل والهندسة الفراغية</span>
               </div>
             </div>
           </div>
 
-          {/* Hero Floating Card Visual */}
+          {/* Right: Teacher Image Visual */}
           <div className="hero-visual-wrapper">
-            <div className="glass-card hero-main-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <span className="pulse-dot"></span>
-                  <strong style={{ fontSize: '0.9rem' }}>بث مباشر الان: الفيزياء الحديثة</strong>
+            <div className="hero-teacher-image-wrapper">
+              <img
+                src="/teacher_hero.png"
+                alt="أستاذ التفاضل والتكامل والهندسة الفراغية"
+                className="hero-teacher-image"
+              />
+              {/* Overlay with subject badges */}
+              <div className="hero-teacher-overlay">
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <div style={{
+                    background: 'rgba(8,145,178,0.9)', backdropFilter: 'blur(8px)',
+                    padding: '0.4rem 0.9rem', borderRadius: '9999px', fontSize: '0.78rem',
+                    fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.35rem'
+                  }}>
+                    <Sigma size={13} /> التفاضل والتكامل
+                  </div>
+                  <div style={{
+                    background: 'rgba(13,148,136,0.9)', backdropFilter: 'blur(8px)',
+                    padding: '0.4rem 0.9rem', borderRadius: '9999px', fontSize: '0.78rem',
+                    fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.35rem'
+                  }}>
+                    <Box size={13} /> الهندسة الفراغية
+                  </div>
                 </div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>1,420 طالب يشاهدون الان</span>
-              </div>
-              <div style={{ width: '100%', height: '220px', background: '#0F172A', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-                <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} alt="Live Class" />
-                <button
-                  onClick={() => onNavigateView('view-drm-player')}
-                  style={{ position: 'absolute', background: 'rgba(79, 70, 229, 0.9)', width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', border: 'none', cursor: 'pointer', boxShadow: '0 0 20px var(--primary-glow)' }}
-                >
-                  <Play size={24} fill="#FFF" />
-                </button>
+                <div style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', padding: '0.35rem 0.75rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600, color: '#10B981' }}>
+                  ● متاح الآن
+                </div>
               </div>
             </div>
 
+            {/* Floating stat cards */}
             <div className="glass-card floating-card-1">
-              <Award size={26} color="var(--accent)" />
+              <TrendingUp size={26} color="var(--success)" />
               <div>
-                <strong style={{ fontSize: '0.85rem', display: 'block' }}>شهادة معتمدة موثقة</strong>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>المرتبة الأولى بالمحافظة</span>
+                <strong style={{ fontSize: '0.88rem', display: 'block', color: 'var(--text-bright)' }}>معدل النجاح</strong>
+                <span style={{ fontSize: '0.78rem', color: 'var(--success)' }}>97% من الطلاب تفوقوا</span>
               </div>
             </div>
 
             <div className="glass-card floating-card-2">
-              <TrendingUp size={26} color="var(--secondary-light)" />
+              <Award size={26} color="var(--accent)" />
               <div>
-                <strong style={{ fontSize: '0.85rem', display: 'block' }}>المعدل التراكمي: 98%</strong>
-                <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>+4.5% تحسن مستمر</span>
+                <strong style={{ fontSize: '0.88rem', display: 'block', color: 'var(--text-bright)' }}>أعلى الدرجات</strong>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>+12 طالب الأوائل هذا الشهر</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* STATISTICS BAR */}
+      {/* ── STATISTICS BAR ───────────────────────────────── */}
       <section className="stats-section">
         <div className="container">
           <div className="stats-grid">
             <div className="glass-card stat-card">
               <div className="stat-number gradient-text">{counters.students.toLocaleString()}+</div>
-              <div className="stat-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                <Users size={16} /> طالب مشترك بالمنصة
-              </div>
+              <div className="stat-label"><Users size={16} /> طالب مشترك</div>
             </div>
             <div className="glass-card stat-card">
-              <div className="stat-number gradient-text">{counters.courses}+</div>
-              <div className="stat-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                <BookOpen size={16} /> كورس ودرس حصري
-              </div>
+              <div className="stat-number gradient-text">{counters.lessons}+</div>
+              <div className="stat-label"><BookOpen size={16} /> درس ومحاضرة</div>
             </div>
             <div className="glass-card stat-card">
-              <div className="stat-number gradient-text">{counters.teachers}+</div>
-              <div className="stat-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                <UserCheck size={16} /> مدرس ومعلم خبير
-              </div>
+              <div className="stat-number gradient-text">{counters.score}%</div>
+              <div className="stat-label"><TrendingUp size={16} /> معدل النجاح</div>
             </div>
             <div className="glass-card stat-card">
               <div className="stat-number gradient-text">{counters.rating}%</div>
-              <div className="stat-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                <Smile size={16} /> نسبة رضا أولياء الأمور
-              </div>
+              <div className="stat-label"><Smile size={16} /> رضا أولياء الأمور</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* CATEGORIES SECTION */}
-      <section className="container" style={{ padding: '4rem 1.5rem' }}>
+      {/* ── SUBJECTS SECTION ─────────────────────────────── */}
+      <section className="container" style={{ padding: '5rem 1.5rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><Atom size={16} /> الأقسام والمواد الدراسية</span>
-          <h2 className="section-title">استكشف مسارات التخصص والتفوق</h2>
-          <p className="section-subtitle">اختر المادة الدراسية للحصول على شرح بالفيديو، ملازم PDF، وامتحانات بابل شيت تفاعلية.</p>
+          <span className="gradient-badge"><Sigma size={15} /> المواد الدراسية المتخصصة</span>
+          <h2 className="section-title">مادتان. شرح شامل. نتائج مضمونة.</h2>
+          <p className="section-subtitle">نتخصص حصريًا في التفاضل والتكامل والهندسة الفراغية لضمان أعمق مستوى من الفهم والإتقان.</p>
         </div>
 
-        <div className="categories-grid">
-          <div className="glass-card category-card" onClick={() => setActiveCourseTab('physics')}>
-            <div className="category-icon"><Atom size={28} /></div>
-            <h3 className="category-title">الفيزياء الثانوية</h3>
-            <span className="category-count">48 درس • 120 امتحان</span>
-          </div>
-
-          <div className="glass-card category-card" onClick={() => setActiveCourseTab('math')}>
-            <div className="category-icon"><CheckSquare size={28} /></div>
-            <h3 className="category-title">الرياضيات والتفاضل</h3>
-            <span className="category-count">64 درس • 150 امتحان</span>
-          </div>
-
-          <div className="glass-card category-card" onClick={() => setActiveCourseTab('chemistry')}>
-            <div className="category-icon"><FlaskConical size={28} /></div>
-            <h3 className="category-title">الكيمياء العضوية</h3>
-            <span className="category-count">40 درس • 90 امتحان</span>
-          </div>
-
-          <div className="glass-card category-card" onClick={() => setActiveCourseTab('biology')}>
-            <div className="category-icon"><Dna size={28} /></div>
-            <h3 className="category-title">الأحياء والجيولوجيا</h3>
-            <span className="category-count">36 درس • 85 امتحان</span>
-          </div>
-        </div>
-      </section>
-
-      {/* COURSES FILTER & GRID */}
-      <section className="container" style={{ padding: '2rem 1.5rem 5rem 1.5rem' }}>
-        <div className="courses-filter-bar">
-          <button className={`filter-btn ${activeCourseTab === 'all' ? 'active' : ''}`} onClick={() => setActiveCourseTab('all')}>جميع الكورسات</button>
-          <button className={`filter-btn ${activeCourseTab === 'physics' ? 'active' : ''}`} onClick={() => setActiveCourseTab('physics')}>الفيزياء</button>
-          <button className={`filter-btn ${activeCourseTab === 'math' ? 'active' : ''}`} onClick={() => setActiveCourseTab('math')}>الرياضيات</button>
-          <button className={`filter-btn ${activeCourseTab === 'chemistry' ? 'active' : ''}`} onClick={() => setActiveCourseTab('chemistry')}>الكيمياء</button>
-        </div>
-
-        <div className="courses-grid">
-          {filteredCourses.map(course => (
-            <div key={course.id} className="glass-card course-card">
-              <div className="course-thumb">
-                <img src={course.image} className="course-img" alt={course.title} />
-                <span className="course-badge">{course.tag}</span>
-              </div>
-              <div className="course-body">
-                <div className="course-meta">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={14} /> {course.duration}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Star size={14} fill="var(--accent)" color="var(--accent)" /> {course.rating} ({course.studentsCount})</span>
-                </div>
-                <h3 className="course-title">{course.title}</h3>
-
-                <div className="course-instructor">
-                  <img src={course.instructor.avatar} className="instructor-avatar" alt={course.instructor.name} />
-                  <div>
-                    <span className="instructor-name">{course.instructor.name}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', display: 'block' }}>{course.instructor.role}</span>
-                  </div>
-                </div>
-
-                <div className="course-footer">
-                  <div className="course-price">{course.price}</div>
-                  <button className="btn btn-primary" onClick={() => onNavigateView('view-drm-player')}>
-                    ابدأ الدرس الان <ArrowLeft size={16} />
-                  </button>
-                </div>
-              </div>
+        <div className="subjects-grid">
+          {/* Calculus */}
+          <div className="glass-card subject-card" onClick={() => onNavigateView('view-drm-player')}>
+            <div className="subject-icon">
+              <Sigma size={30} />
             </div>
-          ))}
+            <h3 className="subject-title">التفاضل والتكامل</h3>
+            <p className="subject-subtitle">
+              من المشتقات إلى التكاملات — شرح تفصيلي لكل مفهوم مع حل أمثلة من امتحانات وزارة التربية والتعليم.
+            </p>
+            <div className="subject-features">
+              <div className="subject-feature-item"><Check size={15} /> <span>دروس فيديو محمية DRM</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>واجبات وامتحانات تفاعلية</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>ملازم PDF مفصّلة</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>جلسات بث مباشر أسبوعية</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>مساعد AI متخصص في الحساب</span></div>
+            </div>
+            <button className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%' }}>
+              ابدأ التفاضل والتكامل <ArrowLeft size={16} />
+            </button>
+          </div>
+
+          {/* 3D Geometry */}
+          <div className="glass-card subject-card" onClick={() => onNavigateView('view-drm-player')}>
+            <div className="subject-icon" style={{
+              background: 'linear-gradient(135deg, rgba(13,148,136,.2), rgba(8,145,178,.2))',
+              borderColor: 'rgba(13,148,136,.25)',
+              color: 'var(--secondary-light)'
+            }}>
+              <Box size={30} />
+            </div>
+            <h3 className="subject-title">الهندسة الفراغية</h3>
+            <p className="subject-subtitle">
+              الأجسام ثلاثية الأبعاد، المستويات، الحجوم — شرح بصري ثلاثي الأبعاد مع تطبيقات عملية ومسائل احترافية.
+            </p>
+            <div className="subject-features">
+              <div className="subject-feature-item"><Check size={15} /> <span>رسوم توضيحية ثلاثية الأبعاد</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>واجبات وامتحانات تفاعلية</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>ملازم PDF مع رسومات هندسية</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>جلسات بث مباشر أسبوعية</span></div>
+              <div className="subject-feature-item"><Check size={15} /> <span>مساعد AI متخصص في الهندسة</span></div>
+            </div>
+            <button className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%', background: 'linear-gradient(135deg, var(--secondary), var(--primary))' }}>
+              ابدأ الهندسة الفراغية <ArrowLeft size={16} />
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* PLATFORM FEATURES SHOWCASE */}
-      <section className="container" style={{ padding: '3rem 1.5rem 6rem 1.5rem' }}>
+      {/* ── PLATFORM FEATURES ────────────────────────────── */}
+      <section className="container" style={{ padding: '2rem 1.5rem 6rem 1.5rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><Sparkles size={16} /> المنظومة التعليمية المتكاملة</span>
-          <h2 className="section-title">لماذا يختارنا الطلاب وأولياء الأمور؟</h2>
+          <span className="gradient-badge"><Sparkles size={15} /> المنظومة التعليمية المتكاملة</span>
+          <h2 className="section-title">لماذا يختارنا طلاب الرياضيات؟</h2>
         </div>
 
         <div className="features-grid">
           <div className="glass-card feature-card">
             <div className="feature-icon-box"><Lock size={28} /></div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>حماية الفيديوهات DRM</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-              علامات مائية متحركة ديناميكياً بأسم الطالب وكوده لحماية الحقوق الفكرية ومنع التسريب أو تسجيل الشاشة.
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-bright)' }}>حماية الفيديوهات DRM</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.7 }}>
+              علامات مائية متحركة بأسم الطالب وكوده لحماية شرح المعلم ومنع التسريب.
             </p>
           </div>
 
           <div className="glass-card feature-card">
             <div className="feature-icon-box"><FileCheck size={28} /></div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>امتحانات البابل شيت</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-              اختبارات أونلاين تفاعلية بنظام البابل شيت مع تحذيرات حظر التنقل بين النوافذ وتصحيح فوري بالنماذج الرسمية.
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-bright)' }}>امتحانات البابل شيت</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.7 }}>
+              اختبارات أونلاين تفاعلية بنظام البابل شيت مع تصحيح فوري وتحليل الأخطاء.
             </p>
           </div>
 
           <div className="glass-card feature-card">
             <div className="feature-icon-box"><Bot size={28} /></div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>مساعد الذكاء الاصطناعي 24/7</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-              مساعد تعليمي ذكي يفهم أسئلة الفيزياء والرياضيات والكيمياء ويولد حلولاً وخطوات تفصيلية في أي وقت.
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-bright)' }}>مساعد الذكاء الاصطناعي 24/7</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.7 }}>
+              مساعد متخصص في التفاضل والهندسة الفراغية يحل المسائل خطوة بخطوة في أي وقت.
             </p>
           </div>
         </div>
       </section>
 
-      {/* PRICING PLANS SECTION */}
+      {/* ── PRICING ──────────────────────────────────────── */}
       <section className="container" style={{ padding: '2rem 1.5rem 6rem 1.5rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><Award size={16} /> الاشتراكات والباقات</span>
-          <h2 className="section-title">اختر الخطة المناسبة لرحلة تفوقك</h2>
+          <span className="gradient-badge"><Award size={15} /> الاشتراكات والباقات</span>
+          <h2 className="section-title">اختر خطة تفوقك في الرياضيات</h2>
         </div>
 
         <div className="pricing-toggle-wrap">
-          <span style={{ fontWeight: !isYearlyBilling ? 700 : 400, color: !isYearlyBilling ? 'var(--text-main)' : 'var(--text-muted)' }}>شهري</span>
+          <span style={{ fontWeight: !isYearlyBilling ? 700 : 400, color: !isYearlyBilling ? 'var(--text-bright)' : 'var(--text-muted)' }}>شهري</span>
           <div
             className={`toggle-switch ${isYearlyBilling ? 'active' : ''}`}
             onClick={() => {
               setIsYearlyBilling(!isYearlyBilling);
-              showToast(!isYearlyBilling ? "تم اختيار الاشتراك السنوي (خصم 20% مفعل)" : "تم اختيار الاشتراك الشهري");
+              showToast(!isYearlyBilling ? 'تم اختيار الاشتراك السنوي (خصم 20% مفعل)' : 'تم اختيار الاشتراك الشهري');
             }}
           >
             <div className="toggle-handle"></div>
           </div>
-          <span style={{ fontWeight: isYearlyBilling ? 700 : 400, color: isYearlyBilling ? 'var(--text-main)' : 'var(--text-muted)' }}>
+          <span style={{ fontWeight: isYearlyBilling ? 700 : 400, color: isYearlyBilling ? 'var(--text-bright)' : 'var(--text-muted)' }}>
             سنوي <span style={{ color: 'var(--success)', fontSize: '0.85rem' }}>(خصم 20%)</span>
           </span>
         </div>
 
         <div className="pricing-grid">
           <div className="glass-card pricing-card">
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700 }}>الباقة الأساسية</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>للطالب الراغب في مادة واحدة</p>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-bright)' }}>مادة واحدة</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>التفاضل أو الهندسة الفراغية</p>
             <div className="price-amount">
               {isYearlyBilling ? '2000' : '250'} <span className="price-period">ج.م / {isYearlyBilling ? 'سنة' : 'شهر'}</span>
             </div>
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> مشاهدة فيديوهات مادة واحدة DRM</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> امتحانات البابل شيت الأسبوعية</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> تقرير شهر لولي الأمر</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> جميع محاضرات المادة المختارة</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> امتحانات البابل شيت الأسبوعية</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> تقرير شهري لولي الأمر</li>
             </ul>
-            <button className="btn btn-secondary" style={{ marginTop: 'auto' }} onClick={onOpenAuthModal}>اشترك الان</button>
+            <button className="btn btn-secondary" style={{ marginTop: 'auto' }} onClick={onOpenAuthModal}>اشترك الآن</button>
           </div>
 
           <div className="glass-card pricing-card popular">
             <div className="popular-badge">الأكثر اختياراً</div>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700 }}>الباقة الشاملة للمرحلة</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>جميع المواد للمرحلة الثانوية</p>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-bright)' }}>المادتان معاً</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>التفاضل + الهندسة الفراغية</p>
             <div className="price-amount">
-              {isYearlyBilling ? '4800' : '600'} <span className="price-period">ج.م / {isYearlyBilling ? 'سنة' : 'شهر'}</span>
+              {isYearlyBilling ? '3600' : '450'} <span className="price-period">ج.م / {isYearlyBilling ? 'سنة' : 'شهر'}</span>
             </div>
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> وصول غير محدود لجميع المحاضرات</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> امتحانات بابل شيت متقدمة لا نهائية</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> مساعد AI Tutor غير محدود 24/7</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> إشعارات واتساب لحظية لولي الأمر</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> وصول غير محدود للمادتين</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> امتحانات بابل شيت لا نهائية</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> مساعد AI غير محدود 24/7</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> جلسات بث مباشر أسبوعية</li>
             </ul>
             <button className="btn btn-primary" style={{ marginTop: 'auto' }} onClick={onOpenAuthModal}>احصل على الخطة الشاملة</button>
           </div>
 
           <div className="glass-card pricing-card">
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700 }}>باقة السنتر والمجموعات</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>لطلاب السناثر وكروت الشحن</p>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-bright)' }}>باقة السنتر</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>للمجموعات والسناتر التعليمية</p>
             <div className="price-amount">
-              {isYearlyBilling ? '7200' : '900'} <span className="price-period">ج.م / {isYearlyBilling ? 'سنة' : 'شهر'}</span>
+              {isYearlyBilling ? '6000' : '750'} <span className="price-period">ج.م / {isYearlyBilling ? 'سنة' : 'شهر'}</span>
             </div>
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> كروت شحن الأكواد الخاصة بالسنتر</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> متابعة مساعدة خاصة من الأسستنت</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="var(--success)" /> ملازم ومذكرات PDF مطبوعة تصل للمنزل</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> كروت شحن للمجموعات الحضورية</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> ملازم PDF مطبوعة تصل للمنزل</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> متابعة مساعد خاص من الأستاذ</li>
             </ul>
             <button className="btn btn-secondary" style={{ marginTop: 'auto' }} onClick={onOpenAuthModal}>تواصل مع الإدارة</button>
           </div>
         </div>
       </section>
 
-      {/* FAQ SECTION */}
-      <section className="container" style={{ padding: '2rem 1.5rem 6rem 1.5rem' }}>
+      {/* ── FAQ ──────────────────────────────────────────── */}
+      <section className="container" style={{ padding: '2rem 1.5rem 7rem 1.5rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><MessageSquare size={16} /> الأسئلة الشائعة</span>
+          <span className="gradient-badge"><MessageSquare size={15} /> الأسئلة الشائعة</span>
           <h2 className="section-title">إجابات لكافة استفساراتك</h2>
         </div>
 

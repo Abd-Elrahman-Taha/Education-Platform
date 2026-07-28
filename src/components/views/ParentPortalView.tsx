@@ -40,8 +40,8 @@ export const ParentPortalView: React.FC = () => {
 
     // Gradient area under curve
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, 'rgba(79, 70, 229, 0.45)');
-    grad.addColorStop(1, 'rgba(79, 70, 229, 0)');
+    grad.addColorStop(0, 'rgba(8, 145, 178, 0.45)');
+    grad.addColorStop(1, 'rgba(8, 145, 178, 0)');
 
     ctx.beginPath();
     scores.forEach((sc, idx) => {
@@ -65,7 +65,7 @@ export const ParentPortalView: React.FC = () => {
       if (idx === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = '#818CF8';
+    ctx.strokeStyle = '#22D3EE';
     ctx.lineWidth = 3;
     ctx.stroke();
 
@@ -75,7 +75,7 @@ export const ParentPortalView: React.FC = () => {
       const y = canvas.height - (sc / 100) * (canvas.height - 50) - 25;
       ctx.beginPath();
       ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#06B6D4';
+      ctx.fillStyle = '#2DD4BF';
       ctx.fill();
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
@@ -106,8 +106,8 @@ export const ParentPortalView: React.FC = () => {
             <ShieldCheck size={26} />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>بوابة متابعة ولي الأمر الشاملة</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>استعلام لحظي عن أداء الطالب ودرجات امتحانات البابل شيت ونسبة الحضور</p>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-bright)' }}>بوابة متابعة ولي الأمر (Parent Dashboard)</h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>استعلام لحظي عن أداء الطالب في التفاضل والتكامل والهندسة الفراغية ودرجات امتحانات البابل شيت</p>
           </div>
         </div>
 
@@ -136,8 +136,8 @@ export const ParentPortalView: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
             <div className="glass-card" style={{ padding: '1.5rem' }}>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>اسم الطالب المسجل</div>
-              <strong style={{ fontSize: '1.2rem', display: 'block' }}>أحمد محمد محمود</strong>
-              <span style={{ fontSize: '0.75rem', color: 'var(--primary-light)' }}>الصف الثالث الثانوي • علمي علوم</span>
+              <strong style={{ fontSize: '1.2rem', display: 'block', color: 'var(--text-bright)' }}>أحمد طالب (طالب)</strong>
+              <span style={{ fontSize: '0.75rem', color: 'var(--primary-light)' }}>الصف الثالث الثانوي • رياضيات تخصص</span>
             </div>
 
             <div className="glass-card" style={{ padding: '1.5rem' }}>
@@ -159,16 +159,15 @@ export const ParentPortalView: React.FC = () => {
             </div>
           </div>
 
-          {/* Performance Chart & Weak Points Row */}
+          {/* Performance Chart & Insights Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
-            {/* Left: Canvas Score Progression */}
             <div className="glass-card" style={{ padding: '1.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <TrendingUp size={20} color="var(--primary-light)" /> منحنى درجات الامتحانات (آخر 6 أشاريع)
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-bright)' }}>
+                    <TrendingUp size={20} color="var(--primary-light)" /> منحنى درجات التفاضل والهندسة الفراغية
                   </h3>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>مقياس الدرجات التقييمي من 100%</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>مقياس التقييم لآخر 6 اختبارات</span>
                 </div>
                 <button className="btn btn-secondary" onClick={handleSendWhatsapp} style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
                   <Share2 size={16} /> إرسال لـ WhatsApp
@@ -180,16 +179,15 @@ export const ParentPortalView: React.FC = () => {
               </div>
             </div>
 
-            {/* Right: Insights & Alerts */}
             <div className="glass-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>تحليلات وتوصيات المعلم</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)' }}>تحليلات وتوصيات المعلم</h3>
 
               <div style={{ padding: '1rem', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, color: 'var(--success)', marginBottom: '0.35rem' }}>
                   <CheckCircle2 size={18} /> نقاط القوة المتفوقة
                 </div>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  إتقان تام لقوانين كيرشوف والفيزياء الحديثة مع السرعة الفائقة في حل أسئلة البابل شيت.
+                  إتقان ممتاز لقواعد اشتقاق الدوال المثلثية وتطبيقات القيم العظمى والصغرى في التفاضل.
                 </p>
               </div>
 
@@ -198,7 +196,7 @@ export const ParentPortalView: React.FC = () => {
                   <AlertTriangle size={18} /> نقاط تحتاج للمراجعة
                 </div>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  مراجعة الحسابات العددية في باب الدينامو والفيض المغناطيسي لتفادي الأخطاء البسيطة.
+                  مراجعة رسم المستويات في الهندسة الفراغية ثلاثية الأبعاد لحل المسائل المعقدة بشكل أسرع.
                 </p>
               </div>
             </div>

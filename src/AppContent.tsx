@@ -1,0 +1,124 @@
+import React, { useState } from 'react';
+import { AppView } from './types';
+import { Navbar } from './components/layout/Navbar';
+import { Footer } from './components/layout/Footer';
+import { AITutorWidget } from './components/layout/AITutorWidget';
+import { LandingView } from './components/views/LandingView';
+import { DRMPlayerView } from './components/views/DRMPlayerView';
+import { AssessmentView } from './components/views/AssessmentView';
+import { ParentPortalView } from './components/views/ParentPortalView';
+import { CommunityView } from './components/views/CommunityView';
+import { AdminView } from './components/views/AdminView';
+import { AuthModal } from './components/modals/AuthModal';
+import { SearchModal } from './components/modals/SearchModal';
+import { ShareModal } from './components/modals/ShareModal';
+import { RoleGuard } from './components/layout/RoleGuard';
+
+export const AppContent: React.FC = () => {
+  const [currentView, setCurrentView] = useState<AppView>('view-landing');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  const handleNavigateView = (view: AppView) => {
+    setCurrentView(view);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div style={{ position: 'relative', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Ambient Glowing Background Orbs */}
+      <div className="ambient-glow-sphere sphere-1"></div>
+      <div className="ambient-glow-sphere sphere-2"></div>
+
+      {/* Top Navbar */}
+      <Navbar
+        currentView={currentView}
+        onNavigateView={handleNavigateView}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenSearchModal={() => setIsSearchModalOpen(true)}
+      />
+
+      {/* Main View Router Container */}
+      <main style={{ flex: 1, position: 'relative', zIndex: 1 }}>
+        {currentView === 'view-landing' && (
+          <LandingView
+            onNavigateView={handleNavigateView}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          />
+        )}
+
+        {currentView === 'view-drm-player' && <DRMPlayerView />}
+
+        {currentView === 'view-assessment' && <AssessmentView />}
+
+        {currentView === 'view-parent-portal' && (
+          <RoleGuard
+            allowedRoles={['parent', 'admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <ParentPortalView />
+          </RoleGuard>
+        )}
+
+        {currentView === 'view-community' && (
+          <CommunityView onOpenShareModal={() => setIsShareModalOpen(true)} />
+        )}
+
+        {currentView === 'view-admin' && (
+          <RoleGuard
+            allowedRoles={['admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <AdminView />
+          </RoleGuard>
+        )}
+
+        {/* Placeholder views for new routes */}
+        {(currentView === 'view-homework' || currentView === 'view-pdfs' || currentView === 'view-live') && (
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <div className="container fade-in-up" style={{ padding: '5rem 1.5rem', textAlign: 'center' }}>
+              <div className="glass-card" style={{ padding: '3rem', maxWidth: '600px', margin: '0 auto' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
+                  {currentView === 'view-homework' ? '📝' : currentView === 'view-pdfs' ? '📄' : '📡'}
+                </div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.75rem' }}>
+                  {currentView === 'view-homework' ? 'الواجبات المنزلية' :
+                   currentView === 'view-pdfs' ? 'ملفات PDF والمذكرات' :
+                   'البث المباشر'}
+                </h2>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  هذا القسم قيد التطوير. سيكون متاحاً قريباً.
+                </p>
+              </div>
+            </div>
+          </RoleGuard>
+        )}
+      </main>
+
+      {/* Footer */}
+      <Footer />
+
+      {/* Floating AI Assistant Widget */}
+      <AITutorWidget />
+
+      {/* Modals */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onNavigateView={handleNavigateView}
+      />
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+      />
+    </div>
+  );
+};

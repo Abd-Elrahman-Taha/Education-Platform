@@ -1,10 +1,28 @@
+export type UserRole = 'student' | 'parent' | 'admin' | 'teacher';
+
 export type AppView =
   | 'view-landing'
   | 'view-drm-player'
   | 'view-assessment'
   | 'view-parent-portal'
   | 'view-community'
-  | 'view-admin';
+  | 'view-admin'
+  | 'view-homework'
+  | 'view-pdfs'
+  | 'view-live'
+  | 'view-subject-calculus'
+  | 'view-subject-geometry';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: UserRole;
+  status: 'active' | 'blocked' | 'inactive';
+  avatar: string;
+  registrationDate: string;
+}
 
 export interface Course {
   id: string;
