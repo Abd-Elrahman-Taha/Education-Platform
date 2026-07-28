@@ -1,0 +1,73 @@
+/* ==========================================================================
+   Syntax EdTech - Dynamic Animations & Visual Effects CSS
+   ========================================================================== */
+
+/* Glowing Gradient Background Spheres */
+.ambient-glow-sphere {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.sphere-1 {
+  width: 450px;
+  height: 450px;
+  background: var(--primary);
+  top: -100px;
+  left: -100px;
+  animation: pulseGlow 8s ease-in-out infinite alternate;
+}
+
+.sphere-2 {
+  width: 400px;
+  height: 400px;
+  background: var(--secondary);
+  bottom: 0px;
+  right: -50px;
+  animation: pulseGlow 10s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(1) translate(0, 0); opacity: 0.35; }
+  100% { transform: scale(1.2) translate(30px, -20px); opacity: 0.6; }
+}
+
+/* Pulsing Badge Indicator */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--danger);
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  animation: dotPulse 1.8s infinite;
+}
+
+@keyframes dotPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Watermark Bouncing Motion for DRM Canvas */
+@keyframes watermarkFloat {
+  0% { transform: translate(10px, 10px); }
+  25% { transform: translate(250px, 80px); }
+  50% { transform: translate(120px, 220px); }
+  75% { transform: translate(300px, 150px); }
+  100% { transform: translate(10px, 10px); }
+}
+
+/* Fade In Up Entrance */
+.fade-in-up {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  to { opacity: 1; transform: translateY(0); }
+}
