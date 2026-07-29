@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
   BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
-  BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare
+  BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard
 } from 'lucide-react';
 import { AppView, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { NotificationBell } from '../../features/notifications/components/NotificationBell';
 
 interface NavbarProps {
   currentView: AppView;
-  onNavigateView: (view: AppView) => void;
+  onNavigateView: (view: AppView, lessonId?: string) => void;
   onOpenAuthModal: () => void;
   onOpenSearchModal: () => void;
 }
@@ -22,45 +23,38 @@ interface NavItem {
 }
 
 const studentNav: NavItem[] = [
-  { id: 'view-landing',          label: 'الرئيسية',      icon: Home },
-  { id: 'view-drm-player',       label: 'الدروس',         icon: Video },
-  { id: 'view-assessment',       label: 'الامتحانات',     icon: FileSignature },
-  { id: 'view-homework',         label: 'الواجبات',       icon: ClipboardList },
-  { id: 'view-live',             label: 'البث المباشر',   icon: Radio },
-  { id: 'view-community',        label: 'المجتمع',        icon: MessageSquare },
-  
-  { id: 'view-pdfs',             label: 'ملفات PDF',      icon: FileText },
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
+  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
+  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const parentNav: NavItem[] = [
-  { id: 'view-landing',          label: 'الرئيسية',        icon: Home },
-  { id: 'view-parent-portal',    label: 'بوابة ولي الأمر', icon: ShieldCheck },
-  { id: 'view-community',        label: 'المجتمع',        icon: MessageSquare },
- 
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const adminNav: NavItem[] = [
-  { id: 'view-admin',            label: 'لوحة الإدارة',   icon: Sliders },
-  { id: 'view-landing',          label: 'الطلاب',          icon: Users },
-  { id: 'view-community',        label: 'المجتمع',        icon: MessageSquare },
-
+  { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
+  { id: 'view-landing',           label: 'الطلاب', icon: Users },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const teacherNav: NavItem[] = [
-  { id: 'view-landing',          label: 'الرئيسية',        icon: Home },
-  { id: 'view-drm-player',       label: 'إدارة الدروس',    icon: Video },
-  { id: 'view-assessment',       label: 'الامتحانات',      icon: FileSignature },
-  { id: 'view-homework',         label: 'الواجبات',        icon: ClipboardList },
-  { id: 'view-community',        label: 'المجتمع',        icon: MessageSquare },
- 
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-teacher-inbox',     label: 'صندوق رسائل المعلم', icon: Inbox },
+  { id: 'view-drm-player',        label: 'الدروس', icon: Video },
+  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const guestNav: NavItem[] = [
-  { id: 'view-landing',   label: 'الرئيسية', icon: Home },
-  { id: 'view-drm-player',label: 'الدروس',   icon: Video },
-  { id: 'view-assessment',label: 'الامتحانات',icon: FileSignature },
-  { id: 'view-community', label: 'المجتمع',  icon: MessageSquare },
- 
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
+  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
@@ -92,12 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     : guestNav;
 
   const handleNavClick = (view: AppView) => {
-    if (view === 'view-ai') {
-      window.dispatchEvent(new CustomEvent('openAITutor'));
-      onNavigateView('view-ai');
-    } else {
-      onNavigateView(view);
-    }
+    onNavigateView(view);
     setMobileMenuOpen(false);
   };
 
@@ -136,6 +125,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Buttons */}
         <div className="nav-actions">
+          {/* Notification Bell with live unread badge */}
+          {isAuthenticated && (
+            <NotificationBell onNavigateView={onNavigateView} />
+          )}
+
           {/* Theme Toggle Button */}
           <button
             className="icon-btn"

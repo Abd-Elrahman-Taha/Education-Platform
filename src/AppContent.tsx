@@ -4,8 +4,10 @@ import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { AITutorWidget } from './components/layout/AITutorWidget';
 import { LandingView } from './components/views/LandingView';
-import { DRMPlayerView } from './components/views/DRMPlayerView';
-import { AssessmentView } from './components/views/AssessmentView';
+import { StudentDashboardView } from './features/student/components/StudentDashboardView';
+import { UnifiedLessonView } from './features/lessons/components/UnifiedLessonView';
+import { StandaloneExamsView } from './features/exams/components/StandaloneExamsView';
+import { TeacherInboxView } from './features/messages/components/TeacherInboxView';
 import { ParentPortalView } from './components/views/ParentPortalView';
 import { CommunityView } from './components/views/CommunityView';
 import { AdminView } from './components/views/AdminView';
@@ -16,12 +18,16 @@ import { RoleGuard } from './components/layout/RoleGuard';
 
 export const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('view-landing');
+  const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  const handleNavigateView = (view: AppView) => {
+  const handleNavigateView = (view: AppView, lessonId?: string) => {
     setCurrentView(view);
+    if (lessonId) {
+      setActiveLessonId(lessonId);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -48,9 +54,36 @@ export const AppContent: React.FC = () => {
           />
         )}
 
-        {currentView === 'view-drm-player' && <DRMPlayerView />}
+        {currentView === 'view-student-dashboard' && (
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <StudentDashboardView onNavigateView={handleNavigateView} />
+          </RoleGuard>
+        )}
 
-        {currentView === 'view-assessment' && <AssessmentView />}
+        {currentView === 'view-drm-player' && (
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <UnifiedLessonView activeLessonId={activeLessonId} onNavigateView={handleNavigateView} />
+          </RoleGuard>
+        )}
+
+        {currentView === 'view-assessment' && (
+          <StandaloneExamsView />
+        )}
+
+        {currentView === 'view-teacher-inbox' && (
+          <RoleGuard
+            allowedRoles={['teacher', 'admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <TeacherInboxView />
+          </RoleGuard>
+        )}
 
         {currentView === 'view-parent-portal' && (
           <RoleGuard
@@ -91,8 +124,11 @@ export const AppContent: React.FC = () => {
                    'البث المباشر'}
                 </h2>
                 <p style={{ color: 'var(--text-muted)' }}>
-                  هذا القسم قيد التطوير. سيكون متاحاً قريباً.
+                  يمكنك الوصول للواجبات وملفات PDF المخصصة لكل درس مباشرة داخل صفحة الدرس الموحدة.
                 </p>
+                <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => handleNavigateView('view-drm-player')}>
+                  الذهاب للدروس الموحدة
+                </button>
               </div>
             </div>
           </RoleGuard>
