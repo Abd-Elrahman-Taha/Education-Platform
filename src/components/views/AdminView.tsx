@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Sliders, Search, Users, TrendingUp, DollarSign, Activity,
   Edit2, Trash2, Ban, Shield, ShieldOff, CheckCircle2, XCircle,
   ArrowUp, ArrowDown, UserCheck, Plus, UserPlus, BookOpen, Award,
   Eye, EyeOff, Check, X, Filter, Sparkles, GraduationCap, ChevronRight,
   Layers, Lock, Unlock, Settings, BarChart2, Star, Clock, Calendar,
-  FileText, CheckSquare, RefreshCw
+  FileText, CheckSquare, RefreshCw, Phone, Mail, Copy, ExternalLink, ShieldCheck
 } from 'lucide-react';
 import {
   AcademicYear, ACADEMIC_YEAR_LABELS, StudentProfile, Lesson, User,
@@ -38,6 +39,7 @@ export const AdminView: React.FC = () => {
 
   // Modals state
   const [selectedStudentForModal, setSelectedStudentForModal] = useState<StudentProfile | null>(null);
+  const [studentProfileTab, setStudentProfileTab] = useState<'exams' | 'packages' | 'lessons' | 'contact'>('exams');
   const [isRegisterStudentOpen, setIsRegisterStudentOpen] = useState(false);
   const [isAddLessonOpen, setIsAddLessonOpen] = useState(false);
   const [isTeacherPermissionsModalOpen, setIsTeacherPermissionsModalOpen] = useState<User | null>(null);
@@ -65,6 +67,17 @@ export const AdminView: React.FC = () => {
     pdfUrl: 'https://www.w3.org/W3C/DesignIssues/Overview.html',
     isPublished: true,
   });
+
+  // Lock background body scroll when any modal/overlay is open, preserving exact scroll position
+  useEffect(() => {
+    if (selectedStudentForModal || isTeacherPermissionsModalOpen || isRegisterStudentOpen || isAddLessonOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selectedStudentForModal, isTeacherPermissionsModalOpen, isRegisterStudentOpen, isAddLessonOpen]);
 
   // ── SCOPED DATA BY ACADEMIC YEAR ──────────────────────────────
   const scopedStudents = students.filter(s => s.academicYear === selectedYear);
@@ -794,131 +807,398 @@ export const AdminView: React.FC = () => {
         </div>
       )}
 
-      {/* ── MODAL: STUDENT DETAILED PROFILE & ASSIGNMENTS (Requirements #15, #16, #17) ── */}
-      {selectedStudentForModal && (
-        <div className="modal-overlay active" onClick={() => setSelectedStudentForModal(null)}>
-          <div className="modal-box" style={{ maxWidth: '750px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedStudentForModal(null)}><X size={18} /></button>
-
+      {/* ── MODAL: COMPACT STUDENT PROFILE & MANAGEMENT (VIEWPORT-FRIENDLY VIA PORTAL) ── */}
+      {selectedStudentForModal && createPortal(
+        <div
+          className="modal-overlay active"
+          onClick={() => setSelectedStudentForModal(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
+            background: 'rgba(5, 15, 20, 0.85)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            opacity: 1,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            className="modal-box"
+            style={{
+              maxWidth: '680px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '1.5rem',
+              overflow: 'hidden',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-glass-hover)',
+              borderRadius: 'var(--radius-xl)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              position: 'relative',
+              zIndex: 100000,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1.25rem', marginBottom: '1.5rem' }}>
-              <img src={selectedStudentForModal.avatar} alt={selectedStudentForModal.name} style={{ width: '64px', height: '64px', borderRadius: '50%', border: '3px solid var(--primary-light)', objectFit: 'cover' }} />
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
-                    {selectedStudentForModal.name}
-                  </h2>
-                  <span className={`status-badge status-badge--${selectedStudentForModal.status}`}>
-                    {selectedStudentForModal.status === 'active' ? 'نشط' : 'محظور'}
-                  </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <img
+                  src={selectedStudentForModal.avatar}
+                  alt={selectedStudentForModal.name}
+                  style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid var(--primary-light)', objectFit: 'cover' }}
+                />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                      {selectedStudentForModal.name}
+                    </h2>
+                    <span className={`status-badge status-badge--${selectedStudentForModal.status}`}>
+                      {selectedStudentForModal.status === 'active' ? 'نشط' : 'محظور'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--primary-light)', fontWeight: 700 }}>
+                      #{selectedStudentForModal.code}
+                    </span>
+                    <span>•</span>
+                    <span>{ACADEMIC_YEAR_LABELS[selectedStudentForModal.academicYear]}</span>
+                    <span>•</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                      الرقم القومي: <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{selectedStudentForModal.nationalId}</strong>
+                    </span>
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  كود: #{selectedStudentForModal.code} • الرقم القومي: {selectedStudentForModal.nationalId} • {ACADEMIC_YEAR_LABELS[selectedStudentForModal.academicYear]}
-                </div>
+              </div>
+
+              <button
+                className="modal-close"
+                onClick={() => setSelectedStudentForModal(null)}
+                style={{ position: 'static', transform: 'none' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Quick Stats Strip */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>المعدل العام</span>
+                <strong style={{ fontSize: '1.15rem', color: '#10B981' }}>{selectedStudentForModal.averageScore}%</strong>
+              </div>
+              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>نسبة الحضور</span>
+                <strong style={{ fontSize: '1.15rem', color: 'var(--primary-light)' }}>{selectedStudentForModal.attendanceRate}%</strong>
+              </div>
+              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>الاختبارات</span>
+                <strong style={{ fontSize: '1.15rem', color: '#8B5CF6' }}>{selectedStudentForModal.examResults?.length || 0}</strong>
+              </div>
+              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>الباقة</span>
+                <strong style={{ fontSize: '0.82rem', color: 'var(--text-bright)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                  {selectedStudentForModal.packageName || 'بدون باقة'}
+                </strong>
               </div>
             </div>
 
-            {/* Performance Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المعدل التراكمي</span>
-                <strong style={{ display: 'block', fontSize: '1.4rem', color: '#10B981' }}>{selectedStudentForModal.averageScore}%</strong>
-              </div>
-              <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>نسبة الحضور</span>
-                <strong style={{ display: 'block', fontSize: '1.4rem', color: 'var(--primary-light)' }}>{selectedStudentForModal.attendanceRate}%</strong>
-              </div>
-              <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المحاضرات المتاحة</span>
-                <strong style={{ display: 'block', fontSize: '1.4rem', color: 'var(--text-bright)' }}>{selectedStudentForModal.assignedLessonIds.length}</strong>
-              </div>
+            {/* Segmented Sub-Tabs Bar */}
+            <div style={{ display: 'flex', gap: '0.4rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+              <button
+                type="button"
+                className={`filter-btn ${studentProfileTab === 'exams' ? 'active' : ''}`}
+                onClick={() => setStudentProfileTab('exams')}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
+              >
+                <Award size={14} /> سجل الامتحانات ({selectedStudentForModal.examResults?.length || 0})
+              </button>
+              <button
+                type="button"
+                className={`filter-btn ${studentProfileTab === 'packages' ? 'active' : ''}`}
+                onClick={() => setStudentProfileTab('packages')}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
+              >
+                <Layers size={14} /> الباقة والاشتراك
+              </button>
+              <button
+                type="button"
+                className={`filter-btn ${studentProfileTab === 'lessons' ? 'active' : ''}`}
+                onClick={() => setStudentProfileTab('lessons')}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
+              >
+                <BookOpen size={14} /> تعيين الدروس ({selectedStudentForModal.assignedLessonIds.length})
+              </button>
+              <button
+                type="button"
+                className={`filter-btn ${studentProfileTab === 'contact' ? 'active' : ''}`}
+                onClick={() => setStudentProfileTab('contact')}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
+              >
+                <Users size={14} /> التواصل والحساب
+              </button>
             </div>
 
-            {/* SECTION: ASSIGN PACKAGES (Requirement #17) */}
-            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Layers size={16} color="var(--primary-light)" /> تعيين الباقة للطالب (Assign Package)
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                اختيار باقة اشتراك يحدث تلقائياً جميع الدروس المتاحة للطالب وفق محتوى الباقة.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {scopedPackages.map(pkg => {
-                  const isCur = selectedStudentForModal.packageId === pkg.id;
-                  return (
-                    <button
-                      key={pkg.id}
-                      onClick={() => handleAssignPackageToStudent(selectedStudentForModal.id, pkg.id)}
-                      style={{
-                        padding: '0.5rem 0.85rem',
-                        borderRadius: '8px',
-                        border: isCur ? '2px solid #10B981' : '1px solid var(--border-glass)',
-                        background: isCur ? 'rgba(16,185,129,0.15)' : 'var(--bg-glass-card)',
-                        color: isCur ? '#10B981' : 'var(--text-muted)',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {pkg.name} ({pkg.price} ج.م) {isCur && '✓'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* SECTION: ASSIGN SPECIFIC LESSONS (Requirement #16) */}
-            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <BookOpen size={16} color="var(--primary-light)" /> تعيين الدروس والمحاضرات الفردية (Assign Lessons)
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                حدد المحاضرات التي يستطيع الطالب فتحها ومشاهدتها:
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {scopedLessons.map(les => {
-                  const isAssigned = selectedStudentForModal.assignedLessonIds.includes(les.id);
-                  return (
-                    <div
-                      key={les.id}
-                      style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '0.65rem 0.9rem', borderRadius: '8px',
-                        background: isAssigned ? 'rgba(8,145,178,0.12)' : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${isAssigned ? 'rgba(8,145,178,0.3)' : 'var(--border-glass)'}`,
-                      }}
-                    >
-                      <div>
-                        <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{les.title}</strong>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>{les.duration}</span>
-                      </div>
-
-                      <button
-                        className={`btn ${isAssigned ? 'btn-secondary' : 'btn-primary'}`}
-                        style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem' }}
-                        onClick={() => handleAssignLessonToStudent(selectedStudentForModal.id, les.id, !isAssigned)}
+            {/* Scrollable Tab Body */}
+            <div style={{ overflowY: 'auto', flex: 1, paddingRight: '0.25rem' }}>
+              {/* TAB 1: EXAM HISTORY */}
+              {studentProfileTab === 'exams' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {selectedStudentForModal.examResults && selectedStudentForModal.examResults.length > 0 ? (
+                    selectedStudentForModal.examResults.map((ex, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '8px',
+                          background: 'var(--bg-subtle)',
+                          border: '1px solid var(--border-glass)',
+                        }}
                       >
-                        {isAssigned ? <><Check size={14} color="#10B981" /> متاح للطالب (Assigned)</> : <><Plus size={14} /> تعيين وإتاحة (Not Assigned)</>}
-                      </button>
+                        <div>
+                          <strong style={{ fontSize: '0.88rem', color: 'var(--text-bright)', display: 'block' }}>
+                            {ex.examTitle}
+                          </strong>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {ex.date} • النتيجة: {ex.score}/{ex.total} ({ex.percentage}%)
+                          </span>
+                        </div>
+
+                        <div style={{ textAlign: 'left' }}>
+                          <span style={{
+                            fontSize: '1rem',
+                            fontWeight: 800,
+                            color: ex.score >= 60 ? '#10B981' : '#E11D48',
+                            display: 'block'
+                          }}>
+                            {ex.score}%
+                          </span>
+                          <span style={{
+                            fontSize: '0.72rem',
+                            color: ex.score >= 60 ? '#10B981' : '#E11D48',
+                            fontWeight: 700
+                          }}>
+                            {ex.score >= 60 ? 'ناجح ✓' : 'راسب ✕'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
+                      <Award size={32} style={{ opacity: 0.4, margin: '0 auto 0.5rem' }} />
+                      <p style={{ margin: 0, fontSize: '0.88rem' }}>لم يقم الطالب بتسليم أي اختبارات حتى الآن.</p>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: PACKAGES */}
+              {studentProfileTab === 'packages' && (
+                <div>
+                  <div style={{ marginBottom: '1rem', background: 'rgba(8,145,178,0.1)', padding: '0.75rem 1rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>حالة الاشتراك الحالية:</span>
+                      <strong style={{ display: 'block', fontSize: '0.95rem', color: 'var(--primary-light)' }}>
+                        {selectedStudentForModal.packageName || 'بدون باقة نشطة'}
+                      </strong>
+                    </div>
+                    <span className={`status-badge ${selectedStudentForModal.hasAccess ? 'status-badge--active' : 'status-badge--blocked'}`}>
+                      {selectedStudentForModal.hasAccess ? 'وصول مفعل' : 'وصول معطل'}
+                    </span>
+                  </div>
+
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>
+                    اختر باقة لتعيينها وتحديث دروس الطالب تلقائياً:
+                  </span>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                    {scopedPackages.map(pkg => {
+                      const isCur = selectedStudentForModal.packageId === pkg.id;
+                      return (
+                        <button
+                          key={pkg.id}
+                          onClick={() => handleAssignPackageToStudent(selectedStudentForModal.id, pkg.id)}
+                          style={{
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            border: isCur ? '2px solid #10B981' : '1px solid var(--border-glass)',
+                            background: isCur ? 'rgba(16,185,129,0.15)' : 'var(--bg-subtle)',
+                            color: isCur ? '#10B981' : 'var(--text-bright)',
+                            textAlign: 'right',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <strong style={{ fontSize: '0.85rem' }}>{pkg.name}</strong>
+                            {isCur && <Check size={14} color="#10B981" />}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {pkg.price} ج.م • {pkg.includedLessonIds.length} محاضرة
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: LESSONS */}
+              {studentProfileTab === 'lessons' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      المحاضرات المتاحة: <strong>{selectedStudentForModal.assignedLessonIds.length} من {scopedLessons.length}</strong>
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '260px', overflowY: 'auto' }}>
+                    {scopedLessons.map(les => {
+                      const isAssigned = selectedStudentForModal.assignedLessonIds.includes(les.id);
+                      return (
+                        <div
+                          key={les.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '0.55rem 0.85rem',
+                            borderRadius: '6px',
+                            background: isAssigned ? 'rgba(8,145,178,0.1)' : 'var(--bg-subtle)',
+                            border: `1px solid ${isAssigned ? 'rgba(8,145,178,0.3)' : 'var(--border-glass)'}`,
+                          }}
+                        >
+                          <div>
+                            <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-bright)' }}>{les.title}</span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginRight: '0.5rem' }}>({les.duration})</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={`btn ${isAssigned ? 'btn-secondary' : 'btn-primary'}`}
+                            style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem' }}
+                            onClick={() => handleAssignLessonToStudent(selectedStudentForModal.id, les.id, !isAssigned)}
+                          >
+                            {isAssigned ? <><Check size={12} color="#10B981" /> متاح</> : <><Plus size={12} /> إتاحة</>}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: CONTACT & ACCOUNT INFO */}
+              {studentProfileTab === 'contact' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>هاتف الطالب:</span>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{selectedStudentForModal.phone}</strong>
+                      <div style={{ marginTop: '0.4rem' }}>
+                        <a
+                          href={`https://wa.me/2${selectedStudentForModal.phone}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: '0.75rem', color: '#10B981', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none' }}
+                        >
+                          <ExternalLink size={12} /> محادثة WhatsApp
+                        </a>
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>هاتف ولي الأمر:</span>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{selectedStudentForModal.parentPhone}</strong>
+                      <div style={{ marginTop: '0.4rem' }}>
+                        <a
+                          href={`https://wa.me/2${selectedStudentForModal.parentPhone}?text=${encodeURIComponent(`تقرير متابعة الطالب ${selectedStudentForModal.name} - المعدل: ${selectedStudentForModal.averageScore}% - الكود: ${selectedStudentForModal.code}`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ fontSize: '0.75rem', color: '#10B981', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none' }}
+                        >
+                          <ExternalLink size={12} /> إرسال التقرير لولي الأمر
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>حالة الحساب:</span>
+                      <strong style={{ fontSize: '0.88rem', color: selectedStudentForModal.status === 'active' ? '#10B981' : '#E11D48' }}>
+                        {selectedStudentForModal.status === 'active' ? 'الحساب نشط ويستطيع الدخول' : 'الحساب محظور من الدخول'}
+                      </strong>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`btn ${selectedStudentForModal.status === 'active' ? 'btn-warning' : 'btn-primary'}`}
+                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+                      onClick={() => handleToggleStudentStatus(selectedStudentForModal.id)}
+                    >
+                      {selectedStudentForModal.status === 'active' ? <><Ban size={14} /> حظر الحساب</> : <><Check size={14} /> تفعيل الحساب</>}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div style={{ textAlign: 'left' }}>
-              <button className="btn btn-primary" onClick={() => setSelectedStudentForModal(null)}>
-                حفظ وإغلاق النافذة
+            {/* Modal Footer */}
+            <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '0.85rem', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                تاريخ التسجيل: {selectedStudentForModal.registrationDate}
+              </span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ padding: '0.45rem 1.25rem', fontSize: '0.85rem' }}
+                onClick={() => setSelectedStudentForModal(null)}
+              >
+                تم وإغلاق الملف
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* ── MODAL: TEACHER PERMISSIONS (Requirement #7) ──────── */}
-      {isTeacherPermissionsModalOpen && (
-        <div className="modal-overlay active" onClick={() => setIsTeacherPermissionsModalOpen(null)}>
-          <div className="modal-box" style={{ maxWidth: '640px' }} onClick={e => e.stopPropagation()}>
+      {/* ── MODAL: TEACHER PERMISSIONS (Requirement #7 VIA PORTAL) ──────── */}
+      {isTeacherPermissionsModalOpen && createPortal(
+        <div
+          className="modal-overlay active"
+          onClick={() => setIsTeacherPermissionsModalOpen(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
+            background: 'rgba(5, 15, 20, 0.85)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            opacity: 1,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: '640px', width: '100%', background: 'var(--bg-surface)', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setIsTeacherPermissionsModalOpen(null)}><X size={18} /></button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
@@ -968,13 +1248,34 @@ export const AdminView: React.FC = () => {
               حفظ الصلاحيات
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* ── MODAL: REGISTER STUDENT ────────────────────────── */}
-      {isRegisterStudentOpen && (
-        <div className="modal-overlay active" onClick={() => setIsRegisterStudentOpen(false)}>
-          <div className="modal-box" style={{ maxWidth: '540px' }} onClick={e => e.stopPropagation()}>
+      {/* ── MODAL: REGISTER STUDENT (VIA PORTAL) ────────────────────────── */}
+      {isRegisterStudentOpen && createPortal(
+        <div
+          className="modal-overlay active"
+          onClick={() => setIsRegisterStudentOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
+            background: 'rgba(5, 15, 20, 0.85)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            opacity: 1,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: '540px', width: '100%', background: 'var(--bg-surface)', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setIsRegisterStudentOpen(false)}><X size={18} /></button>
 
             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1rem' }}>
@@ -1016,13 +1317,34 @@ export const AdminView: React.FC = () => {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* ── MODAL: ADD LESSON ──────────────────────────────── */}
-      {isAddLessonOpen && (
-        <div className="modal-overlay active" onClick={() => setIsAddLessonOpen(false)}>
-          <div className="modal-box" style={{ maxWidth: '580px' }} onClick={e => e.stopPropagation()}>
+      {/* ── MODAL: ADD LESSON (VIA PORTAL) ──────────────────────────────── */}
+      {isAddLessonOpen && createPortal(
+        <div
+          className="modal-overlay active"
+          onClick={() => setIsAddLessonOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
+            background: 'rgba(5, 15, 20, 0.85)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            opacity: 1,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: '580px', width: '100%', background: 'var(--bg-surface)', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setIsAddLessonOpen(false)}><X size={18} /></button>
 
             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1rem' }}>
@@ -1072,7 +1394,8 @@ export const AdminView: React.FC = () => {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

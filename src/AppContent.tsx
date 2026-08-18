@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView, UserRole } from './types';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
@@ -17,32 +17,125 @@ import { SearchModal } from './components/modals/SearchModal';
 import { ShareModal } from './components/modals/ShareModal';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { useAuth } from './context/AuthContext';
-
 import { StandaloneAIView } from './features/ai/components/StandaloneAIView';
+
+const ROUTE_TO_VIEW: Record<string, AppView> = {
+  '/': 'view-landing',
+  '/home': 'view-landing',
+  '/dashboard': 'view-student-dashboard',
+  '/student-dashboard': 'view-student-dashboard',
+  '/lessons': 'view-drm-player',
+  '/lectures': 'view-drm-player',
+  '/exams': 'view-assessment',
+  '/assessments': 'view-assessment',
+  '/ai': 'view-ai',
+  '/community': 'view-community',
+  '/parent-portal': 'view-parent-portal',
+  '/admin': 'view-admin',
+  '/students': 'view-admin',
+  '/teachers': 'view-admin',
+  '/messages': 'view-teacher-inbox',
+  '/inbox': 'view-teacher-inbox',
+  '/packages': 'view-packages',
+  '/faq': 'view-faq',
+};
+
+const VIEW_TO_ROUTE: Record<AppView, string> = {
+  'view-landing': '/',
+  'view-student-dashboard': '/dashboard',
+  'view-drm-player': '/lessons',
+  'view-assessment': '/exams',
+  'view-ai': '/ai',
+  'view-community': '/community',
+  'view-parent-portal': '/parent-portal',
+  'view-admin': '/admin',
+  'view-teacher-inbox': '/messages',
+  'view-packages': '/packages',
+  'view-faq': '/faq',
+  'view-homework': '/lessons',
+  'view-pdfs': '/lessons',
+  'view-live': '/lessons',
+  'view-subject-calculus': '/lessons',
+  'view-subject-geometry': '/lessons',
+};
+
+const getInitialView = (): AppView => {
+  // 1. Check window.location.pathname
+  const path = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
+  if (ROUTE_TO_VIEW[path]) {
+    return ROUTE_TO_VIEW[path];
+  }
+
+  // 2. Check window.location.hash
+  const hash = window.location.hash.replace(/^#\/?/, '/').toLowerCase();
+  if (ROUTE_TO_VIEW[hash]) {
+    return ROUTE_TO_VIEW[hash];
+  }
+
+  // 3. Check localStorage
+  try {
+    const saved = localStorage.getItem('syntax_active_view') as AppView;
+    if (saved && VIEW_TO_ROUTE[saved]) {
+      return saved;
+    }
+  } catch {}
+
+  return 'view-landing';
+};
 
 export const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated } = useAuth();
-  const [currentView, setCurrentView] = useState<AppView>('view-landing');
+  const [currentView, setCurrentView] = useState<AppView>(getInitialView);
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Sync URL on initial mount and route changes without reloading
+  useEffect(() => {
+    const currentPath = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
+    const expectedPath = VIEW_TO_ROUTE[currentView] || '/';
+    if (currentPath !== expectedPath && currentPath !== '') {
+      window.history.replaceState({ view: currentView }, '', expectedPath);
+    }
+    try {
+      localStorage.setItem('syntax_active_view', currentView);
+    } catch {}
+  }, [currentView]);
+
+  // Listen to browser Back/Forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
+      if (ROUTE_TO_VIEW[path]) {
+        setCurrentView(ROUTE_TO_VIEW[path]);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleNavigateView = (view: AppView, lessonId?: string) => {
     setCurrentView(view);
     if (lessonId) {
       setActiveLessonId(lessonId);
     }
+    const targetPath = VIEW_TO_ROUTE[view] || '/';
+    try {
+      localStorage.setItem('syntax_active_view', view);
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ view }, '', targetPath);
+      }
+    } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleLoginSuccess = (role: UserRole) => {
     if (role === 'admin' || role === 'teacher') {
-      setCurrentView('view-admin');
+      handleNavigateView('view-admin');
     } else {
-      setCurrentView('view-student-dashboard');
+      handleNavigateView('view-student-dashboard');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
