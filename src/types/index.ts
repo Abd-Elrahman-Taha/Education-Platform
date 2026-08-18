@@ -1,4 +1,43 @@
-export type UserRole = 'student' | 'parent' | 'admin' | 'teacher';
+export type UserRole = 'student' | 'admin' | 'teacher' | 'parent';
+
+export type AcademicYear = 'first_secondary' | 'second_secondary' | 'third_secondary';
+
+export const ACADEMIC_YEAR_LABELS: Record<AcademicYear, string> = {
+  first_secondary: 'الصف الأول الثانوي',
+  second_secondary: 'الصف الثاني الثانوي',
+  third_secondary: 'الصف الثالث الثانوي',
+};
+
+export type TeacherPermission =
+  | 'view_students'
+  | 'view_reports'
+  | 'upload_lessons'
+  | 'edit_lessons'
+  | 'publish_lessons'
+  | 'upload_exams'
+  | 'edit_exams'
+  | 'publish_exams'
+  | 'assign_lessons'
+  | 'assign_packages'
+  | 'view_payments'
+  | 'manage_students'
+  | 'manage_teachers';
+
+export const PERMISSION_LABELS: Record<TeacherPermission, { label: string; desc: string }> = {
+  view_students: { label: 'عرض قائمة الطلاب', desc: 'إمكانية استعراض الطلاب والبحث والتصفية' },
+  view_reports: { label: 'عرض تقارير الطلاب', desc: 'الاطلاع على درجات ومنحنيات أداء الطلاب' },
+  upload_lessons: { label: 'رفع وإضافة الدروس', desc: 'إضافة محاضرات وفيديوهات وملفات جديدة' },
+  edit_lessons: { label: 'تعديل الدروس', desc: 'تعديل بيانات الدروس ومحتواها' },
+  publish_lessons: { label: 'نشر وإخفاء الدروس', desc: 'التحكم في ظهور أو إخفاء الدروس للطلاب' },
+  upload_exams: { label: 'إضافة الامتحانات', desc: 'إنشاء امتحانات واختبارات بابل شيت' },
+  edit_exams: { label: 'تعديل الامتحانات', desc: 'تعديل الأسئلة والأوقات ونسب النجاح' },
+  publish_exams: { label: 'نشر وإخفاء الامتحانات', desc: 'التحكم في نشر الامتحانات وتفعيلها' },
+  assign_lessons: { label: 'تعيين الدروس للطلاب', desc: 'إتاحة دروس محددة لطالب معين أو سحبها' },
+  assign_packages: { label: 'تعيين الباقات', desc: 'تفعيل وتغيير باقات الاشتراك للطلاب' },
+  view_payments: { label: 'عرض حالة الاشتراكات والمدفوعات', desc: 'معرفة الطلاب المشتركين وغير المشتركين' },
+  manage_students: { label: 'إدارة الطلاب (إضافة/تعديل/حظر)', desc: 'تسجيل طلاب جدد وتعديل بياناتهم وحظرهم' },
+  manage_teachers: { label: 'إدارة المعلمين وتعديل الصلاحيات', desc: 'إضافة معلمين وتحديد صلاحياتهم' },
+};
 
 export type AppView =
   | 'view-landing'
@@ -8,6 +47,7 @@ export type AppView =
   | 'view-parent-portal'
   | 'view-community'
   | 'view-admin'
+  | 'view-faq'
   | 'view-homework'
   | 'view-pdfs'
   | 'view-live'
@@ -25,6 +65,46 @@ export interface User {
   status: 'active' | 'blocked' | 'inactive';
   avatar: string;
   registrationDate: string;
+  academicYear?: AcademicYear;
+  permissions?: TeacherPermission[];
+}
+
+export interface Package {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  academicYear: AcademicYear;
+  includedLessonIds: string[];
+}
+
+export interface StudentProfile {
+  id: string;
+  code: string;
+  nationalId: string;
+  name: string;
+  email: string;
+  phone: string;
+  parentPhone: string;
+  academicYear: AcademicYear;
+  status: 'active' | 'blocked';
+  avatar: string;
+  packageId?: string;
+  packageName?: string;
+  hasAccess: boolean;
+  assignedLessonIds: string[];
+  averageScore: number;
+  attendanceRate: number;
+  registrationDate: string;
+  examResults: {
+    examId: string;
+    examTitle: string;
+    date: string;
+    score: number;
+    total: number;
+    percentage: number;
+    isPassed: boolean;
+  }[];
 }
 
 export interface Course {
@@ -72,13 +152,16 @@ export interface CommunityPost {
 export interface RosterStudent {
   id: string;
   code: string;
+  nationalId?: string;
   name: string;
   phone: string;
   parentPhone: string;
   grade: string;
+  academicYear?: AcademicYear;
   attendance: string;
   averageScore: number;
   status: 'active' | 'blocked';
+  packageName?: string;
 }
 
 export interface AIMessage {
@@ -89,11 +172,12 @@ export interface AIMessage {
   timestamp: string;
 }
 
-// ── NEW DOMAIN TYPES ──────────────────────────────────────────
+// ── DOMAIN TYPES ──────────────────────────────────────────
 
 export interface StudentDashboardData {
   studentName: string;
   currentGrade: string;
+  academicYear: AcademicYear;
   overallProgress: number; // percentage e.g. 78
   lessonsCompleted: number;
   lessonsRemaining: number;
@@ -103,6 +187,7 @@ export interface StudentDashboardData {
   totalStudyHours: number; // e.g. 42.5
   lastLogin: string;
   currentLearningStreak: number; // days e.g. 7
+  packageName: string;
   continueLearningLesson: {
     id: string;
     title: string;
@@ -118,6 +203,7 @@ export interface ProgressTimelineData {
   lessonProgress: { month: string; completed: number; target: number }[];
   weeklyActivity: { day: string; hours: number }[];
   homeworkRates: { category: string; rate: number }[];
+  subjectGrades?: { subject: string; score: number; maxScore: number }[];
 }
 
 export interface HomeworkQuestion {
@@ -143,6 +229,7 @@ export interface LessonExam {
   title: string;
   durationMinutes: number;
   passingScorePercentage: number; // e.g. 60
+  isPublished?: boolean;
   questions: Question[];
 }
 
@@ -160,6 +247,8 @@ export interface Lesson {
   description: string;
   duration: string;
   order: number;
+  academicYear: AcademicYear;
+  isPublished: boolean;
   isLocked: boolean;
   prerequisiteLessonId?: string;
   prerequisiteExamTitle?: string;
@@ -186,6 +275,7 @@ export interface ExamRecord {
   id: string;
   lessonId: string;
   lessonTitle: string;
+  academicYear?: AcademicYear;
   date: string;
   score: number;
   totalQuestions: number;

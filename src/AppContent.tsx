@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppView } from './types';
+import { AppView, UserRole } from './types';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { AITutorWidget } from './components/layout/AITutorWidget';
@@ -9,14 +9,17 @@ import { UnifiedLessonView } from './features/lessons/components/UnifiedLessonVi
 import { StandaloneExamsView } from './features/exams/components/StandaloneExamsView';
 import { TeacherInboxView } from './features/messages/components/TeacherInboxView';
 import { ParentPortalView } from './components/views/ParentPortalView';
+import { FAQView } from './components/views/FAQView';
 import { CommunityView } from './components/views/CommunityView';
 import { AdminView } from './components/views/AdminView';
 import { AuthModal } from './components/modals/AuthModal';
 import { SearchModal } from './components/modals/SearchModal';
 import { ShareModal } from './components/modals/ShareModal';
 import { RoleGuard } from './components/layout/RoleGuard';
+import { useAuth } from './context/AuthContext';
 
 export const AppContent: React.FC = () => {
+  const { currentUser, isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>('view-landing');
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -27,6 +30,15 @@ export const AppContent: React.FC = () => {
     setCurrentView(view);
     if (lessonId) {
       setActiveLessonId(lessonId);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleLoginSuccess = (role: UserRole) => {
+    if (role === 'admin' || role === 'teacher') {
+      setCurrentView('view-admin');
+    } else {
+      setCurrentView('view-student-dashboard');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -85,13 +97,14 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
+        {/* Parent Portal is public & verification-based (Requirement #2) */}
         {currentView === 'view-parent-portal' && (
-          <RoleGuard
-            allowedRoles={['parent', 'admin']}
-            onNavigateHome={() => handleNavigateView('view-landing')}
-          >
-            <ParentPortalView />
-          </RoleGuard>
+          <ParentPortalView />
+        )}
+
+        {/* Dedicated FAQ View (Requirement #3) */}
+        {currentView === 'view-faq' && (
+          <FAQView />
         )}
 
         {currentView === 'view-community' && (
@@ -100,7 +113,7 @@ export const AppContent: React.FC = () => {
 
         {currentView === 'view-admin' && (
           <RoleGuard
-            allowedRoles={['admin']}
+            allowedRoles={['admin', 'teacher']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <AdminView />
@@ -136,7 +149,10 @@ export const AppContent: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <Footer />
+      <Footer
+        onNavigateView={handleNavigateView}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+      />
 
       {/* Floating AI Assistant Widget */}
       <AITutorWidget />
@@ -145,6 +161,7 @@ export const AppContent: React.FC = () => {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
       <SearchModal
         isOpen={isSearchModalOpen}

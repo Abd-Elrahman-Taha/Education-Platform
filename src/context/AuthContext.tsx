@@ -10,7 +10,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'syntax_current_user';
+const STORAGE_KEY = 'syntax_current_user_v2';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -53,50 +53,70 @@ export const useAuth = () => {
   return context;
 };
 
-// Preconfigured Demo Accounts as requested
-export const DEMO_USERS: Record<UserRole, User & { defaultPassword?: string }> = {
+// Unified Demo Accounts for Student and Teacher/Admin
+export const DEMO_USERS: Record<'student' | 'teacher' | 'admin', User & { defaultPassword?: string }> = {
   student: {
     id: 'u_student_demo',
     name: 'أحمد طالب (طالب)',
     email: 'student.demo@edulearn.com',
     phone: '01012345678',
     role: 'student',
+    academicYear: 'third_secondary',
     status: 'active',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
     registrationDate: '2026-01-15',
     defaultPassword: 'Student123!',
   },
-  parent: {
-    id: 'u_parent_demo',
-    name: 'محمود عبد الله (ولي أمر)',
-    email: 'parent.demo@edulearn.com',
-    phone: '01198765432',
-    role: 'parent',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-    registrationDate: '2026-01-20',
-    defaultPassword: 'Parent123!',
-  },
   teacher: {
-    id: 'u_teacher_demo',
-    name: 'أ. د. محمد الشريف (معلم)',
-    email: 'teacher.demo@edulearn.com',
-    phone: '01055544332',
-    role: 'teacher',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80',
-    registrationDate: '2025-09-15',
-    defaultPassword: 'Teacher123!',
-  },
-  admin: {
-    id: 'u_admin_demo',
-    name: 'المهندس طارق (مدير النظام)',
+    id: 'u_teacher_admin_demo',
+    name: 'أ. د. محمد الشريف (معلم ومدير المنظومة)',
     email: 'admin.demo@edulearn.com',
     phone: '01000000001',
     role: 'admin',
     status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=100&q=80',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80',
     registrationDate: '2025-09-01',
     defaultPassword: 'Admin123!',
+    permissions: [
+      'view_students',
+      'view_reports',
+      'upload_lessons',
+      'edit_lessons',
+      'publish_lessons',
+      'upload_exams',
+      'edit_exams',
+      'publish_exams',
+      'assign_lessons',
+      'assign_packages',
+      'view_payments',
+      'manage_students',
+      'manage_teachers',
+    ],
+  },
+  admin: {
+    id: 'u_teacher_admin_demo',
+    name: 'أ. د. محمد الشريف (معلم ومدير المنظومة)',
+    email: 'admin.demo@edulearn.com',
+    phone: '01000000001',
+    role: 'admin',
+    status: 'active',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80',
+    registrationDate: '2025-09-01',
+    defaultPassword: 'Admin123!',
+    permissions: [
+      'view_students',
+      'view_reports',
+      'upload_lessons',
+      'edit_lessons',
+      'publish_lessons',
+      'upload_exams',
+      'edit_exams',
+      'publish_exams',
+      'assign_lessons',
+      'assign_packages',
+      'view_payments',
+      'manage_students',
+      'manage_teachers',
+    ],
   },
 };

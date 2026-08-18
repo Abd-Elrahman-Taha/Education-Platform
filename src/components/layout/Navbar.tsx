@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
   BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
-  BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard
+  BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard,
+  HelpCircle, Shield
 } from 'lucide-react';
 import { AppView, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -27,39 +28,40 @@ const studentNav: NavItem[] = [
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
   { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
   { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
-];
-
-const parentNav: NavItem[] = [
-  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
   { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
-  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
-];
-
-const adminNav: NavItem[] = [
-  { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-landing',           label: 'الطلاب', icon: Users },
-  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
   { id: 'view-teacher-inbox',     label: 'صندوق رسائل المعلم', icon: Inbox },
-  { id: 'view-drm-player',        label: 'الدروس', icon: Video },
+  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
   { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
+  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
+  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
+];
+
+const adminNav: NavItem[] = [
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
+  { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
+  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
+  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
+  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
+  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
 ];
 
 const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
-  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
-  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
+  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
+  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
   student: studentNav,
-  parent:  parentNav,
+  parent:  guestNav,
   admin:   adminNav,
   teacher: teacherNav,
 };
@@ -67,7 +69,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
 const ROLE_LABELS: Record<UserRole, string> = {
   student: 'طالب',
   parent:  'ولي أمر',
-  admin:   'أدمن',
+  admin:   'أدمن / مدير',
   teacher: 'معلم',
 };
 
@@ -82,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = isAuthenticated && currentUser
-    ? ROLE_NAV[currentUser.role]
+    ? ROLE_NAV[currentUser.role] || guestNav
     : guestNav;
 
   const handleNavClick = (view: AppView) => {

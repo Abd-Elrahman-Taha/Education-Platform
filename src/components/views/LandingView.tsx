@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles, Rocket, Star, Award, TrendingUp, Users, BookOpen, UserCheck, Smile,
-  CheckSquare, Lock, FileCheck, Bot, MessageSquare, ChevronDown, Check, ArrowLeft,
-  Clock, Sigma, Box, Play, Video, ClipboardList, Radio, FileText, BarChart2
+  Sparkles, Rocket, Star, Award, TrendingUp, Users, BookOpen, UserCheck,
+  Check, ArrowLeft, Clock, Sigma, Box, Play, Video, FileText, BarChart2,
+  HelpCircle, ShieldCheck, Shield, Lock, Bot, Layers, CheckCircle2,
+  GraduationCap, ChevronDown, ArrowRight, Flame, Activity, Phone
 } from 'lucide-react';
-import { AppView, Course } from '../../types';
+import { AppView, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { mockDB } from '../../services/db';
 
 interface LandingViewProps {
   onNavigateView: (view: AppView) => void;
@@ -15,16 +17,17 @@ interface LandingViewProps {
 
 export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpenAuthModal }) => {
   const { showToast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentUser } = useAuth();
   const [isYearlyBilling, setIsYearlyBilling] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [previewTab, setPreviewTab] = useState<'student' | 'parent' | 'teacher'>('student');
 
   // Animated counters
   const [counters, setCounters] = useState({ students: 0, lessons: 0, score: 0, rating: 0 });
 
   useEffect(() => {
-    const duration = 1500;
-    const steps = 30;
+    const duration = 1200;
+    const steps = 25;
     const intervalTime = duration / steps;
     let step = 0;
 
@@ -34,99 +37,94 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
       setCounters({
         students: Math.floor(18500 * p),
         lessons:  Math.floor(320 * p),
-        score:    Math.floor(97 * p),
+        score:    Math.floor(98 * p),
         rating:   Math.floor(99 * p),
       });
 
       if (step >= steps) {
         clearInterval(timer);
-        setCounters({ students: 18500, lessons: 320, score: 97, rating: 99 });
+        setCounters({ students: 18500, lessons: 320, score: 98, rating: 99 });
       }
     }, intervalTime);
 
     return () => clearInterval(timer);
   }, []);
 
-  const faqs = [
+  const topFaqs = [
     {
-      q: 'ما هي المواد الدراسية المتاحة على المنصة؟',
-      a: 'تتخصص المنصة حصريًا في مادتي التفاضل والتكامل (Calculus) والهندسة الفراغية (3D Geometry) للمرحلة الثانوية بكل مستوياتها، مع شرح مفصّل وامتحانات تفاعلية وملازم PDF.',
+      q: 'كيف يمكن للطالب الوصول للدروس الموحدة وامتحانات البابل شيت؟',
+      a: 'بمجرد تسجيل الدخول وتحديد السنة الدراسية (أولى، ثانية، أو ثالثة ثانوي)، يتم فتح المحاضرات المتاحة فوراً مع إمكانية مشاهدة الفيديو المحمي DRM، تنزيل ملزمة PDF، وحل واجب المحاضرة وامتحان البابل شيت.',
     },
     {
-      q: 'كيف تضمن المنصة حماية الفيديوهات من التسريب؟',
-      a: 'تعتمد المنصة على تقنية DRM المتقدمة مع طباعة علامة مائية ديناميكية تتبع حركة العين والشاشة وتحتوي على اسم الطالب وكوده وعنوان الـ IP لمنع أي تصوير أو تسجيل.',
+      q: 'كيف يتابع ولي الأمر درجات الطالب ونسبة الحضور بدون حساب؟',
+      a: 'يمكن لولي الأمر الضغط مباشرة على زر "بوابة ولي الأمر" في القائمة العلوية وإدخال كود الطالب والرقم القومي لرؤية التقرير الأكاديمي الشامل ومنحنى الدرجات ونسبة حضور المحاضرات لحظياً.',
     },
     {
-      q: 'كيف يستفيد ولي الأمر من المنصة؟',
-      a: 'يحصل ولي الأمر على كود متابعة خاص لبوابة ولي الأمر لرؤية منحنى أداء الطالب في مادتي التفاضل والهندسة الفراغية، نسبة الحضور، ودرجات الاختبارات مع إمكانية استلام تقرير شامل تلقائي.',
+      q: 'كيف تضمن المنصة حماية المحاضرات والفيديوهات من التسريب؟',
+      a: 'تعتمد المنصة على تشفير DRM المتقدم مع طباعة علامة مائية ديناميكية تتبع حركة الشاشة وتحتوي على اسم الطالب وكوده وعنوان الـ IP لمنع أي تصوير أو إعادة تسجيل.',
     },
     {
-      q: 'هل يمكنني استخدام المساعد الذكي AI Tutor لحل مسائل الرياضيات؟',
-      a: 'نعم! مساعد Syntax AI متخصص في مسائل التفاضل والتكامل والهندسة الفراغية ويستجيب فوراً مع توليد خطوات الحل التفصيلية ورسوم بيانية توضيحية.',
+      q: 'كيف يحدد المعلم والإدارة صلاحيات الدروس والامتحانات؟',
+      a: 'توفر لوحة تحكم المعلم إمكانية نشر أو إخفاء المحاضرات بنقرة واحدة، وتعيين دروس وباقات اشتراك مخصصة لكل طالب، مع الاطلاع على قائمة أوائل الطلاب المتفوقين.',
+    },
+    {
+      q: 'هل يتوفر مساعد ذكي متخصص في حل مسائل الرياضيات؟',
+      a: 'نعم، يتضمن كل درس مساعد Syntax AI الذكي المدرب خصيصاً على تفكيك مسائل التفاضل والتكامل والهندسة الفراغية خطوة بخطوة مع توضيح القوانين والرسوم التوضيحية.',
     },
   ];
 
   return (
     <div className="fade-in-up">
-      {/* ── HERO SECTION ─────────────────────────────────── */}
-      <section className="hero-section">
-        <div className="container hero-grid">
+      {/* ── 1. HERO SECTION (Requirements #1 & #2) ──────────── */}
+      <section className="hero-section" style={{ paddingTop: '3.5rem', paddingBottom: '4rem' }}>
+        <div className="container hero-grid" style={{ alignItems: 'center' }}>
           {/* Left: Content */}
           <div className="hero-content">
-            <div className="gradient-badge">
-              <Sparkles size={15} /> منصة التفاضل والهندسة الفراغية الأولى في مصر
+            <div className="gradient-badge" style={{ marginBottom: '1.25rem' }}>
+              <Sparkles size={15} /> المنظومة التعليمية المتكاملة للرياضيات في مصر
             </div>
 
-            <h1>
-              أتقن{' '}
-              <span className="gradient-text">التفاضل والتكامل</span>{' '}
-              و<span className="gradient-text">الهندسة الفراغية</span>{' '}
-              بأسلوب عصري
+            <h1 style={{ fontSize: 'clamp(2.1rem, 3.8vw, 3.1rem)', fontWeight: 900, lineHeight: 1.25, marginBottom: '1.25rem' }}>
+              منظومة متكاملة <span className="gradient-text">للتعلم، متابعة التقدم،</span> والتميز في الرياضيات
             </h1>
 
-            <p className="hero-subtitle">
-              تجربة تعليمية متكاملة في مادتي التفاضل والتكامل والهندسة الفراغية تجمع بين شرح الفيديو المحمي DRM،
-              امتحانات تفاعلية، ومساعد الذكاء الاصطناعي المتاح 24/7.
+            <p className="hero-subtitle" style={{ fontSize: '1.05rem', lineHeight: 1.75, marginBottom: '2rem' }}>
+              منصة تعليمية متخصصة تجمع الطلاب وأولياء الأمور والمعلمين في بيئة رقمية واحدة: محاضرات فيديو فائقة الحماية بتقنية DRM، امتحانات بابل شيت تفاعلية مع تصحيح ذكي، ومتابعة فورية لدرجات وتقارير الطالب.
             </p>
 
-            <div className="hero-cta-group">
+            <div className="hero-cta-group" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
               <button
                 className="btn btn-primary btn-lg"
                 onClick={isAuthenticated ? () => onNavigateView('view-drm-player') : onOpenAuthModal}
-                style={{ padding: '0.9rem 2rem', fontSize: '1.05rem' }}
+                style={{ padding: '0.95rem 2.2rem', fontSize: '1.05rem', fontWeight: 800 }}
               >
                 <Rocket size={20} /> ابدأ التعلم الآن
               </button>
               <button
                 className="btn btn-secondary btn-lg"
-                onClick={() => onNavigateView('view-assessment')}
-                style={{ padding: '0.9rem 2rem', fontSize: '1.05rem' }}
+                onClick={() => onNavigateView('view-parent-portal')}
+                style={{ padding: '0.95rem 2rem', fontSize: '1.05rem', fontWeight: 700 }}
               >
-                <Play size={18} /> جرّب امتحان مجاني
+                <ShieldCheck size={20} color="var(--primary-light)" /> متابعة أداء الطالب
               </button>
             </div>
 
-            <div className="hero-trust-badge">
-              <div className="avatar-group">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" className="avatar-stack" alt="Student" />
-                <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" className="avatar-stack" alt="Student" />
-                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" className="avatar-stack" alt="Student" />
+            {/* Quick Trust Pill */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#F59E0B' }}>
+                <Star size={16} fill="#F59E0B" />
+                <Star size={16} fill="#F59E0B" />
+                <Star size={16} fill="#F59E0B" />
+                <Star size={16} fill="#F59E0B" />
+                <Star size={16} fill="#F59E0B" />
               </div>
-              <div className="trust-info">
-                <div className="stars">
-                  <Star size={14} fill="currentColor" />
-                  <Star size={14} fill="currentColor" />
-                  <Star size={14} fill="currentColor" />
-                  <Star size={14} fill="currentColor" />
-                  <Star size={14} fill="currentColor" />
-                  <span style={{ marginRight: '4px' }}>(4.9/5)</span>
-                </div>
-                <span className="trust-text">محل ثقة أكثر من 18,000 طالب في التفاضل والهندسة الفراغية</span>
-              </div>
+              <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                مصممة خصيصاً لطلاب المرحلة الثانوية • الصفوف الأول والثاني والثالث
+              </span>
             </div>
           </div>
 
-          {/* Right: Teacher Image Visual */}
+          {/* Right: Teacher Image Visual & Live Educational Dashboard Mockup */}
           <div className="hero-visual-wrapper">
             <div className="hero-teacher-image-wrapper">
               <img
@@ -138,163 +136,496 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
               <div className="hero-teacher-overlay">
                 <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
                   <div style={{
-                    background: 'rgba(8,145,178,0.9)', backdropFilter: 'blur(8px)',
+                    background: 'rgba(8,145,178,0.92)', backdropFilter: 'blur(8px)',
                     padding: '0.4rem 0.9rem', borderRadius: '9999px', fontSize: '0.78rem',
                     fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.35rem'
                   }}>
                     <Sigma size={13} /> التفاضل والتكامل
                   </div>
                   <div style={{
-                    background: 'rgba(13,148,136,0.9)', backdropFilter: 'blur(8px)',
+                    background: 'rgba(13,148,136,0.92)', backdropFilter: 'blur(8px)',
                     padding: '0.4rem 0.9rem', borderRadius: '9999px', fontSize: '0.78rem',
                     fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.35rem'
                   }}>
                     <Box size={13} /> الهندسة الفراغية
                   </div>
                 </div>
-                <div style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', padding: '0.35rem 0.75rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600, color: '#10B981' }}>
+                <div style={{ background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.4)', padding: '0.35rem 0.75rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: '#10B981' }}>
                   ● متاح الآن
                 </div>
               </div>
             </div>
 
-            {/* Floating stat cards */}
+            {/* Floating stat cards around teacher image */}
             <div className="glass-card floating-card-1">
               <TrendingUp size={26} color="var(--success)" />
               <div>
-                <strong style={{ fontSize: '0.88rem', display: 'block', color: 'var(--text-bright)' }}>معدل النجاح</strong>
-                <span style={{ fontSize: '0.78rem', color: 'var(--success)' }}>97% من الطلاب تفوقوا</span>
+                <strong style={{ fontSize: '0.88rem', display: 'block', color: 'var(--text-bright)' }}>معدل التفوق</strong>
+                <span style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: 700 }}>98% من الطلاب</span>
               </div>
             </div>
 
             <div className="glass-card floating-card-2">
               <Award size={26} color="var(--accent)" />
               <div>
-                <strong style={{ fontSize: '0.88rem', display: 'block', color: 'var(--text-bright)' }}>أعلى الدرجات</strong>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>+12 طالب الأوائل هذا الشهر</span>
+                <strong style={{ fontSize: '0.88rem', display: 'block', color: 'var(--text-bright)' }}>أوائل الثانوية العامة</strong>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>+15 طالباً متفوقاً</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── STATISTICS BAR ───────────────────────────────── */}
-      <section className="stats-section">
+      {/* ── 2. TRUST & QUICK STATS (Requirement #3) ──────────── */}
+      <section className="stats-section" style={{ padding: '2rem 0' }}>
         <div className="container">
           <div className="stats-grid">
             <div className="glass-card stat-card">
               <div className="stat-number gradient-text">{counters.students.toLocaleString()}+</div>
-              <div className="stat-label"><Users size={16} /> طالب مشترك</div>
+              <div className="stat-label"><Users size={16} /> طالب مسجل في الرياضيات</div>
             </div>
             <div className="glass-card stat-card">
               <div className="stat-number gradient-text">{counters.lessons}+</div>
-              <div className="stat-label"><BookOpen size={16} /> درس ومحاضرة</div>
+              <div className="stat-label"><BookOpen size={16} /> محاضرة فيديو محمية DRM</div>
             </div>
             <div className="glass-card stat-card">
               <div className="stat-number gradient-text">{counters.score}%</div>
-              <div className="stat-label"><TrendingUp size={16} /> معدل النجاح</div>
+              <div className="stat-label"><TrendingUp size={16} /> نسبة اجتياز اختبارات البابل شيت</div>
             </div>
             <div className="glass-card stat-card">
-              <div className="stat-number gradient-text">{counters.rating}%</div>
-              <div className="stat-label"><Smile size={16} /> رضا أولياء الأمور</div>
+              <div className="stat-number gradient-text">3 مراحل</div>
+              <div className="stat-label"><GraduationCap size={16} /> أولى وثانية وثالثة ثانوي</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── SUBJECTS SECTION ─────────────────────────────── */}
-      <section className="container" style={{ padding: '5rem 1.5rem' }}>
+      {/* ── 3. "WHY THIS PLATFORM?" (Requirement #4) ─────────── */}
+      <section className="container" style={{ padding: '5rem 1.5rem 3rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><Sigma size={15} /> المواد الدراسية المتخصصة</span>
-          <h2 className="section-title">مادتان. شرح شامل. نتائج مضمونة.</h2>
-          <p className="section-subtitle">نتخصص حصريًا في التفاضل والتكامل والهندسة الفراغية لضمان أعمق مستوى من الفهم والإتقان.</p>
+          <span className="gradient-badge"><Award size={15} /> لماذا تختار منصة Syntax؟</span>
+          <h2 className="section-title">بيئة تعليمية متطورة مصممة خصيصاً للنجاح</h2>
+          <p className="section-subtitle">
+            نجمع بين قوة الشرح الرياضي الأكاديمي، أحدث تقنيات حماية البث، والتقييم الذكي لضمان أعلى درجات التفوق.
+          </p>
         </div>
 
-        <div className="subjects-grid">
-          {/* Calculus */}
-          <div className="glass-card subject-card" onClick={() => onNavigateView('view-drm-player')}>
-            <div className="subject-icon">
-              <Sigma size={30} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+          <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(8,145,178,0.15)', color: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Layers size={24} />
             </div>
-            <h3 className="subject-title">التفاضل والتكامل</h3>
-            <p className="subject-subtitle">
-              من المشتقات إلى التكاملات — شرح تفصيلي لكل مفهوم مع حل أمثلة من امتحانات وزارة التربية والتعليم.
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>تعلم منظم حسب السنة الدراسية</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7, margin: 0 }}>
+              مقررات دراسية مخصصة بدقة لكل سنة (الأولى، الثانية، والثالثة الثانوي) مع تسلسل منطقي من الأساسيات إلى امتحانات الثانوية العامة.
             </p>
-            <div className="subject-features">
-              <div className="subject-feature-item"><Check size={15} /> <span>دروس فيديو محمية DRM</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>واجبات وامتحانات تفاعلية</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>ملازم PDF مفصّلة</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>جلسات بث مباشر أسبوعية</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>مساعد AI متخصص في الحساب</span></div>
+          </div>
+
+          <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16,185,129,0.15)', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <TrendingUp size={24} />
             </div>
-            <button className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%' }}>
-              ابدأ التفاضل والتكامل <ArrowLeft size={16} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>متابعة فورية للدرجات والتقدم</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7, margin: 0 }}>
+              منحنيات بيانية ورسوم تفاعلية تظهر تطور درجات الطالب بعد كل اختبار بابل شيت مع تحديد فوري لنسب الحضور والإنجاز.
+            </p>
+          </div>
+
+          <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Shield size={24} />
+            </div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>حماية الفيديوهات ونظام فتح الدروس</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7, margin: 0 }}>
+              حماية DRM صارمة بعلامات مائية ديناميكية، ونظام ذكي يشترط اجتياز امتحان الدرس الحالي لفتح المحاضرة التالية.
+            </p>
+          </div>
+
+          <div className="glass-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(139,92,246,0.15)', color: '#8B5CF6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bot size={24} />
+            </div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>مساعد ذكي متخصص 24/7</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7, margin: 0 }}>
+              مساعد AI مدمج في كل درس يساعدك على حل خطوات المسائل الصعبة والإجابة على أي استفسار رياضي في أي وقت.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 4. HOW IT WORKS (Requirement #5) ─────────────────── */}
+      <section className="container" style={{ padding: '4rem 1.5rem 4rem' }}>
+        <div className="section-header">
+          <span className="gradient-badge"><Clock size={15} /> خطوات سهلة وسريعة</span>
+          <h2 className="section-title">كيف تبدأ رحلة تفوقك مع المنصة؟</h2>
+          <p className="section-subtitle">
+            ثلاث خطوات بسيطة تفصلك عن تجربة تعليمية متكاملة في التفاضل والهندسة الفراغية.
+          </p>
+        </div>
+
+        <div className="steps-grid">
+          <div className="glass-card step-card">
+            <div className="step-number-badge">1</div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              سجّل حسابك وحدد سنتك الدراسية
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7 }}>
+              أنشئ حساب طالب جديد واختر صفك الدراسي (أولى، ثانية، أو ثالثة ثانوي) لتظهر لك المقررات والباقات المناسبة تلقائياً.
+            </p>
+          </div>
+
+          <div className="glass-card step-card">
+            <div className="step-number-badge">2</div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              شاهد المحاضرات وحل الاختبارات
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7 }}>
+              تابع الفيديو المحمي DRM، حمّل ملزمة الـ PDF المرفقة، وحل واجب المحاضرة وامتحان البابل شيت لفتح الدرس التالي.
+            </p>
+          </div>
+
+          <div className="glass-card step-card">
+            <div className="step-number-badge">3</div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              تابع درجاتك وشارك تقريرك
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7 }}>
+              راقب منحنى تقدمك الأكاديمي، واستفد من تقارير ولي الأمر الفورية التي تبرز تفوقك والتزامك خطوة بخطوة.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 5. DIFFERENT EXPERIENCE FOR EVERY USER (Requirement #6) ── */}
+      <section className="container" style={{ padding: '3rem 1.5rem 5rem' }}>
+        <div className="section-header">
+          <span className="gradient-badge"><Users size={15} /> لكل مستخدم تجربة مخصصة</span>
+          <h2 className="section-title">منظومة مصممة لخدمة أطراف العملية التعليمية</h2>
+        </div>
+
+        <div className="experience-grid">
+          {/* Card 1: Students */}
+          <div className="glass-card experience-card featured">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GraduationCap size={24} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>للطلاب (Students)</h3>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--primary-light)' }}>تعلّم، تدرّب، وتفوّق</span>
+                </div>
+              </div>
+
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> دروس فيديو موحدة مع مشغل DRM</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> امتحانات بابل شيت مع تصحيح لحظي</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> مساعد AI لحل المسائل خطوة بخطوة</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> ملازم PDF وواجبات مخصصة لكل درس</li>
+              </ul>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={isAuthenticated ? () => onNavigateView('view-student-dashboard') : onOpenAuthModal}
+            >
+              ابدأ التعلم كطالب <ArrowLeft size={16} />
             </button>
           </div>
 
-          {/* 3D Geometry */}
-          <div className="glass-card subject-card" onClick={() => onNavigateView('view-drm-player')}>
-            <div className="subject-icon" style={{
-              background: 'linear-gradient(135deg, rgba(13,148,136,.2), rgba(8,145,178,.2))',
-              borderColor: 'rgba(13,148,136,.25)',
-              color: 'var(--secondary-light)'
-            }}>
-              <Box size={30} />
+          {/* Card 2: Parents */}
+          <div className="glass-card experience-card">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'rgba(16,185,129,0.15)', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldCheck size={24} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>لأولياء الأمور (Parents)</h3>
+                  <span style={{ fontSize: '0.82rem', color: '#10B981' }}>متابعة لحظية بدون إنشاء حساب</span>
+                </div>
+              </div>
+
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> استعلام سريع بكود الطالب والرقم القومي</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> منحنى درجات الامتحانات والتقييمات</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> نسبة حضور المحاضرات ومعدل الالتزام</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> إمكانية إرسال التقرير عبر WhatsApp</li>
+              </ul>
             </div>
-            <h3 className="subject-title">الهندسة الفراغية</h3>
-            <p className="subject-subtitle">
-              الأجسام ثلاثية الأبعاد، المستويات، الحجوم — شرح بصري ثلاثي الأبعاد مع تطبيقات عملية ومسائل احترافية.
-            </p>
-            <div className="subject-features">
-              <div className="subject-feature-item"><Check size={15} /> <span>رسوم توضيحية ثلاثية الأبعاد</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>واجبات وامتحانات تفاعلية</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>ملازم PDF مع رسومات هندسية</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>جلسات بث مباشر أسبوعية</span></div>
-              <div className="subject-feature-item"><Check size={15} /> <span>مساعد AI متخصص في الهندسة</span></div>
+
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => onNavigateView('view-parent-portal')}
+            >
+              استخراج تقرير الطالب <ArrowLeft size={16} />
+            </button>
+          </div>
+
+          {/* Card 3: Teachers */}
+          <div className="glass-card experience-card">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserCheck size={24} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>للمعلمين والإدارة (Teachers)</h3>
+                  <span style={{ fontSize: '0.82rem', color: '#F59E0B' }}>إدارة شاملة للمحتوى والطلاب</span>
+                </div>
+              </div>
+
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> لوحة تحكم مفصلة حسب السنة الدراسية</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> نشر وإخفاء الدروس والامتحانات بضغطة زر</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> تعيين باقات ودروس مخصصة لكل طالب</li>
+                <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Check size={16} color="#10B981" /> إدارة صلاحيات المعلمين ومراقبة الأداء</li>
+              </ul>
             </div>
-            <button className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%', background: 'linear-gradient(135deg, var(--secondary), var(--primary))' }}>
-              ابدأ الهندسة الفراغية <ArrowLeft size={16} />
+
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={isAuthenticated ? () => onNavigateView('view-admin') : onOpenAuthModal}
+            >
+              لوحة الإدارة والتحكم <ArrowLeft size={16} />
             </button>
           </div>
         </div>
       </section>
 
-      {/* ── PLATFORM FEATURES ────────────────────────────── */}
-      <section className="container" style={{ padding: '2rem 1.5rem 6rem 1.5rem' }}>
+      {/* ── 6. INTERACTIVE PLATFORM PREVIEW TABS (Requirements #8, #9, #10, #12) ── */}
+      <section className="container" style={{ padding: '3rem 1.5rem 5rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><Sparkles size={15} /> المنظومة التعليمية المتكاملة</span>
-          <h2 className="section-title">لماذا يختارنا طلاب الرياضيات؟</h2>
+          <span className="gradient-badge"><Activity size={15} /> نظرة حية داخل المنصة</span>
+          <h2 className="section-title">شاهد كيف تعمل المنصة قبل الاشتراك</h2>
+          <p className="section-subtitle">
+            استكشف واجهات المنصة المصممة وفق أعلى معايير تجربة المستخدم لضمان السهولة والدقة.
+          </p>
         </div>
 
-        <div className="features-grid">
-          <div className="glass-card feature-card">
-            <div className="feature-icon-box"><Lock size={28} /></div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-bright)' }}>حماية الفيديوهات DRM</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.7 }}>
-              علامات مائية متحركة بأسم الطالب وكوده لحماية شرح المعلم ومنع التسريب.
+        <div style={{ textAlign: 'center' }}>
+          <div className="preview-tab-bar">
+            <button
+              className={`preview-tab-btn ${previewTab === 'student' ? 'active' : ''}`}
+              onClick={() => setPreviewTab('student')}
+            >
+              <GraduationCap size={16} /> تجربة الطالب (Learning Hub)
+            </button>
+            <button
+              className={`preview-tab-btn ${previewTab === 'parent' ? 'active' : ''}`}
+              onClick={() => setPreviewTab('parent')}
+            >
+              <ShieldCheck size={16} /> تقرير ولي الأمر (Parent Report)
+            </button>
+            <button
+              className={`preview-tab-btn ${previewTab === 'teacher' ? 'active' : ''}`}
+              onClick={() => setPreviewTab('teacher')}
+            >
+              <UserCheck size={16} /> لوحة المعلم (Management Hub)
+            </button>
+          </div>
+        </div>
+
+        {/* Live Preview Display Box */}
+        <div className="glass-card" style={{ padding: '2.5rem', maxWidth: '950px', margin: '0 auto', border: '1px solid rgba(8,145,178,0.35)' }}>
+          {previewTab === 'student' && (
+            <div className="fade-in-up">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
+                <div>
+                  <span className="gradient-badge" style={{ fontSize: '0.75rem', marginBottom: '0.35rem' }}>لوحة تحليلات الطالب الشخصية</span>
+                  <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>مرحباً بك، أحمد طالب 👋</h3>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', padding: '0.4rem 0.85rem', borderRadius: 'var(--radius-md)', color: '#F59E0B', fontWeight: 800 }}>
+                  <Flame size={18} fill="#F59E0B" /> 7 أيام متتالية
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المعدل العام</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10B981' }}>98%</div>
+                </div>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المحاضرات المكتملة</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--primary-light)' }}>6 / 8 دروس</div>
+                </div>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>الامتحانات المجتازة</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#8B5CF6' }}>5 اختبارات</div>
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.3)', padding: '1.25rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary-light)', fontWeight: 700 }}>متابعة التعلم (Continue Learning)</span>
+                  <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.2rem 0' }}>المحاضرة 2: مشتقات الدوال المثلثية والهندسية</h4>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المدة: 1:30:00 • إنجاز 45%</span>
+                </div>
+                <button className="btn btn-primary" onClick={() => onNavigateView('view-drm-player')}>
+                  <Play size={16} /> استكمال المحاضرة
+                </button>
+              </div>
+            </div>
+          )}
+
+          {previewTab === 'parent' && (
+            <div className="fade-in-up">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
+                <div>
+                  <span className="gradient-badge" style={{ fontSize: '0.75rem', marginBottom: '0.35rem' }}>تقرير ولي الأمر المعتمد</span>
+                  <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>تقرير الطالب: أحمد طالب (#CODE-94021)</h3>
+                </div>
+                <span className="gradient-badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)' }}>
+                  ● حساب نشط ومثالي
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المعدل التراكمي للامتحانات</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10B981' }}>98.5%</div>
+                </div>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>نسبة حضور المحاضرات</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--primary-light)' }}>100%</div>
+                </div>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>باقة الاشتراك</span>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-bright)' }}>الباقة الشاملة</div>
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid var(--border-glass)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong style={{ fontSize: '0.95rem', color: 'var(--text-bright)' }}>آخر اختبار: المشتقات وقاعدة السلسلة</strong>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>الدرجة: 3 / 3 (100% — ناجح)</span>
+                </div>
+                <button className="btn btn-secondary" onClick={() => onNavigateView('view-parent-portal')}>
+                  فتح التقرير الكامل <ArrowLeft size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {previewTab === 'teacher' && (
+            <div className="fade-in-up">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <span className="gradient-badge" style={{ fontSize: '0.75rem', marginBottom: '0.35rem' }}>لوحة تحكم المعلم والإدارة</span>
+                  <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>إدارة الصف الثالث الثانوي</h3>
+                </div>
+                <div className="year-pill-group">
+                  <span className="year-pill-btn active">الصف الثالث الثانوي</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>الطلاب المسجلون</span>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-bright)' }}>4 طلاب</div>
+                </div>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>المشتركون بالباقات</span>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#10B981' }}>3 طلاب</div>
+                </div>
+                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>الدروس المنشورة</span>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--primary-light)' }}>4 / 5 دروس</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.3)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)' }}>
+                <div>
+                  <strong style={{ fontSize: '0.95rem', color: 'var(--text-bright)' }}>التحكم في نشر المحاضرات وتعيين الصلاحيات</strong>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>إتاحة أو حجب المحاضرات لكل طالب بنقرة واحدة</span>
+                </div>
+                <button className="btn btn-primary" onClick={isAuthenticated ? () => onNavigateView('view-admin') : onOpenAuthModal}>
+                  الدخول للوحة الإدارة
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── 7. ACADEMIC YEARS ("مصممة لرحلتك الأكاديمية") (Requirement #11) ── */}
+      <section className="container" style={{ padding: '3rem 1.5rem 5rem' }}>
+        <div className="section-header">
+          <span className="gradient-badge"><GraduationCap size={15} /> المراحل الدراسية المتاحة</span>
+          <h2 className="section-title">مصممة لرحلتك في المرحلة الثانوية</h2>
+          <p className="section-subtitle">
+            محتوى تعليمي متخصص يغطي كافة مقررات الرياضيات للمرحلة الثانوية بصفوفها الثلاثة.
+          </p>
+        </div>
+
+        <div className="academic-years-grid">
+          <div className="glass-card academic-year-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <span className="gradient-badge" style={{ fontSize: '0.75rem' }}>تأسيس شامل</span>
+              <Sigma size={24} color="var(--primary-light)" />
+            </div>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              الصف الأول الثانوي
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.7, marginBottom: '1.25rem' }}>
+              الجبر الخطي والمصفوفات، حساب المثلثات، والهندسة التحليلية والمستوية بأسلوب تطبيقي ميسر.
             </p>
+            <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Check size={14} color="#10B981" /> المصفوفات والعمليات عليها</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Check size={14} color="#10B981" /> حساب المثلثات والمتطابقات</li>
+            </ul>
+            <button className="btn btn-secondary" style={{ marginTop: 'auto', width: '100%' }} onClick={isAuthenticated ? () => onNavigateView('view-drm-player') : onOpenAuthModal}>
+              تصفح مقررات أولى ثانوي
+            </button>
           </div>
 
-          <div className="glass-card feature-card">
-            <div className="feature-icon-box"><FileCheck size={28} /></div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-bright)' }}>امتحانات البابل شيت</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.7 }}>
-              اختبارات أونلاين تفاعلية بنظام البابل شيت مع تصحيح فوري وتحليل الأخطاء.
+          <div className="glass-card academic-year-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <span className="gradient-badge" style={{ fontSize: '0.75rem' }}>مرحلة التخصص</span>
+              <Activity size={24} color="#10B981" />
+            </div>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              الصف الثاني الثانوي
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.7, marginBottom: '1.25rem' }}>
+              الدوال الحقيقية، حساب النهايات والاتصال، ومدخل التأسيس للتفاضل والتكامل والميكانيكا.
             </p>
+            <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Check size={14} color="#10B981" /> حساب النهايات عند نقطة واللانهاية</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Check size={14} color="#10B981" /> قواعد الاشتقاق التأسيسية</li>
+            </ul>
+            <button className="btn btn-secondary" style={{ marginTop: 'auto', width: '100%' }} onClick={isAuthenticated ? () => onNavigateView('view-drm-player') : onOpenAuthModal}>
+              تصفح مقررات ثانية ثانوي
+            </button>
           </div>
 
-          <div className="glass-card feature-card">
-            <div className="feature-icon-box"><Bot size={28} /></div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--text-bright)' }}>مساعد الذكاء الاصطناعي 24/7</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.7 }}>
-              مساعد متخصص في التفاضل والهندسة الفراغية يحل المسائل خطوة بخطوة في أي وقت.
+          <div className="glass-card academic-year-card" style={{ border: '1px solid var(--primary-light)', background: 'linear-gradient(135deg, rgba(8,145,178,0.12), rgba(19,46,53,0.85))' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <span className="gradient-badge" style={{ fontSize: '0.75rem' }}>الثانوية العامة</span>
+              <Box size={24} color="var(--primary-light)" />
+            </div>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              الصف الثالث الثانوي
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.7, marginBottom: '1.25rem' }}>
+              التفاضل والتكامل التخصصي، الهندسة الفراغية ثلاثية الأبعاد، مسائل المستويات، وتطبيقات الامتحانات الوزارية.
             </p>
+            <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Check size={14} color="#10B981" /> التفاضل والتكامل الكامل</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Check size={14} color="#10B981" /> الهندسة الفراغية والمجسمات</li>
+            </ul>
+            <button className="btn btn-primary" style={{ marginTop: 'auto', width: '100%' }} onClick={isAuthenticated ? () => onNavigateView('view-drm-player') : onOpenAuthModal}>
+              تصفح مقررات ثالثة ثانوي
+            </button>
           </div>
         </div>
       </section>
 
-      {/* ── PRICING ──────────────────────────────────────── */}
-      <section className="container" style={{ padding: '2rem 1.5rem 6rem 1.5rem' }}>
+      {/* ── 8. PRICING & SUBSCRIPTIONS (Reused & Enhanced) ──── */}
+      <section className="container" style={{ padding: '2rem 1.5rem 5rem 1.5rem' }}>
         <div className="section-header">
           <span className="gradient-badge"><Award size={15} /> الاشتراكات والباقات</span>
           <h2 className="section-title">اختر خطة تفوقك في الرياضيات</h2>
@@ -326,7 +657,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem', fontSize: '0.9rem' }}>
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> جميع محاضرات المادة المختارة</li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> امتحانات البابل شيت الأسبوعية</li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> تقرير شهري لولي الأمر</li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}><Check size={16} color="var(--success)" /> تقرير شامل لولي الأمر</li>
             </ul>
             <button className="btn btn-secondary" style={{ marginTop: 'auto' }} onClick={onOpenAuthModal}>اشترك الآن</button>
           </div>
@@ -363,25 +694,62 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
         </div>
       </section>
 
-      {/* ── FAQ ──────────────────────────────────────────── */}
-      <section className="container" style={{ padding: '2rem 1.5rem 7rem 1.5rem' }}>
+      {/* ── 9. FAQ ACCORDION SECTION (Requirement #13) ───────── */}
+      <section className="container" style={{ padding: '2rem 1.5rem 5rem 1.5rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><MessageSquare size={15} /> الأسئلة الشائعة</span>
+          <span className="gradient-badge"><HelpCircle size={15} /> الأسئلة الشائعة</span>
           <h2 className="section-title">إجابات لكافة استفساراتك</h2>
         </div>
 
-        <div className="faq-container">
-          {faqs.map((faq, idx) => (
-            <div key={idx} className={`faq-item ${openFaq === idx ? 'active' : ''}`}>
+        <div className="faq-container" style={{ maxWidth: '850px', margin: '0 auto' }}>
+          {topFaqs.map((faq, idx) => (
+            <div key={idx} className={`faq-item ${openFaq === idx ? 'active' : ''}`} style={{ marginBottom: '1rem' }}>
               <div className="faq-question" onClick={() => setOpenFaq(openFaq === idx ? null : idx)}>
-                <span>{faq.q}</span>
+                <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-bright)' }}>{faq.q}</span>
                 <ChevronDown size={18} className="faq-icon" />
               </div>
               <div className="faq-answer">
-                <p>{faq.a}</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.7, margin: 0 }}>{faq.a}</p>
               </div>
             </div>
           ))}
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+          <button className="btn btn-secondary" onClick={() => onNavigateView('view-faq')}>
+            <HelpCircle size={16} /> تصفح جميع الأسئلة الشائعة (FAQ Hub)
+          </button>
+        </div>
+      </section>
+
+      {/* ── 10. FINAL CALL TO ACTION (Requirement #14) ──────── */}
+      <section className="container" style={{ padding: '2rem 1.5rem 6rem 1.5rem' }}>
+        <div className="glass-card" style={{ padding: '3.5rem 2.5rem', textAlign: 'center', background: 'linear-gradient(135deg, rgba(8,145,178,0.2), rgba(19,46,53,0.9))', border: '1px solid rgba(8,145,178,0.35)', position: 'relative', overflow: 'hidden' }}>
+          <span className="gradient-badge" style={{ marginBottom: '1rem' }}>
+            <Rocket size={15} /> انضم لمنظومة التفوق في الرياضيات
+          </span>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 3.2vw, 2.5rem)', fontWeight: 900, color: 'var(--text-bright)', margin: '0.5rem 0 1rem' }}>
+            جاهز لبدء رحلة التميز والتفوق الأكاديمي؟
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', maxWidth: '680px', margin: '0 auto 2rem', lineHeight: 1.7 }}>
+            انضم الآن لآلاف الطلاب واحصل على وصول مباشر لمحاضرات التفاضل والهندسة الفراغية، امتحانات البابل شيت، ومتابعة دقيقة لمستواك الأكاديمي.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-primary btn-lg"
+              onClick={isAuthenticated ? () => onNavigateView('view-drm-player') : onOpenAuthModal}
+              style={{ padding: '0.95rem 2.5rem', fontSize: '1.05rem', fontWeight: 800 }}
+            >
+              <Rocket size={18} /> ابدأ التعلم الآن
+            </button>
+            <button
+              className="btn btn-secondary btn-lg"
+              onClick={() => onNavigateView('view-parent-portal')}
+              style={{ padding: '0.95rem 2rem', fontSize: '1.05rem', fontWeight: 700 }}
+            >
+              <ShieldCheck size={18} /> استخراج تقرير ولي الأمر
+            </button>
+          </div>
         </div>
       </section>
     </div>
