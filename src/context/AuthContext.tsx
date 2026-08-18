@@ -60,6 +60,7 @@ export const DEMO_USERS: Record<'student' | 'teacher' | 'admin', User & { defaul
     name: 'أحمد طالب (طالب)',
     email: 'student.demo@edulearn.com',
     phone: '01012345678',
+    nationalId: '30501011234567',
     role: 'student',
     academicYear: 'third_secondary',
     status: 'active',

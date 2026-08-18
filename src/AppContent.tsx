@@ -18,6 +18,8 @@ import { ShareModal } from './components/modals/ShareModal';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { useAuth } from './context/AuthContext';
 
+import { StandaloneAIView } from './features/ai/components/StandaloneAIView';
+
 export const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>('view-landing');
@@ -75,17 +77,36 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
+        {/* Lessons & Lectures — Accessible for authenticated users (Students, Teachers, Admins) */}
         {currentView === 'view-drm-player' && (
           <RoleGuard
             allowedRoles={['student', 'teacher', 'admin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
-            <UnifiedLessonView activeLessonId={activeLessonId} onNavigateView={handleNavigateView} />
+            <UnifiedLessonView
+              activeLessonId={activeLessonId}
+              onNavigateView={handleNavigateView}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            />
           </RoleGuard>
         )}
 
+        {/* Exams View — Accessible only after login (Students: Exam History/Taking, Teacher/Admin: Analytics) */}
         {currentView === 'view-assessment' && (
-          <StandaloneExamsView />
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <StandaloneExamsView
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+              onNavigateView={handleNavigateView}
+            />
+          </RoleGuard>
+        )}
+
+        {/* Standalone AI View — Dedicated Navbar AI Experience */}
+        {currentView === 'view-ai' && (
+          <StandaloneAIView onOpenAuthModal={() => setIsAuthModalOpen(true)} />
         )}
 
         {currentView === 'view-teacher-inbox' && (
@@ -97,18 +118,22 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Parent Portal is public & verification-based (Requirement #2) */}
+        {/* Parent Portal is public & verification-based */}
         {currentView === 'view-parent-portal' && (
           <ParentPortalView />
         )}
 
-        {/* Dedicated FAQ View (Requirement #3) */}
+        {/* Dedicated FAQ View */}
         {currentView === 'view-faq' && (
           <FAQView />
         )}
 
+        {/* Community with Auth Gate for Guests */}
         {currentView === 'view-community' && (
-          <CommunityView onOpenShareModal={() => setIsShareModalOpen(true)} />
+          <CommunityView
+            onOpenShareModal={() => setIsShareModalOpen(true)}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          />
         )}
 
         {currentView === 'view-admin' && (

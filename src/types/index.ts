@@ -53,6 +53,7 @@ export type AppView =
   | 'view-live'
   | 'view-ai'
   | 'view-teacher-inbox'
+  | 'view-packages'
   | 'view-subject-calculus'
   | 'view-subject-geometry';
 
@@ -61,6 +62,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  nationalId?: string;
   role: UserRole;
   status: 'active' | 'blocked' | 'inactive';
   avatar: string;

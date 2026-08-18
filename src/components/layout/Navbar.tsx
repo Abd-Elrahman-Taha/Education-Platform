@@ -26,37 +26,37 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
-  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
+  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
-  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
+  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
+  { id: 'view-community',         label: 'مجتمع الطلاب', icon: MessageSquare },
 ];
 
 const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
-  { id: 'view-teacher-inbox',     label: 'صندوق رسائل المعلم', icon: Inbox },
-  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
-  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
-  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
+  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
+  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
+  { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
+  { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
 ];
 
 const adminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
+  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
+  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
+  { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
   { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
-  { id: 'view-drm-player',        label: 'الدروس الموحدة', icon: Video },
-  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
-  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
 ];
 
 const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
-  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
-  { id: 'view-faq',               label: 'الأسئلة الشائعة', icon: HelpCircle },
+  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
+  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
 ];
 
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
@@ -69,8 +69,8 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
 const ROLE_LABELS: Record<UserRole, string> = {
   student: 'طالب',
   parent:  'ولي أمر',
-  admin:   'أدمن / مدير',
-  teacher: 'معلم',
+  admin:   'معلم / مدير',
+  teacher: 'معلم / مدير',
 };
 
 export const Navbar: React.FC<NavbarProps> = ({

@@ -124,7 +124,7 @@ export const AskTeacherSection: React.FC<Props> = ({ lessonId, lessonTitle }) =>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {messages.map(msg => (
-              <div key={msg.id} className="glass-card" style={{ padding: '1rem 1.25rem', background: 'rgba(15,23,42,0.4)', border: '1px solid var(--border-glass)' }}>
+              <div key={msg.id} className="glass-card" style={{ padding: '1rem 1.25rem', background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <strong style={{ fontSize: '0.88rem', color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <User size={14} color="var(--primary-light)" /> {msg.studentName}

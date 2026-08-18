@@ -16,7 +16,7 @@ interface Props {
   onNavigateView: (view: AppView, lessonId?: string) => void;
 }
 
-const PIE_COLORS = ['#0891B2', '#06B6D4', '#E11D48'];
+const PIE_COLORS = ['#0891B2', ' #ffc800', '#E11D48'];
 
 export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
   const { data: dashboardRes, isLoading: isDashLoading, isError: isDashError, refetch: refetchDash } = useQuery({
@@ -62,7 +62,7 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem' }}>
       {/* ── WELCOME BANNER ─────────────────────────────────── */}
-      <div className="glass-card" style={{ padding: '2rem 2.5rem', marginBottom: '2rem', background: 'linear-gradient(135deg, rgba(8,145,178,0.18), rgba(15,23,42,0.65))', border: '1px solid rgba(8,145,178,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
+      <div className="glass-card" style={{ padding: '2rem 2.5rem', marginBottom: '2rem', background: 'var(--banner-gradient)', border: '1px solid rgba(8,145,178,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <span style={{ background: 'rgba(8,145,178,0.25)', color: 'var(--primary-light)', padding: '0.3rem 0.85rem', borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 700 }}>

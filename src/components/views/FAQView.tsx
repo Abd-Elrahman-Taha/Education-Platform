@@ -130,7 +130,7 @@ export const FAQView: React.FC = () => {
       </div>
 
       {/* Need More Help Card */}
-      <div className="glass-card" style={{ maxWidth: '850px', margin: '3.5rem auto 0', padding: '2rem', textAlign: 'center', background: 'linear-gradient(135deg, rgba(8,145,178,0.15), rgba(15,23,42,0.6))', border: '1px solid rgba(8,145,178,0.25)' }}>
+      <div className="glass-card" style={{ maxWidth: '850px', margin: '3.5rem auto 0', padding: '2rem', textAlign: 'center', background: 'var(--banner-gradient)', border: '1px solid rgba(8,145,178,0.25)' }}>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
           لديك سؤال آخر لم تجد إجابته؟
         </h3>

@@ -835,7 +835,7 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* SECTION: ASSIGN PACKAGES (Requirement #17) */}
-            <div style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <Layers size={16} color="var(--primary-light)" /> تعيين الباقة للطالب (Assign Package)
               </h3>
@@ -868,7 +868,7 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* SECTION: ASSIGN SPECIFIC LESSONS (Requirement #16) */}
-            <div style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <BookOpen size={16} color="var(--primary-light)" /> تعيين الدروس والمحاضرات الفردية (Assign Lessons)
               </h3>

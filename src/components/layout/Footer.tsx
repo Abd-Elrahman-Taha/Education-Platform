@@ -61,7 +61,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateView, onOpenAuthModal 
               <button className="footer-link" onClick={() => handleNav('view-drm-player')}>
                 الدروس والمحاضرات
               </button>
-              <button className="footer-link" onClick={() => handleNav('view-assessment')}>
+              <button className="footer-link" onClick={isAuthenticated ? () => handleNav('view-assessment') : onOpenAuthModal}>
                 سجل الامتحانات
               </button>
               <button className="footer-link" onClick={() => handleNav('view-community')}>

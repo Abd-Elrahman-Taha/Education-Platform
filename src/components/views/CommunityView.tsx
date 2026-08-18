@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { MessageSquare, ThumbsUp, Share2, Download, Plus, Search, Tag, CheckCircle2, User, Send, Sigma, Box, BookOpen, Layers } from 'lucide-react';
+import { MessageSquare, ThumbsUp, Share2, Download, Plus, Search, Tag, CheckCircle2, User, Send, Sigma, Box, BookOpen, Layers, LogIn, UserPlus, Sparkles, Users, HelpCircle, ShieldCheck } from 'lucide-react';
 import { CommunityPost } from '../../types';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface CommunityViewProps {
   onOpenShareModal: () => void;
+  onOpenAuthModal?: () => void;
 }
 
-export const CommunityView: React.FC<CommunityViewProps> = ({ onOpenShareModal }) => {
+export const CommunityView: React.FC<CommunityViewProps> = ({ onOpenShareModal, onOpenAuthModal }) => {
   const { showToast } = useToast();
+  const { isAuthenticated } = useAuth();
   const [activeSubject, setActiveSubject] = useState<string>('all');
   const [showNewQuestionForm, setShowNewQuestionForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -95,6 +98,83 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onOpenShareModal }
   const totalAll = posts.length;
   const totalCalc = posts.filter(p => p.subject === 'التفاضل والتكامل').length;
   const totalGeom = posts.filter(p => p.subject === 'الهندسة الفراغية').length;
+
+  // ── GUEST AUTHENTICATION REQUIRED SCREEN ────────────────────
+  if (!isAuthenticated) {
+    return (
+      <div className="container fade-in-up" style={{ padding: '3rem 1.5rem 6rem' }}>
+        <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 3rem' }}>
+          <div style={{
+            width: '80px', height: '80px', borderRadius: '24px', margin: '0 auto 1.5rem',
+            background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 32px var(--primary-glow)',
+          }}>
+            <Users size={38} color="#fff" />
+          </div>
+          <span className="gradient-badge" style={{ marginBottom: '0.75rem' }}>
+            <Sparkles size={14} /> مجتمع الطلاب والمعلمين
+          </span>
+          <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--text-bright)', margin: '0.5rem 0 0.75rem' }}>
+            انضم إلى مجتمع التعلم
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '1rem', lineHeight: 1.7, maxWidth: '580px', margin: '0 auto' }}>
+            سجّل دخولك للمشاركة في النقاشات، طرح الأسئلة والاستفسارات في مادتي التفاضل والتكامل والهندسة الفراغية، والتواصل المباشر مع معلم المادة وزملائك الطلاب.
+          </p>
+        </div>
+
+        {/* Feature Highlights Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', maxWidth: '900px', margin: '0 auto 3rem' }}>
+          <div className="glass-card" style={{ padding: '1.75rem', textAlign: 'center' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '14px', margin: '0 auto 1rem', background: 'rgba(8,145,178,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HelpCircle size={24} color="var(--primary-light)" />
+            </div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>طرح استفسارات ومسائل</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>شارك أي خطوة صعبة أو مسألة توقفت عندها واحصل على إجابة تفصيلية.</p>
+          </div>
+
+          <div className="glass-card" style={{ padding: '1.75rem', textAlign: 'center' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '14px', margin: '0 auto 1rem', background: 'rgba(8,145,178,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={24} color="#10B981" />
+            </div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>إجابات موثوقة من المعلم</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>متابعة ومراجعة مستمرة من المعلم للتأكد من صحة القوانين والحلول.</p>
+          </div>
+
+          <div className="glass-card" style={{ padding: '1.75rem', textAlign: 'center' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '14px', margin: '0 auto 1rem', background: 'rgba(8,145,178,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Users size={24} color="#F59E0B" />
+            </div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>تبادل الخبرات بين الزملاء</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>تفاعل مع زملائك من نفس الصف وشارك طرق حل أسرع وملاحظات هامة.</p>
+          </div>
+        </div>
+
+        {/* Auth CTA Card */}
+        <div className="glass-card" style={{
+          maxWidth: '520px', margin: '0 auto', padding: '2.5rem',
+          textAlign: 'center', background: 'var(--banner-gradient)',
+          border: '1px solid rgba(8,145,178,0.25)',
+        }}>
+          <MessageSquare size={36} color="var(--primary-light)" style={{ marginBottom: '1rem' }} />
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+            سجّل دخولك للمشاركة في المجتمع
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.75rem', lineHeight: 1.6 }}>
+            "Sign in to participate in discussions, ask questions, and connect with other students."
+          </p>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={onOpenAuthModal} style={{ padding: '0.75rem 2rem', fontSize: '0.95rem' }}>
+              <LogIn size={18} /> تسجيل الدخول
+            </button>
+            <button className="btn btn-secondary" onClick={onOpenAuthModal} style={{ padding: '0.75rem 2rem', fontSize: '0.95rem' }}>
+              <UserPlus size={18} /> إنشاء حساب جديد
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem 1.5rem' }}>

@@ -145,7 +145,7 @@ export const InlineAIAssistant: React.FC<Props> = ({ lessonId, lessonTitle }) =>
           maxHeight: '380px',
           overflowY: 'auto',
           padding: '1rem',
-          background: 'rgba(15,23,42,0.5)',
+          background: 'var(--bg-subtle)',
           borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border-glass)',
           display: 'flex',
