@@ -1,0 +1,240 @@
+import React from 'react';
+import { Search, BookOpen, ArrowLeft, Filter, Sparkles } from 'lucide-react';
+import { useCourses } from '../../hooks/useCourses';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { ErrorState } from '../../components/common/ErrorState';
+import { EmptyState } from '../../components/common/EmptyState';
+import { Pagination } from '../../components/common/Pagination';
+import { Course } from '../../types/api.types';
+
+interface CoursesPageProps {
+  onSelectCourse: (courseId: string) => void;
+}
+
+export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
+  const {
+    courses,
+    pagination,
+    isLoading,
+    isError,
+    error,
+    params,
+    handlePageChange,
+    handleSearchChange,
+    handleSortChange,
+    refetch,
+  } = useCourses({ limit: 12, sort: '-createdAt' });
+
+  return (
+    <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 6rem' }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', maxWidth: '680px', margin: '0 auto 2.5rem' }}>
+        <span className="gradient-badge" style={{ marginBottom: '0.75rem', display: 'inline-flex' }}>
+          <Sparkles size={13} /> استكشف الكورسات المتاحة
+        </span>
+        <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--text-bright)', margin: '0.4rem 0 0.75rem' }}>
+          الكورسات والمسارات التعليمية
+        </h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', margin: 0, lineHeight: 1.6 }}>
+          اختر الكورس المناسب لمستواك الدراسي وابدأ المشاهدة وحل الاختبارات الدورية فوراً
+        </p>
+      </div>
+
+      {/* Filters & Search Toolbar */}
+      <div
+        className="glass-card"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          padding: '1rem 1.25rem',
+          marginBottom: '2rem',
+        }}
+      >
+        {/* Search */}
+        <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
+          <Search
+            size={16}
+            style={{
+              position: 'absolute',
+              right: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-muted)',
+            }}
+          />
+          <input
+            type="text"
+            placeholder="ابحث عن كورس أو مادة..."
+            className="input-field"
+            style={{ width: '100%', paddingRight: '38px', fontSize: '0.88rem' }}
+            value={params.search || ''}
+            onChange={(e) => handleSearchChange(e.target.value)}
+          />
+        </div>
+
+        {/* Sort */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Filter size={16} style={{ color: 'var(--text-muted)' }} />
+          <select
+            className="input-field"
+            style={{ fontSize: '0.85rem', width: 'auto' }}
+            value={params.sort || '-createdAt'}
+            onChange={(e) => handleSortChange(e.target.value)}
+          >
+            <option value="-createdAt">الأحدث إضافة</option>
+            <option value="Price">الأقل سعراً</option>
+            <option value="-Price">الأعلى سعراً</option>
+            <option value="Title">أبجدياً (أ - ي)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Loading state */}
+      {isLoading && <LoadingSpinner message="جاري استعراض الكورسات..." size="lg" />}
+
+      {/* Error state */}
+      {isError && (
+        <ErrorState
+          title="فشل في جلب الكورسات"
+          message={error?.message || 'تعذر الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت والمحاولة ثانية.'}
+          onRetry={refetch}
+        />
+      )}
+
+      {/* Empty state */}
+      {!isLoading && !isError && courses.length === 0 && (
+        <EmptyState
+          title="لم يتم العثور على أي كورسات"
+          message={params.search ? `لا توجد نتائج بحث مطابقة لـ "${params.search}".` : 'لا توجد كورسات منشورة متاحة حالياً.'}
+          actionText={params.search ? 'إلغاء البحث' : undefined}
+          onAction={() => handleSearchChange('')}
+        />
+      )}
+
+      {/* Courses Grid */}
+      {!isLoading && !isError && courses.length > 0 && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+              gap: '1.5rem',
+            }}
+          >
+            {courses.map((course: Course) => (
+              <div
+                key={course._id}
+                className="glass-card"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRadius: 'var(--radius-lg)',
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  cursor: 'pointer',
+                }}
+                onClick={() => onSelectCourse(course._id)}
+              >
+                {/* Course Thumbnail */}
+                <div
+                  style={{
+                    height: '160px',
+                    background: course.Thumbnail
+                      ? `url(${course.Thumbnail}) center/cover no-repeat`
+                      : 'linear-gradient(135deg, rgba(8,145,178,0.25), rgba(139,92,246,0.25))',
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {!course.Thumbnail && <BookOpen size={48} style={{ opacity: 0.35, color: '#FFF' }} />}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      left: '10px',
+                      background: 'rgba(0, 0, 0, 0.75)',
+                      backdropFilter: 'blur(6px)',
+                      color: '#FFF',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      padding: '0.25rem 0.65rem',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    {course.Price > 0 ? `${course.Price} ج.م` : 'مجاني'}
+                  </span>
+                </div>
+
+                {/* Course Info */}
+                <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <h3
+                    style={{
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
+                      color: 'var(--text-bright)',
+                      margin: '0 0 0.5rem',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {course.Title}
+                  </h3>
+
+                  {course.Description && (
+                    <p
+                      style={{
+                        color: 'var(--text-muted)',
+                        fontSize: '0.84rem',
+                        margin: '0 0 1rem',
+                        lineHeight: 1.5,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        flex: 1,
+                      }}
+                    >
+                      {course.Description}
+                    </p>
+                  )}
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginTop: 'auto',
+                      paddingTop: '0.85rem',
+                      borderTop: '1px solid var(--border-glass)',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {course.LessonsCount ? `${course.LessonsCount} محاضرة` : 'عرض التفاصيل'}
+                    </span>
+                    <button
+                      className="btn btn-primary"
+                      style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectCourse(course._id);
+                      }}
+                    >
+                      دخول الكورس <ArrowLeft size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Backend-driven Pagination */}
+          <Pagination pagination={pagination} onPageChange={handlePageChange} />
+        </>
+      )}
+    </div>
+  );
+};

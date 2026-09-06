@@ -19,9 +19,18 @@ import { RoleGuard } from './components/layout/RoleGuard';
 import { useAuth } from './context/AuthContext';
 import { StandaloneAIView } from './features/ai/components/StandaloneAIView';
 
+// New LMS REST API Integrated Pages
+import { CoursesPage } from './pages/Courses/CoursesPage';
+import { CourseDetailsPage } from './pages/CourseDetails/CourseDetailsPage';
+import { LessonViewPage } from './pages/Lesson/LessonViewPage';
+import { ExamPage } from './pages/Exam/ExamPage';
+import { ProfilePage } from './pages/Profile/ProfilePage';
+
 const ROUTE_TO_VIEW: Record<string, AppView> = {
   '/': 'view-landing',
   '/home': 'view-landing',
+  '/courses': 'view-courses',
+  '/profile': 'view-profile',
   '/dashboard': 'view-student-dashboard',
   '/student-dashboard': 'view-student-dashboard',
   '/lessons': 'view-drm-player',
@@ -42,6 +51,11 @@ const ROUTE_TO_VIEW: Record<string, AppView> = {
 
 const VIEW_TO_ROUTE: Record<AppView, string> = {
   'view-landing': '/',
+  'view-courses': '/courses',
+  'view-course-details': '/courses',
+  'view-lesson-detail': '/lessons',
+  'view-exam-session': '/exams',
+  'view-profile': '/profile',
   'view-student-dashboard': '/dashboard',
   'view-drm-player': '/lessons',
   'view-assessment': '/exams',
@@ -59,58 +73,86 @@ const VIEW_TO_ROUTE: Record<AppView, string> = {
   'view-subject-geometry': '/lessons',
 };
 
-const getInitialView = (): AppView => {
-  // 1. Check window.location.pathname
+const getInitialState = () => {
   const path = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
-  if (ROUTE_TO_VIEW[path]) {
-    return ROUTE_TO_VIEW[path];
-  }
+  let initialCourseId: string | undefined;
+  let initialExamId: string | undefined;
+  let initialLessonId: string | undefined;
+  let initialView: AppView = 'view-landing';
 
-  // 2. Check window.location.hash
-  const hash = window.location.hash.replace(/^#\/?/, '/').toLowerCase();
-  if (ROUTE_TO_VIEW[hash]) {
-    return ROUTE_TO_VIEW[hash];
-  }
-
-  // 3. Check localStorage
-  try {
-    const saved = localStorage.getItem('syntax_active_view') as AppView;
-    if (saved && VIEW_TO_ROUTE[saved]) {
-      return saved;
+  if (path.startsWith('/courses/')) {
+    const parts = path.split('/');
+    initialCourseId = parts[2];
+    if (parts[3] === 'lessons' && parts[4]) {
+      initialLessonId = parts[4];
+      initialView = 'view-lesson-detail';
+    } else {
+      initialView = 'view-course-details';
     }
-  } catch {}
+  } else if (path.startsWith('/exams/')) {
+    const parts = path.split('/');
+    initialExamId = parts[2];
+    initialView = 'view-exam-session';
+  } else if (ROUTE_TO_VIEW[path]) {
+    initialView = ROUTE_TO_VIEW[path];
+  } else {
+    // Check localStorage
+    try {
+      const saved = localStorage.getItem('syntax_active_view') as AppView;
+      if (saved && VIEW_TO_ROUTE[saved]) {
+        initialView = saved;
+      }
+    } catch {}
+  }
 
-  return 'view-landing';
+  return { initialView, initialCourseId, initialExamId, initialLessonId };
 };
 
 export const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated } = useAuth();
-  const [currentView, setCurrentView] = useState<AppView>(getInitialView);
+  const initialState = getInitialState();
+
+  const [currentView, setCurrentView] = useState<AppView>(initialState.initialView);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | undefined>(initialState.initialCourseId);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | undefined>(initialState.initialLessonId);
+  const [selectedExamId, setSelectedExamId] = useState<string | undefined>(initialState.initialExamId);
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  // Sync URL on initial mount and route changes without reloading
+  // Sync URL on route state change
   useEffect(() => {
+    let expectedPath = VIEW_TO_ROUTE[currentView] || '/';
+    if (currentView === 'view-course-details' && selectedCourseId) {
+      expectedPath = `/courses/${selectedCourseId}`;
+    } else if (currentView === 'view-lesson-detail' && selectedCourseId && selectedLessonId) {
+      expectedPath = `/courses/${selectedCourseId}/lessons/${selectedLessonId}`;
+    } else if (currentView === 'view-exam-session' && selectedExamId) {
+      expectedPath = `/exams/${selectedExamId}`;
+    }
+
     const currentPath = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
-    const expectedPath = VIEW_TO_ROUTE[currentView] || '/';
     if (currentPath !== expectedPath && currentPath !== '') {
       window.history.replaceState({ view: currentView }, '', expectedPath);
     }
+
     try {
       localStorage.setItem('syntax_active_view', currentView);
     } catch {}
-  }, [currentView]);
+  }, [currentView, selectedCourseId, selectedLessonId, selectedExamId]);
 
   // Listen to browser Back/Forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
-      if (ROUTE_TO_VIEW[path]) {
-        setCurrentView(ROUTE_TO_VIEW[path]);
-      }
+      const state = getInitialState();
+      setCurrentView(state.initialView);
+      if (state.initialCourseId) setSelectedCourseId(state.initialCourseId);
+      if (state.initialLessonId) setSelectedLessonId(state.initialLessonId);
+      if (state.initialExamId) setSelectedExamId(state.initialExamId);
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -130,11 +172,40 @@ export const AppContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSelectCourse = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    setCurrentView('view-course-details');
+    try {
+      window.history.pushState({ courseId }, '', `/courses/${courseId}`);
+    } catch {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSelectLessonInCourse = (lessonId: string) => {
+    setSelectedLessonId(lessonId);
+    setCurrentView('view-lesson-detail');
+    if (selectedCourseId) {
+      try {
+        window.history.pushState({ courseId: selectedCourseId, lessonId }, '', `/courses/${selectedCourseId}/lessons/${lessonId}`);
+      } catch {}
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenExam = (examId: string) => {
+    setSelectedExamId(examId);
+    setCurrentView('view-exam-session');
+    try {
+      window.history.pushState({ examId }, '', `/exams/${examId}`);
+    } catch {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleLoginSuccess = (role: UserRole) => {
     if (role === 'admin' || role === 'teacher') {
       handleNavigateView('view-admin');
     } else {
-      handleNavigateView('view-student-dashboard');
+      handleNavigateView('view-courses');
     }
   };
 
@@ -154,6 +225,7 @@ export const AppContent: React.FC = () => {
 
       {/* Main View Router Container */}
       <main style={{ flex: 1, position: 'relative', zIndex: 1 }}>
+        {/* Landing View */}
         {currentView === 'view-landing' && (
           <LandingView
             onNavigateView={handleNavigateView}
@@ -161,6 +233,66 @@ export const AppContent: React.FC = () => {
           />
         )}
 
+        {/* Courses Page (GET /courses) */}
+        {currentView === 'view-courses' && (
+          <CoursesPage onSelectCourse={handleSelectCourse} />
+        )}
+
+        {/* Course Details Page (GET /courses/:courseId) */}
+        {currentView === 'view-course-details' && selectedCourseId && (
+          <CourseDetailsPage
+            courseId={selectedCourseId}
+            onSelectLesson={handleSelectLessonInCourse}
+            onSelectExam={handleOpenExam}
+            onBackToCourses={() => handleNavigateView('view-courses')}
+          />
+        )}
+
+        {/* Lesson View Page with Secure Video Player & Heartbeat */}
+        {currentView === 'view-lesson-detail' && selectedCourseId && selectedLessonId && (
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => setIsAuthModalOpen(true)}
+          >
+            <LessonViewPage
+              courseId={selectedCourseId}
+              lessonId={selectedLessonId}
+              onBackToCourse={() => handleSelectCourse(selectedCourseId)}
+              onOpenExam={handleOpenExam}
+            />
+          </RoleGuard>
+        )}
+
+        {/* Exam Taking Page (POST /exams/:id/start & submit) */}
+        {currentView === 'view-exam-session' && selectedExamId && (
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => setIsAuthModalOpen(true)}
+          >
+            <ExamPage
+              examId={selectedExamId}
+              onBack={() => {
+                if (selectedCourseId) {
+                  handleSelectCourse(selectedCourseId);
+                } else {
+                  handleNavigateView('view-courses');
+                }
+              }}
+            />
+          </RoleGuard>
+        )}
+
+        {/* Profile Page with Device UUID, Scratch Card & Change Password */}
+        {currentView === 'view-profile' && (
+          <RoleGuard
+            allowedRoles={['student', 'teacher', 'admin']}
+            onNavigateHome={() => setIsAuthModalOpen(true)}
+          >
+            <ProfilePage onLogoutSuccess={() => handleNavigateView('view-landing')} />
+          </RoleGuard>
+        )}
+
+        {/* Student Dashboard */}
         {currentView === 'view-student-dashboard' && (
           <RoleGuard
             allowedRoles={['student', 'teacher', 'admin']}
@@ -170,7 +302,7 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Lessons & Lectures — Accessible for authenticated users (Students, Teachers, Admins) */}
+        {/* Lessons & Lectures Unified Hub */}
         {currentView === 'view-drm-player' && (
           <RoleGuard
             allowedRoles={['student', 'teacher', 'admin']}
@@ -184,7 +316,7 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Exams View — Accessible only after login (Students: Exam History/Taking, Teacher/Admin: Analytics) */}
+        {/* Exams View */}
         {currentView === 'view-assessment' && (
           <RoleGuard
             allowedRoles={['student', 'teacher', 'admin']}
@@ -197,11 +329,12 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Standalone AI View — Dedicated Navbar AI Experience */}
+        {/* Dedicated Navbar AI Experience */}
         {currentView === 'view-ai' && (
           <StandaloneAIView onOpenAuthModal={() => setIsAuthModalOpen(true)} />
         )}
 
+        {/* Teacher Inbox */}
         {currentView === 'view-teacher-inbox' && (
           <RoleGuard
             allowedRoles={['teacher', 'admin']}
@@ -211,7 +344,7 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Parent Portal is public & verification-based */}
+        {/* Parent Portal */}
         {currentView === 'view-parent-portal' && (
           <ParentPortalView />
         )}
@@ -221,7 +354,7 @@ export const AppContent: React.FC = () => {
           <FAQView />
         )}
 
-        {/* Community with Auth Gate for Guests */}
+        {/* Community */}
         {currentView === 'view-community' && (
           <CommunityView
             onOpenShareModal={() => setIsShareModalOpen(true)}
@@ -229,6 +362,7 @@ export const AppContent: React.FC = () => {
           />
         )}
 
+        {/* Admin Hub */}
         {currentView === 'view-admin' && (
           <RoleGuard
             allowedRoles={['admin', 'teacher']}
@@ -238,7 +372,7 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Placeholder views for new routes */}
+        {/* Placeholder views */}
         {(currentView === 'view-homework' || currentView === 'view-pdfs' || currentView === 'view-live') && (
           <RoleGuard
             allowedRoles={['student', 'teacher', 'admin']}

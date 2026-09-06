@@ -25,6 +25,7 @@ interface NavItem {
 
 const studentNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
   { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
@@ -34,6 +35,7 @@ const studentNav: NavItem[] = [
 
 const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
   { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
@@ -44,6 +46,7 @@ const teacherNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
   { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
@@ -54,6 +57,7 @@ const adminNav: NavItem[] = [
 
 const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },

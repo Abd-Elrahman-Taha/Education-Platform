@@ -1,18 +1,51 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserRole, User } from '../types';
+import { authApi } from '../api/auth.api';
+import { AUTH_TOKEN_KEY } from '../api/axios';
+import { getDeviceUuid } from '../utils/device';
 
 interface AuthContextType {
   currentUser: User | null;
+  token: string | null;
   isAuthenticated: boolean;
-  login: (user: User) => void;
+  login: (user: User, token?: string) => void;
   logout: () => void;
+  signinApi: (phone: string, password: string) => Promise<void>;
+  signupApi: (fullName: string, phone: string, password: string, parentPhone?: string) => Promise<void>;
+  changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'syntax_current_user_v2';
 
+function parseJwt(token: string): any {
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(AUTH_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -22,6 +55,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  // Listen to 401 unauthenticated event from Axios response interceptor
+  useEffect(() => {
+    const handleAuthLogout = () => {
+      logout();
+    };
+
+    window.addEventListener('auth:logout', handleAuthLogout);
+    return () => window.removeEventListener('auth:logout', handleAuthLogout);
+  }, []);
+
+  // Sync state to localStorage
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(currentUser));
@@ -30,16 +74,120 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
-  const login = (user: User) => {
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  }, [token]);
+
+  const login = (user: User, authToken?: string) => {
     setCurrentUser(user);
+    if (authToken) {
+      setToken(authToken);
+    }
   };
 
   const logout = () => {
     setCurrentUser(null);
+    setToken(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch {}
+  };
+
+  /**
+   * Real backend signin using Phone, Password, and persistent device UUID.
+   */
+  const signinApi = async (phone: string, password: string) => {
+    const deviceUuid = getDeviceUuid();
+    const res = await authApi.signin({
+      Phone: phone.trim(),
+      password,
+      device_uuid: deviceUuid,
+    });
+
+    const jwtToken = res.token;
+    setToken(jwtToken);
+
+    // Decode user payload from JWT or response
+    const payload = parseJwt(jwtToken) || {};
+    const roleString = (payload.role || res.user?.role || 'student').toLowerCase();
+    const normalizedRole: UserRole =
+      roleString.includes('admin') ? 'admin' :
+      roleString.includes('teacher') ? 'teacher' :
+      roleString.includes('parent') ? 'parent' : 'student';
+
+    const userObj: User = {
+      id: payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`,
+      name: payload.FullName || payload.name || res.user?.FullName || phone,
+      email: payload.email || `${phone}@lms.edu`,
+      phone: phone.trim(),
+      role: normalizedRole,
+      status: 'active',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+      registrationDate: new Date().toISOString().slice(0, 10),
+    };
+
+    login(userObj, jwtToken);
+  };
+
+  /**
+   * Real backend signup (Backend automatically forces role to Student).
+   */
+  const signupApi = async (fullName: string, phone: string, password: string, parentPhone?: string) => {
+    const res = await authApi.signup({
+      FullName: fullName.trim(),
+      Phone: phone.trim(),
+      password,
+      ParentPhone: parentPhone ? parentPhone.trim() : undefined,
+    });
+
+    // If backend returns token upon signup, log in immediately; otherwise sign in
+    if (res.token) {
+      const jwtToken = res.token;
+      setToken(jwtToken);
+      const payload = parseJwt(jwtToken) || {};
+      const userObj: User = {
+        id: payload.userId || payload.sub || `usr-${Date.now()}`,
+        name: fullName.trim(),
+        email: `${phone}@lms.edu`,
+        phone: phone.trim(),
+        role: 'student',
+        status: 'active',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+        registrationDate: new Date().toISOString().slice(0, 10),
+      };
+      login(userObj, jwtToken);
+    } else {
+      // Automatically sign in with credentials
+      await signinApi(phone, password);
+    }
+  };
+
+  /**
+   * Change password. Backend invalidates session immediately on success, so we force logout.
+   */
+  const changePasswordApi = async (oldPassword: string, newPassword: string) => {
+    await authApi.changePassword({ oldPassword, newPassword });
+    logout();
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isAuthenticated: !!currentUser, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        currentUser,
+        token,
+        isAuthenticated: !!currentUser && !!token,
+        login,
+        logout,
+        signinApi,
+        signupApi,
+        changePasswordApi,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -53,7 +201,7 @@ export const useAuth = () => {
   return context;
 };
 
-// Unified Demo Accounts for Student and Teacher/Admin
+// Demo users preserved for optional offline demo testing
 export const DEMO_USERS: Record<'student' | 'teacher' | 'admin', User & { defaultPassword?: string }> = {
   student: {
     id: 'u_student_demo',

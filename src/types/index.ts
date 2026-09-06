@@ -54,6 +54,11 @@ export type AppView =
   | 'view-ai'
   | 'view-teacher-inbox'
   | 'view-packages'
+  | 'view-courses'
+  | 'view-course-details'
+  | 'view-lesson-detail'
+  | 'view-exam-session'
+  | 'view-profile'
   | 'view-subject-calculus'
   | 'view-subject-geometry';
 
