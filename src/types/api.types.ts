@@ -21,9 +21,10 @@ export interface PaginationMeta {
 // ── Auth ──────────────────────────────────────────────────────────────────
 export interface SignupRequest {
   FullName: string;
+  NationalId: string;
   Phone: string;
+  ParentPhone: string;
   password: string;
-  ParentPhone?: string;
 }
 
 export interface SigninRequest {

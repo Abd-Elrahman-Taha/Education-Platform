@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ApiErrorResponse } from '../types/api.types';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://edc-platform.vercel.app/api/v1';
 export const AUTH_TOKEN_KEY = 'auth_token';
 
 export const apiClient = axios.create({

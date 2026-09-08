@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, AlertCircle, Smartphone } from 'lucide-react';
+import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, AlertCircle, CreditCard } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useAuth, DEMO_USERS } from '../../context/AuthContext';
 import { UserRole } from '../../types';
@@ -20,6 +20,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   const [formData, setFormData] = useState({
     fullName: '',
+    nationalId: '',
     phone: '',
     parentPhone: '',
     password: '',
@@ -28,6 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   if (!isOpen) return null;
 
+  // Egyptian phone number: starts with 01[0125] and 11 digits total
   const validateEgyptianPhone = (p: string) => /^01[0125]\d{8}$/.test(p.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,26 +39,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     // ── REGISTER VALIDATION ──
     if (activeTab === 'register') {
       const cleanName = formData.fullName.trim();
+      const cleanNationalId = formData.nationalId.trim();
+      const cleanPhone = formData.phone.trim();
+      const cleanParentPhone = formData.parentPhone.trim();
+
+      // 1. FullName: Required, 3–60 characters
+      if (!cleanName) {
+        setApiError('الاسم بالكامل مطلوب (Full Name is required).');
+        return;
+      }
       if (cleanName.length < 3 || cleanName.length > 60) {
         setApiError('يجب أن يتراوح الاسم بالكامل بين 3 إلى 60 حرفاً.');
         return;
       }
 
-      if (!validateEgyptianPhone(formData.phone)) {
+      // 2. NationalId: Required, 14 digits string (no conversion to number, preserves leading zeros)
+      if (!cleanNationalId) {
+        setApiError('الرقم القومي مطلوب (National ID is required).');
+        return;
+      }
+      if (!/^\d{14}$/.test(cleanNationalId)) {
+        setApiError('الرقم القومي يجب أن يتكون من 14 رقماً صحيحاً (دون مسافات أو حروف).');
+        return;
+      }
+
+      // 3. Phone: Required, Egyptian phone format
+      if (!cleanPhone) {
+        setApiError('رقم الهاتف مطلوب (Phone is required).');
+        return;
+      }
+      if (!validateEgyptianPhone(cleanPhone)) {
         setApiError('يرجى إدخال رقم هاتف مصري صحيح (11 رقماً يبدأ بـ 010 أو 011 أو 012 أو 015).');
         return;
       }
 
-      if (formData.parentPhone && !validateEgyptianPhone(formData.parentPhone)) {
-        setApiError('رقم هاتف ولي الأمر غير صحيح (يجب أن يكون 11 رقماً ويبدأ بـ 01).');
+      // 4. ParentPhone: REQUIRED for Signup (Not optional)
+      if (!cleanParentPhone) {
+        setApiError('رقم هاتف ولي الأمر مطلوب للتسجيل (Parent Phone is required).');
+        return;
+      }
+      if (!validateEgyptianPhone(cleanParentPhone)) {
+        setApiError('رقم هاتف ولي الأمر غير صحيح (يجب أن يكون 11 رقماً مصرياً ويبدأ بـ 01).');
         return;
       }
 
+      // 5. Password: Required, 8–40 characters
+      if (!formData.password) {
+        setApiError('كلمة المرور مطلوبة (Password is required).');
+        return;
+      }
       if (formData.password.length < 8 || formData.password.length > 40) {
         setApiError('يجب أن تتراوح كلمة المرور بين 8 إلى 40 حرفاً/رقماً.');
         return;
       }
 
+      // 6. Confirm Password: Must match password
       if (formData.password !== formData.confirmPassword) {
         setApiError('كلمة المرور وتأكيد كلمة المرور غير متطابقتين.');
         return;
@@ -64,12 +101,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
       setIsSubmitting(true);
       try {
-        await signupApi(cleanName, formData.phone, formData.password, formData.parentPhone || undefined);
+        await signupApi(cleanName, cleanNationalId, cleanPhone, cleanParentPhone, formData.password);
         showToast('تم إنشاء الحساب بنجاح! مرحباً بك في المنصة التعليمية.', 'success');
         onClose();
         if (onLoginSuccess) onLoginSuccess('student');
       } catch (err: any) {
-        setApiError(err?.message || 'فشل في إنشاء الحساب. يرجى التحقق من صحة البيانات.');
+        const rawStr = JSON.stringify(err?.raw || '').toLowerCase();
+        const errMsg = (err?.message || '').toLowerCase();
+        if (errMsg.includes('nationalid') || rawStr.includes('nationalid')) {
+          setApiError(
+            'تنبيه تعارض العقد (Contract Mismatch): خادم الـ Backend رفض حقل NationalId. تم إرساله كنص مطلوب وفق متطلبات التسجيل المحدثة.'
+          );
+        } else {
+          setApiError(err?.message || 'فشل في إنشاء الحساب. يرجى التحقق من صحة البيانات.');
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -77,7 +122,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     }
 
     // ── SIGNIN VALIDATION & FLOW ──
-    if (!validateEgyptianPhone(formData.phone)) {
+    const cleanPhone = formData.phone.trim();
+    if (!cleanPhone) {
+      setApiError('يرجى إدخال رقم الهاتف المسجل.');
+      return;
+    }
+    if (!validateEgyptianPhone(cleanPhone)) {
       setApiError('يرجى إدخال رقم هاتف مصري مسجل صحيح (11 رقماً يبدأ بـ 01).');
       return;
     }
@@ -89,7 +139,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
     setIsSubmitting(true);
     try {
-      await signinApi(formData.phone, formData.password);
+      await signinApi(cleanPhone, formData.password);
       showToast('تم تسجيل الدخول بنجاح!', 'success');
       onClose();
       if (onLoginSuccess) onLoginSuccess('student');
@@ -116,7 +166,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   return (
     <div className="modal-overlay active" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', padding: '1.75rem' }}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px', padding: '1.75rem', maxHeight: '90vh', overflowY: 'auto' }}>
         <button className="modal-close" onClick={onClose}><X size={18} /></button>
 
         {/* Header */}
@@ -182,10 +232,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
           )}
 
+          {/* 1. Full Name * */}
           {activeTab === 'register' && (
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                1. الاسم بالكامل (3–60 حرفاً)
+                الاسم بالكامل (Full Name) <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <User size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -202,9 +253,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
           )}
 
+          {/* 2. National ID * (Egyptian National ID string, 14 digits, no numeric conversion) */}
+          {activeTab === 'register' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                الرقم القومي (National ID) <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <CreditCard size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  maxLength={14}
+                  placeholder="30101011234567 (14 رقماً)"
+                  className="input-field"
+                  style={{ width: '100%', paddingRight: '38px', fontSize: '0.85rem', letterSpacing: '1px' }}
+                  value={formData.nationalId}
+                  onChange={(e) => setFormData({ ...formData, nationalId: e.target.value.replace(/\D/g, '') })}
+                />
+              </div>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                يتم التعامل مع الرقم القومي كنص للحفاظ على الأصفار الأولى والأمان.
+              </span>
+            </div>
+          )}
+
+          {/* 3. Phone * */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-              رقم الهاتف المحمول (11 رقماً يبدأ بـ 01)
+              رقم الهاتف (Phone) <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <Phone size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -221,17 +299,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
           </div>
 
+          {/* 4. Parent Phone * (REQUIRED for Signup) */}
           {activeTab === 'register' && (
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                رقم هاتف ولي الأمر (اختياري)
+                رقم هاتف ولي الأمر (Parent Phone) <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <Phone size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
                   type="tel"
+                  required
                   maxLength={11}
-                  placeholder="01123456789"
+                  placeholder="01112345678"
                   className="input-field"
                   style={{ width: '100%', paddingRight: '38px', fontSize: '0.85rem' }}
                   value={formData.parentPhone}
@@ -241,9 +321,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
           )}
 
+          {/* 5. Password * */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-              كلمة المرور {activeTab === 'register' && '(8–40 حرفاً)'}
+              كلمة المرور (Password) <span style={{ color: 'var(--danger)' }}>*</span> {activeTab === 'register' && '(8–40 حرفاً)'}
             </label>
             <div style={{ position: 'relative' }}>
               <Lock size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -259,10 +340,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
           </div>
 
+          {/* 6. Confirm Password * */}
           {activeTab === 'register' && (
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                تأكيد كلمة المرور
+                تأكيد كلمة المرور <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <Lock size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />

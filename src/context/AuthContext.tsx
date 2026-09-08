@@ -11,7 +11,7 @@ interface AuthContextType {
   login: (user: User, token?: string) => void;
   logout: () => void;
   signinApi: (phone: string, password: string) => Promise<void>;
-  signupApi: (fullName: string, phone: string, password: string, parentPhone?: string) => Promise<void>;
+  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<void>;
   changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
 }
 
@@ -137,12 +137,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /**
    * Real backend signup (Backend automatically forces role to Student).
    */
-  const signupApi = async (fullName: string, phone: string, password: string, parentPhone?: string) => {
+  const signupApi = async (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => {
     const res = await authApi.signup({
       FullName: fullName.trim(),
+      NationalId: nationalId.trim(),
       Phone: phone.trim(),
+      ParentPhone: parentPhone.trim(),
       password,
-      ParentPhone: parentPhone ? parentPhone.trim() : undefined,
     });
 
     // If backend returns token upon signup, log in immediately; otherwise sign in
@@ -155,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: fullName.trim(),
         email: `${phone}@lms.edu`,
         phone: phone.trim(),
+        nationalId: nationalId.trim(),
         role: 'student',
         status: 'active',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
