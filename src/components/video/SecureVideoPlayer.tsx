@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Lock, AlertOctagon } from 'lucide-react';
 import { useVideoPlayback } from '../../hooks/useVideoPlayback';
 
@@ -7,6 +7,7 @@ interface SecureVideoPlayerProps {
   videoUrl?: string;
   title: string;
   userPhone?: string;
+  userName?: string;
 }
 
 export const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
@@ -14,6 +15,7 @@ export const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
   videoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4',
   title,
   userPhone,
+  userName,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -74,6 +76,18 @@ export const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
     };
   }, [stopHeartbeatLoop]);
 
+  const [watermarkCoords, setWatermarkCoords] = useState({ top: 18, left: 22 });
+
+  // Dynamically drift watermark across video to prevent cropping/recording
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const top = Math.floor(Math.random() * 55) + 15;
+      const left = Math.floor(Math.random() * 55) + 15;
+      setWatermarkCoords({ top, left });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div
       style={{
@@ -104,28 +118,31 @@ export const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
         }}
       />
 
-      {/* Floating Dynamic Watermark Overlay */}
+      {/* Floating Dynamic DRM Watermark Overlay */}
       {!isLocked && (
         <div
           style={{
             position: 'absolute',
-            top: '15%',
-            right: '10%',
+            top: `${watermarkCoords.top}%`,
+            left: `${watermarkCoords.left}%`,
+            transition: 'top 2.5s ease-in-out, left 2.5s ease-in-out',
             pointerEvents: 'none',
-            opacity: 0.22,
+            opacity: 0.32,
             color: '#FFF',
-            fontSize: '0.82rem',
+            fontSize: '0.85rem',
             fontFamily: 'monospace',
             letterSpacing: '1px',
             transform: 'rotate(-12deg)',
             zIndex: 10,
             userSelect: 'none',
+            textShadow: '0 1px 3px rgba(0,0,0,0.8)',
           }}
         >
-          <div>{userPhone || 'Syntax Math'}</div>
+          <div style={{ fontWeight: 700 }}>{userPhone || 'Syntax Math'}</div>
+          {userName && <div style={{ fontSize: '0.72rem', opacity: 0.9 }}>{userName}</div>}
           {watermarkToken && (
-            <div style={{ fontSize: '0.65rem' }}>
-              TOKEN: {watermarkToken.substring(0, 16)}...
+            <div style={{ fontSize: '0.62rem', opacity: 0.75 }}>
+              DRM: {watermarkToken.substring(0, 16)}...
             </div>
           )}
         </div>

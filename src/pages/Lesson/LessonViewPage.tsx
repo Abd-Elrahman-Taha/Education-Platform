@@ -98,6 +98,7 @@ export const LessonViewPage: React.FC<LessonViewPageProps> = ({
         videoUrl={lesson.VideoUrl}
         title={lesson.Title}
         userPhone={currentUser?.phone}
+        userName={currentUser?.name}
       />
 
       {/* Lesson Details Card */}
