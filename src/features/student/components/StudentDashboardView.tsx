@@ -30,13 +30,18 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
     queryFn: studentApi.getProgressTimeline,
   });
 
-  if (isDashLoading || isTimelineLoading) {
+  const { data: enrollments, isLoading: isEnrollmentsLoading } = useQuery({
+    queryKey: ['my-enrollments'],
+    queryFn: () => enrollmentsApi.getMyCourses(),
+  });
+
+  if (isDashLoading || isTimelineLoading || isEnrollmentsLoading) {
     return (
       <div className="container fade-in-up" style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
         <div className="glass-card" style={{ padding: '3rem', maxWidth: '500px', margin: '0 auto' }}>
           <div className="spinner" style={{ margin: '0 auto 1.5rem', width: '48px', height: '48px', border: '4px solid rgba(8,145,178,0.2)', borderTopColor: 'var(--primary-light)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-bright)' }}>جاري تحميل تحليلات الطالب الأكاديمية...</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.5rem' }}>نستجلب البيانات المعالجة من المحاكي (simulated delay 500-1000ms)...</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.5rem' }}>نستجلب البيانات المعالجة من المنصة...</p>
         </div>
       </div>
     );
@@ -59,12 +64,6 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
 
   const dash = dashboardRes.data;
   const timeline = timelineRes?.data;
-
-  const { data: enrollments, isLoading: isEnrollmentsLoading } = useQuery({
-    queryKey: ['my-enrollments'],
-    queryFn: () => enrollmentsApi.getMyCourses(),
-  });
-
   const enrolledList = enrollments || [];
 
   return (
