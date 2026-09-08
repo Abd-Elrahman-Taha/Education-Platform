@@ -13,11 +13,35 @@ interface AuthContextType {
   signinApi: (phone: string, password: string) => Promise<UserRole>;
   signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<any>;
   changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
+  updateUserName: (newName: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'syntax_current_user_v2';
+
+export function resolveDisplayName(rawName?: string, phoneNum?: string, role?: string): string {
+  // If rawName is present and NOT solely numeric digits/symbols
+  if (rawName && /[^\d\s\+\-]/.test(rawName)) {
+    return rawName.trim();
+  }
+  const p = (phoneNum || '').trim();
+  if (p) {
+    const fromPhone = localStorage.getItem(`syntax_user_name_${p}`);
+    if (fromPhone && /[^\d\s\+\-]/.test(fromPhone)) return fromPhone.trim();
+  }
+  const generic = localStorage.getItem('syntax_user_name');
+  if (generic && /[^\d\s\+\-]/.test(generic)) return generic.trim();
+
+  const lastReg = localStorage.getItem('syntax_last_registered_name');
+  if (lastReg && /[^\d\s\+\-]/.test(lastReg)) return lastReg.trim();
+
+  const rLower = (role || '').toLowerCase();
+  if (rLower === 'admin' || rLower === 'superadmin' || rLower === 'administrator') {
+    return 'المشرف العام';
+  }
+  return 'طالب المنصة';
+}
 
 function parseJwt(token: string): any {
   try {
@@ -49,7 +73,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (parsed) {
+        parsed.name = resolveDisplayName(parsed.name, parsed.phone, parsed.role);
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -93,20 +122,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
 
         setCurrentUser((prev) => {
+          const pPhone = payload.Phone || payload.phone || prev?.phone || '';
+          const resolved = resolveDisplayName(payload.FullName || payload.name || prev?.name, pPhone, normalizedRole);
           if (!prev) {
             return {
               id: payload.userId || payload.sub || payload._id || `usr-${Date.now()}`,
-              name: payload.FullName || payload.name || payload.Phone || 'مستخدم',
+              name: resolved,
               email: payload.email || 'user@lms.edu',
-              phone: payload.Phone || payload.phone || '',
+              phone: pPhone,
               role: normalizedRole,
               status: 'active',
               avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
               registrationDate: new Date().toISOString().slice(0, 10),
             };
           }
-          if (prev.role !== normalizedRole) {
-            return { ...prev, role: normalizedRole };
+          if (prev.role !== normalizedRole || prev.name !== resolved) {
+            return { ...prev, role: normalizedRole, name: resolved };
           }
           return prev;
         });
@@ -165,9 +196,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
     const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
 
+    const resolvedName = resolveDisplayName(
+      payload.FullName || payload.name || res.user?.FullName,
+      phone,
+      normalizedRole
+    );
+
     const userObj: User = {
       id: payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`,
-      name: payload.FullName || payload.name || res.user?.FullName || phone,
+      name: resolvedName,
       email: payload.email || `${phone}@lms.edu`,
       phone: phone.trim(),
       role: normalizedRole,
@@ -182,16 +219,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /**
    * Real backend signup (Backend automatically forces role to Student).
-   * Returns registered successfully message (no token returned on 201).
+   * Persists name locally so subsequent logins identify the user with their name.
    */
   const signupApi = async (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => {
+    const cleanP = phone.trim();
+    const cleanN = fullName.trim();
+    if (cleanP && cleanN) {
+      try {
+        localStorage.setItem(`syntax_user_name_${cleanP}`, cleanN);
+        localStorage.setItem('syntax_user_name', cleanN);
+        localStorage.setItem('syntax_last_registered_name', cleanN);
+      } catch {}
+    }
     return await authApi.signup({
-      FullName: fullName.trim(),
+      FullName: cleanN,
       NationalId: nationalId.trim(),
-      Phone: phone.trim(),
+      Phone: cleanP,
       ParentPhone: parentPhone.trim(),
       password,
     });
+  };
+
+  /**
+   * Update student / admin display name directly and persist it.
+   */
+  const updateUserName = (newName: string) => {
+    const clean = newName.trim();
+    if (!clean) return;
+    try {
+      if (currentUser?.phone) {
+        localStorage.setItem(`syntax_user_name_${currentUser.phone}`, clean);
+      }
+      localStorage.setItem('syntax_user_name', clean);
+      localStorage.setItem('syntax_last_registered_name', clean);
+    } catch {}
+    setCurrentUser((prev) => (prev ? { ...prev, name: clean } : null));
   };
 
   /**
@@ -213,6 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signinApi,
         signupApi,
         changePasswordApi,
+        updateUserName,
       }}
     >
       {children}

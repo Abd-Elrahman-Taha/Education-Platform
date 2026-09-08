@@ -12,7 +12,7 @@ import {
   Lock, Unlock, Play, Pause, ShieldCheck, Download, FileText,
   CheckCircle2, Star, Send, Award, Clock, ChevronLeft, ChevronRight,
   ClipboardList, AlertTriangle, PlayCircle, HelpCircle, Check,
-  Layers, Video, LogIn, UserPlus, Sparkles, BookOpen
+  Layers, Video, LogIn, UserPlus, Sparkles, BookOpen, GraduationCap
 } from 'lucide-react';
 
 interface Props {
@@ -133,8 +133,9 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
     if (!ctx) return;
 
     let x = 30, y = 50, dx = 1.5, dy = 1.2;
-    const studentName = currentUser?.name || 'أحمد طالب';
-    const studentCode = `CODE: #${currentUser?.id?.slice(-5) || '94021'}`;
+    const rawName = currentUser?.name || '';
+    const studentName = (rawName && /[^\d\s\+\-]/.test(rawName)) ? rawName : (currentUser?.phone ? `طالب • ${currentUser.phone.slice(-4)}` : 'طالب المنصة');
+    const studentCode = `ID: #${currentUser?.id?.slice(-5) || '94021'}`;
 
     const resizeCanvas = () => {
       if (canvas.parentElement) {
@@ -148,22 +149,41 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
 
     const drawWatermark = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'rgba(13, 31, 35, 0.75)';
-      ctx.strokeStyle = 'rgba(8, 145, 178, 0.5)';
-      ctx.lineWidth = 1.5;
+      ctx.save();
+      ctx.direction = 'ltr';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+
+      const boxW = 190;
+      const boxH = 46;
+
+      // Subtle translucent backdrop pill (formulas remain visible through it)
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.25)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(x, y, 220, 50, 10);
+      ctx.roundRect(x, y, boxW, boxH, 8);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.font = '600 12px Cairo, sans-serif';
-      ctx.fillText(studentName, x + 12, y + 20);
-      ctx.fillStyle = '#22D3EE';
-      ctx.font = '700 10px monospace';
-      ctx.fillText(`${studentCode} • DRM v2.4`, x + 12, y + 38);
 
-      if (x + 220 >= canvas.width || x <= 0) dx = -dx;
-      if (y + 50 >= canvas.height || y <= 0) dy = -dy;
+      // Text with shadow for readability
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+      ctx.font = '600 12px Cairo, sans-serif';
+      ctx.fillText(studentName, x + 10, y + 8);
+
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.48)';
+      ctx.font = '700 10px monospace';
+      ctx.fillText(`${studentCode} • DRM Encrypted`, x + 10, y + 26);
+
+      ctx.restore();
+
+      if (x + boxW >= canvas.width || x <= 0) dx = -dx;
+      if (y + boxH >= canvas.height || y <= 0) dy = -dy;
       x += dx; y += dy;
       animFrameIdRef.current = requestAnimationFrame(drawWatermark);
     };
@@ -201,39 +221,52 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
 
   return (
     <div className="container fade-in-up" style={{ padding: '2rem 1.5rem 5rem' }}>
-      {/* ── TOP SECTION: MAIN TABS (Lessons | Packages | FAQ) ── */}
-      <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Video size={22} color="var(--primary-light)" /> مركز الدروس والمحاضرات
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-            شروحات تفصيلية، ملازم PDF، تدريبات بابل شيت ومتابعة شاملة
-          </p>
+      {/* ── TOP SECTION: MAIN TABS (الدروس والمحاضرات | باقات الاشتراك | الأسئلة الشائعة) ── */}
+      <div className="lms-main-tabs-wrapper">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{
+            width: '46px', height: '46px', borderRadius: 'var(--radius-md)',
+            background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#FFF', boxShadow: '0 4px 16px var(--primary-glow)', flexShrink: 0
+          }}>
+            <Video size={22} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-bright)', margin: '0 0 0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              مركز المحاضرات والاشتراكات
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.6rem', borderRadius: '9999px', background: 'rgba(8,145,178,0.2)', color: 'var(--primary-light)', border: '1px solid rgba(8,145,178,0.35)' }}>
+                منظومة 2026
+              </span>
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+              شروحات تفصيلية، ملازم PDF رقمية، تدريبات بابل شيت ومتابعة تفاعلية
+            </p>
+          </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {/* Navigation Tabs (Segmented Control Pill Group) */}
+        <div className="lms-segmented-bar">
           <button
-            className={`filter-btn ${mainTab === 'lessons' ? 'active' : ''}`}
+            className={`lms-tab-btn ${mainTab === 'lessons' ? 'active' : ''}`}
             onClick={() => setMainTab('lessons')}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.88rem', padding: '0.5rem 1.1rem' }}
           >
-            <Video size={16} /> الدروس والمحاضرات
+            <Video size={17} />
+            <span>الدروس والمحاضرات</span>
           </button>
           <button
-            className={`filter-btn ${mainTab === 'packages' ? 'active' : ''}`}
+            className={`lms-tab-btn ${mainTab === 'packages' ? 'active' : ''}`}
             onClick={() => setMainTab('packages')}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.88rem', padding: '0.5rem 1.1rem' }}
           >
-            <Layers size={16} /> باقات الاشتراك
+            <Layers size={17} />
+            <span>باقات الاشتراك</span>
           </button>
           <button
-            className={`filter-btn ${mainTab === 'faq' ? 'active' : ''}`}
+            className={`lms-tab-btn ${mainTab === 'faq' ? 'active' : ''}`}
             onClick={() => setMainTab('faq')}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.88rem', padding: '0.5rem 1.1rem' }}
           >
-            <HelpCircle size={16} /> الأسئلة الشائعة
+            <HelpCircle size={17} />
+            <span>الأسئلة الشائعة</span>
           </button>
         </div>
       </div>
@@ -254,32 +287,90 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
       {/* ── TAB CONTENT 1: LESSONS & LECTURES ──────────────── */}
       {mainTab === 'lessons' && (
         <>
-          {/* Academic Year Selection Bar (Available for Guests and Students) */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                السنة الدراسية المستهدفة:
-              </span>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {(['third_secondary', 'second_secondary', 'first_secondary'] as AcademicYear[]).map(yr => (
-                  <button
-                    key={yr}
-                    className={`filter-btn ${selectedAcademicYear === yr ? 'active' : ''}`}
-                    onClick={() => setSelectedAcademicYear(yr)}
-                    style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}
-                  >
-                    {ACADEMIC_YEAR_LABELS[yr]}
-                  </button>
-                ))}
+          {/* Academic Year Selection Section (Available for Guests and Students) */}
+          <div style={{ marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(8,145,178,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-light)' }}>
+                  <GraduationCap size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                    السنة الدراسية المستهدفة:
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    اختر صفك الدراسي لعرض المحاضرات والمناهج الخاصة بك
+                  </span>
+                </div>
               </div>
+
+              {!isAuthenticated ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.3)', padding: '0.4rem 0.9rem', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', color: 'var(--primary-light)', fontWeight: 600 }}>
+                  <Sparkles size={14} /> وضع المعاينة العامة — تصفح المحتوى واشترك لفتح المحاضرات
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', padding: '0.35rem 0.85rem', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', color: '#10B981', fontWeight: 700 }}>
+                  <CheckCircle2 size={14} /> طالب مسجل: {currentUser?.name?.split(' ').slice(0, 2).join(' ') || 'طالب'}
+                </div>
+              )}
             </div>
 
-            {!isAuthenticated && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(8,145,178,0.1)', border: '1px solid rgba(8,145,178,0.25)', padding: '0.4rem 0.85rem', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--primary-light)' }}>
-                <Sparkles size={14} /> وضع المعاينة العامة — تصفح المحتوى واشترك لفتح المحاضرات
-              </div>
-            )}
+            {/* 3 Interactive Grade Cards */}
+            <div className="academic-year-card-group">
+              {[
+                {
+                  id: 'third_secondary' as AcademicYear,
+                  label: 'الصف الثالث الثانوي',
+                  sub: 'الثانوية العامة • دفعة 2026',
+                  icon: GraduationCap,
+                },
+                {
+                  id: 'second_secondary' as AcademicYear,
+                  label: 'الصف الثاني الثانوي',
+                  sub: 'علمي وأدبي • تفاضل ومثلثات',
+                  icon: BookOpen,
+                },
+                {
+                  id: 'first_secondary' as AcademicYear,
+                  label: 'الصف الأول الثانوي',
+                  sub: 'تأسيس الرياضيات والهندسة التحليلية',
+                  icon: Sparkles,
+                },
+              ].map(grade => {
+                const isSelected = selectedAcademicYear === grade.id;
+                const IconComponent = grade.icon;
+                return (
+                  <div
+                    key={grade.id}
+                    className={`academic-year-card ${isSelected ? 'active' : ''}`}
+                    onClick={() => setSelectedAcademicYear(grade.id)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="academic-year-icon-box">
+                      <IconComponent size={22} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                        <span style={{ fontSize: '1rem', fontWeight: 800, color: isSelected ? 'var(--text-bright)' : 'var(--text-main)' }}>
+                          {grade.label}
+                        </span>
+                        {isSelected && (
+                          <span style={{ fontSize: '0.7rem', fontWeight: 800, background: 'rgba(34,211,238,0.2)', color: 'var(--primary-light)', padding: '0.15rem 0.5rem', borderRadius: '9999px', border: '1px solid rgba(34,211,238,0.3)' }}>
+                            نشط حالياً
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {grade.sub}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
 
           {/* ── LESSON UNLOCK SELECTOR BAR ────────────────────── */}
           <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '2rem' }}>

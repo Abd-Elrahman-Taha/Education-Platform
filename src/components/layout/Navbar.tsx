@@ -3,7 +3,7 @@ import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
   BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
   BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard,
-  HelpCircle, Shield
+  HelpCircle, Shield, Edit3
 } from 'lucide-react';
 import { AppView, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -83,9 +83,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuthModal,
   onOpenSearchModal,
 }) => {
-  const { currentUser, isAuthenticated, logout } = useAuth();
+  const { currentUser, isAuthenticated, logout, updateUserName } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState('');
+
+  const cleanDisplayName = (() => {
+    if (!currentUser) return '';
+    const raw = (currentUser.name || '').trim();
+    if (raw && /[^\d\s\+\-]/.test(raw)) {
+      return raw;
+    }
+    if (currentUser.role === 'admin' || currentUser.role === 'teacher') return 'المشرف العام';
+    return 'طالب';
+  })();
 
   const navItems = isAuthenticated && currentUser
     ? ROLE_NAV[currentUser.role] || guestNav
@@ -152,9 +164,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {isAuthenticated && currentUser ? (
             <>
-              <div className="nav-user-badge desktop-only-user">
-                <img src={currentUser.avatar} className="nav-user-avatar" alt={currentUser.name} />
-                <span>{currentUser.name.split(' ')[0]}</span>
+              <div
+                className="nav-user-badge desktop-only-user"
+                onClick={() => { setTempName(cleanDisplayName); setIsEditingName(true); }}
+                title="اضغط لتعديل الاسم الظاهر"
+              >
+                <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
+                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {cleanDisplayName.split(' ').slice(0, 2).join(' ')}
+                </span>
+                <Edit3 size={12} color="var(--primary-light)" style={{ opacity: 0.7 }} />
                 <span className={`role-badge role-badge--${currentUser.role}`} style={{ padding: '0.1rem 0.5rem', fontSize: '0.7rem' }}>
                   {ROLE_LABELS[currentUser.role]}
                 </span>
@@ -202,10 +221,17 @@ export const Navbar: React.FC<NavbarProps> = ({
       {mobileMenuOpen && (
         <div className="mobile-dropdown-menu fade-in-up">
           {isAuthenticated && currentUser && (
-            <div className="mobile-user-info">
-              <img src={currentUser.avatar} className="nav-user-avatar" alt={currentUser.name} />
+            <div
+              className="mobile-user-info"
+              onClick={() => { setTempName(cleanDisplayName); setIsEditingName(true); setMobileMenuOpen(false); }}
+              style={{ cursor: 'pointer' }}
+            >
+              <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
               <div>
-                <strong style={{ fontSize: '0.9rem', display: 'block', color: 'var(--text-bright)' }}>{currentUser.name}</strong>
+                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-bright)' }}>
+                  {cleanDisplayName}
+                  <Edit3 size={13} color="var(--primary-light)" />
+                </strong>
                 <span className={`role-badge role-badge--${currentUser.role}`}>
                   {ROLE_LABELS[currentUser.role]}
                 </span>
@@ -248,6 +274,47 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       )}
+
+      {/* Quick Edit Name Modal */}
+      {isEditingName && (
+        <div className="modal-overlay active" onClick={() => setIsEditingName(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px', padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Edit3 size={18} color="var(--primary-light)" /> تعديل الاسم الظاهر
+              </h3>
+              <button className="icon-btn" onClick={() => setIsEditingName(false)}><X size={16} /></button>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              أدخل اسمك ليظهر على شريط التنقل والشهادات الرسمية والمحاضرات بدلاً من رقم الهاتف:
+            </p>
+            <input
+              type="text"
+              className="input-field"
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              placeholder="اكتب اسمك الثلاثي أو الثنائي..."
+              autoFocus
+              style={{ marginBottom: '1.25rem' }}
+            />
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setIsEditingName(false)}>إلغاء</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  if (tempName.trim()) {
+                    updateUserName(tempName.trim());
+                    setIsEditingName(false);
+                  }
+                }}
+              >
+                حفظ الاسم
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
+

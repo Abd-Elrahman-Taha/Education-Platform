@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Phone, ShieldCheck, Key, Sparkles, LogOut, Smartphone } from 'lucide-react';
+import { User, Phone, ShieldCheck, Key, Sparkles, LogOut, Smartphone, Edit3, Check, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getDeviceUuid } from '../../utils/device';
 import { ChangePasswordModal } from '../../components/auth/ChangePasswordModal';
@@ -10,16 +10,25 @@ interface ProfilePageProps {
 }
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess }) => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateUserName } = useAuth();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isScratchCardOpen, setIsScratchCardOpen] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(currentUser?.name || '');
 
   const deviceUuid = getDeviceUuid();
 
   const handleLogout = () => {
     logout();
     if (onLogoutSuccess) onLogoutSuccess();
+  };
+
+  const handleSaveName = () => {
+    if (nameInput.trim()) {
+      updateUserName(nameInput.trim());
+      setIsEditingName(false);
+    }
   };
 
   return (
@@ -32,12 +41,42 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess }) => 
             alt={currentUser?.name}
             style={{ width: '64px', height: '64px', borderRadius: '50%', border: '2px solid var(--primary-light)', objectFit: 'cover' }}
           />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <h1 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
-                {currentUser?.name || 'طالب المنظومة'}
-              </h1>
-              <span className="status-badge status-badge--active">حساب مفعل</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+              {isEditingName ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    placeholder="اسم الطالب..."
+                    style={{ padding: '0.4rem 0.75rem', fontSize: '0.95rem' }}
+                    autoFocus
+                  />
+                  <button className="btn btn-primary" onClick={handleSaveName} style={{ padding: '0.4rem 0.8rem' }}>
+                    <Check size={16} />
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setIsEditingName(false)} style={{ padding: '0.4rem 0.8rem' }}>
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h1 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
+                    {currentUser?.name || 'طالب المنظومة'}
+                  </h1>
+                  <button
+                    className="icon-btn"
+                    onClick={() => { setNameInput(currentUser?.name || ''); setIsEditingName(true); }}
+                    title="تعديل الاسم"
+                    style={{ width: '28px', height: '28px' }}
+                  >
+                    <Edit3 size={14} />
+                  </button>
+                  <span className="status-badge status-badge--active">حساب مفعل</span>
+                </>
+              )}
             </div>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
               رقم الهاتف: {currentUser?.phone}
