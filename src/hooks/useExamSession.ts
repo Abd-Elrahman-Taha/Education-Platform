@@ -31,12 +31,17 @@ export function useExamSession(examId: string) {
     setError(null);
     try {
       const data = await examsApi.startExam(examId);
-      setExam(data.exam);
-      setQuestions(data.questions || []);
-      setAttemptId(data.attemptId);
+      const examObj = data.data?.exam || data.exam;
+      const questionsList = data.data?.questions || data.questions || [];
+      const attemptIdVal = data.data?.attemptId || data.attemptId || '';
 
-      const durationSec = (data.exam.DurationMinutes || 10) * 60;
-      setTimeRemainingSeconds(durationSec);
+      if (examObj) {
+        setExam(examObj);
+        const durationSec = (examObj.DurationMinutes || 10) * 60;
+        setTimeRemainingSeconds(durationSec);
+      }
+      setQuestions(questionsList);
+      setAttemptId(attemptIdVal);
       setIsTimerExpired(false);
     } catch (err: any) {
       setError(err?.message || 'فشل في بدء جلسة الامتحان');
@@ -64,9 +69,19 @@ export function useExamSession(examId: string) {
       }));
 
       const res = await examsApi.submitExam(examId, { answers: payloadAnswers });
-      setResult(res);
+      const scoreVal = res.data?.score ?? res.score ?? 0;
+      const statusVal = res.data?.status ?? res.status ?? 'Passed';
+      const passingScoreVal = res.data?.passingScore ?? res.passingScore;
+      const normalizedResult: SubmitExamResponse = {
+        message: res.message,
+        score: scoreVal,
+        status: statusVal,
+        passingScore: passingScoreVal,
+        data: res.data,
+      };
+      setResult(normalizedResult);
       setIsFinished(true);
-      return res;
+      return normalizedResult;
     } catch (err: any) {
       setError(err?.message || 'حدث خطأ أثناء تسليم الامتحان');
       throw err;

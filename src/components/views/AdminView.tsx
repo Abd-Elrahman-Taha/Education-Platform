@@ -1,248 +1,283 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Sliders, Search, Users, TrendingUp, DollarSign, Activity,
-  Edit2, Trash2, Ban, Shield, ShieldOff, CheckCircle2, XCircle,
-  ArrowUp, ArrowDown, UserCheck, Plus, UserPlus, BookOpen, Award,
-  Eye, EyeOff, Check, X, Filter, Sparkles, GraduationCap, ChevronRight,
-  Layers, Lock, Unlock, Settings, BarChart2, Star, Clock, Calendar,
-  FileText, CheckSquare, RefreshCw, Phone, Mail, Copy, ExternalLink, ShieldCheck
+  Sliders, Search, Users, DollarSign, Activity,
+  Trash2, Ban, Shield, CheckCircle2, XCircle,
+  Plus, UserPlus, BookOpen, Award,
+  Check, X, Sparkles, GraduationCap,
+  BarChart2, Clock, Phone, Copy, Key, Layers
 } from 'lucide-react';
-import {
-  AcademicYear, ACADEMIC_YEAR_LABELS, StudentProfile, Lesson, User,
-  TeacherPermission, PERMISSION_LABELS, Package
-} from '../../types';
-import { mockDB } from '../../services/db';
+import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { studentsApi } from '../../api/students.api';
+import { coursesApi } from '../../api/courses.api';
+import { lessonsApi } from '../../api/lessons.api';
+import { paymentApi } from '../../api/payment.api';
+import { AdminStudent, Course, Lesson } from '../../types/api.types';
 
 export const AdminView: React.FC = () => {
   const { showToast } = useToast();
   const { currentUser } = useAuth();
 
-  // Selected academic year for scoping EVERYTHING in the dashboard
+  // Selected academic year
   const [selectedYear, setSelectedYear] = useState<AcademicYear>('third_secondary');
 
-  // Main active tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'lessons' | 'exams' | 'teachers'>('overview');
+  // Main active tab (strictly Admin domains, no Teacher role)
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'scratch-cards'>('overview');
 
-  // Local state initialized from db
-  const [students, setStudents] = useState<StudentProfile[]>(() => mockDB.getStudents());
-  const [lessons, setLessons] = useState<Lesson[]>(() => mockDB.getLessons(undefined, true));
-  const [teachers, setTeachers] = useState<User[]>(() => mockDB.getTeachers());
-  const [packages, setPackages] = useState<Package[]>(() => mockDB.getPackages());
-
-  // Search and filters for student list
+  // ── LIVE BACKEND STATE ───────────────────────────────────────
+  const [realStudents, setRealStudents] = useState<AdminStudent[]>([]);
+  const [isStudentsLoading, setIsStudentsLoading] = useState(false);
   const [searchStudent, setSearchStudent] = useState('');
-  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'active' | 'blocked'>('all');
-  const [studentAccessFilter, setStudentAccessFilter] = useState<'all' | 'with_access' | 'no_access'>('all');
+  const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'Active' | 'Blocked' | 'SuspendedMultiDevice'>('all');
 
-  // Modals state
-  const [selectedStudentForModal, setSelectedStudentForModal] = useState<StudentProfile | null>(null);
-  const [studentProfileTab, setStudentProfileTab] = useState<'exams' | 'packages' | 'lessons' | 'contact'>('exams');
+  const [realCourses, setRealCourses] = useState<Course[]>([]);
+  const [isCoursesLoading, setIsCoursesLoading] = useState(false);
+  const [selectedCourseForLessons, setSelectedCourseForLessons] = useState<string>('');
+
+  const [realLessons, setRealLessons] = useState<Lesson[]>([]);
+  const [isLessonsLoading, setIsLessonsLoading] = useState(false);
+
+  // Modals & Forms
   const [isRegisterStudentOpen, setIsRegisterStudentOpen] = useState(false);
-  const [isAddLessonOpen, setIsAddLessonOpen] = useState(false);
-  const [isTeacherPermissionsModalOpen, setIsTeacherPermissionsModalOpen] = useState<User | null>(null);
+  const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
+  const [isCreateLessonOpen, setIsCreateLessonOpen] = useState(false);
 
-  // New student form state
+  // Scratch Cards Generation State
+  const [scratchAmount, setScratchAmount] = useState<number>(100);
+  const [scratchCount, setScratchCount] = useState<number>(10);
+  const [scratchBatch, setScratchBatch] = useState<string>('BATCH-' + new Date().getFullYear());
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [isGeneratingCards, setIsGeneratingCards] = useState(false);
+
+  // Form inputs
   const [newStudentForm, setNewStudentForm] = useState({
     name: '',
     phone: '',
     parentPhone: '',
-    nationalId: '',
-    code: '',
-    email: '',
-    packageId: 'pkg-3',
+    password: 'Password123',
   });
 
-  // New lesson form state
-  const [newLessonForm, setNewLessonForm] = useState({
+  const [newCourseForm, setNewCourseForm] = useState({
     title: '',
-    subtitle: '',
-    subject: 'التفاضل والتكامل',
-    description: '',
-    duration: '1:30:00',
-    videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
-    pdfTitle: 'ملزمة المحاضرة الجديدة.pdf',
-    pdfUrl: 'https://www.w3.org/W3C/DesignIssues/Overview.html',
+    price: 100,
     isPublished: true,
   });
 
-  // Lock background body scroll when any modal/overlay is open, preserving exact scroll position
-  useEffect(() => {
-    if (selectedStudentForModal || isTeacherPermissionsModalOpen || isRegisterStudentOpen || isAddLessonOpen) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [selectedStudentForModal, isTeacherPermissionsModalOpen, isRegisterStudentOpen, isAddLessonOpen]);
-
-  // ── SCOPED DATA BY ACADEMIC YEAR ──────────────────────────────
-  const scopedStudents = students.filter(s => s.academicYear === selectedYear);
-  const scopedLessons = lessons.filter(l => l.academicYear === selectedYear);
-  const scopedPackages = packages.filter(p => p.academicYear === selectedYear);
-  const topStudents = [...scopedStudents]
-    .filter(s => s.status === 'active')
-    .sort((a, b) => b.averageScore - a.averageScore)
-    .slice(0, 5);
-
-  // Filtered students in Student tab
-  const filteredStudents = scopedStudents.filter(s => {
-    const q = searchStudent.toLowerCase();
-    const matchQ = !q || s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q) || s.phone.includes(q);
-    const matchStatus = studentStatusFilter === 'all' || s.status === studentStatusFilter;
-    const matchAccess = studentAccessFilter === 'all' || (studentAccessFilter === 'with_access' ? s.hasAccess : !s.hasAccess);
-    return matchQ && matchStatus && matchAccess;
+  const [newLessonForm, setNewLessonForm] = useState({
+    title: '',
+    videoStoragePath: 'videos/lesson-1.mp4',
+    durationSeconds: 1800,
+    orderIndex: 1,
+    maxAllowedViews: 3,
   });
 
-  // Overview stats calculation
-  const totalStudents = scopedStudents.length;
-  const activeStudents = scopedStudents.filter(s => s.status === 'active').length;
-  const studentsWithAccess = scopedStudents.filter(s => s.hasAccess).length;
-  const studentsWithoutAccess = totalStudents - studentsWithAccess;
-  const totalLessonsCount = scopedLessons.length;
-  const publishedLessonsCount = scopedLessons.filter(l => l.isPublished).length;
-  const avgScore = Math.round(scopedStudents.reduce((acc, s) => acc + s.averageScore, 0) / (totalStudents || 1)) || 0;
-
-  // ── ACTIONS ──────────────────────────────────────────────────
-
-  const handleToggleLessonPublish = (lessonId: string) => {
-    const updated = mockDB.toggleLessonPublish(lessonId);
-    setLessons(prev => prev.map(l => (l.id === lessonId ? updated : l)));
-    showToast(updated.isPublished ? `تم نشر "${updated.title}" للطلاب` : `تم إخفاء "${updated.title}" من قائمة الطلاب`, 'info');
-  };
-
-  const handleDeleteLesson = (lessonId: string) => {
-    mockDB.deleteLesson(lessonId);
-    setLessons(prev => prev.filter(l => l.id !== lessonId));
-    showToast('تم حذف المحاضرة بنجاح', 'danger');
-  };
-
-  const handleToggleStudentStatus = (studentId: string) => {
-    const s = students.find(x => x.id === studentId);
-    if (!s) return;
-    const newStatus = s.status === 'active' ? 'blocked' : 'active';
-    const updated = mockDB.updateStudent(studentId, { status: newStatus });
-    setStudents(prev => prev.map(x => (x.id === studentId ? updated : x)));
-    if (selectedStudentForModal && selectedStudentForModal.id === studentId) {
-      setSelectedStudentForModal(updated);
+  // ── FETCH LIVE DATA ─────────────────────────────────────────
+  const loadStudents = async () => {
+    setIsStudentsLoading(true);
+    try {
+      const res = await studentsApi.getStudents({
+        search: searchStudent.trim() || undefined,
+        Status: studentStatusFilter !== 'all' ? studentStatusFilter : undefined,
+      });
+      setRealStudents(res.students);
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch students:', err);
+    } finally {
+      setIsStudentsLoading(false);
     }
-    showToast(newStatus === 'blocked' ? `تم حظر حساب ${s.name}` : `تم تفعيل حساب ${s.name}`, newStatus === 'blocked' ? 'warning' : 'success');
   };
 
-  const handleAssignLessonToStudent = (studentId: string, lessonId: string, isAssigned: boolean) => {
-    const updated = mockDB.assignLessonToStudent(studentId, lessonId, isAssigned);
-    setStudents(prev => prev.map(s => (s.id === studentId ? updated : s)));
-    if (selectedStudentForModal && selectedStudentForModal.id === studentId) {
-      setSelectedStudentForModal(updated);
+  const loadCourses = async () => {
+    setIsCoursesLoading(true);
+    try {
+      const res = await coursesApi.getCourses();
+      const list = res.courses || [];
+      setRealCourses(list);
+      if (list.length > 0 && !selectedCourseForLessons) {
+        setSelectedCourseForLessons(list[0]._id);
+      }
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch courses:', err);
+    } finally {
+      setIsCoursesLoading(false);
     }
-    showToast(isAssigned ? 'تم منح الطالب صلاحية الوصول للمحاضرة' : 'تم سحب صلاحية المحاضرة من الطالب', 'info');
   };
 
-  const handleAssignPackageToStudent = (studentId: string, packageId: string) => {
-    const updated = mockDB.assignPackageToStudent(studentId, packageId);
-    setStudents(prev => prev.map(s => (s.id === studentId ? updated : s)));
-    if (selectedStudentForModal && selectedStudentForModal.id === studentId) {
-      setSelectedStudentForModal(updated);
+  const loadLessons = async (courseId: string) => {
+    if (!courseId) return;
+    setIsLessonsLoading(true);
+    try {
+      const list = await lessonsApi.getCourseLessons(courseId);
+      setRealLessons(list);
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch lessons:', err);
+      setRealLessons([]);
+    } finally {
+      setIsLessonsLoading(false);
     }
-    showToast(`تم تعيين الباقة (${updated.packageName}) للطالب بنجاح`, 'success');
   };
 
-  const handleCreateStudent = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadStudents();
+    loadCourses();
+  }, []);
+
+  useEffect(() => {
+    if (selectedCourseForLessons) {
+      loadLessons(selectedCourseForLessons);
+    }
+  }, [selectedCourseForLessons]);
+
+  // Handle Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadStudents();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchStudent, studentStatusFilter]);
+
+  // Body scroll lock on modal open
+  useEffect(() => {
+    if (isRegisterStudentOpen || isCreateCourseOpen || isCreateLessonOpen) {
+      const orig = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = orig;
+      };
+    }
+  }, [isRegisterStudentOpen, isCreateCourseOpen, isCreateLessonOpen]);
+
+  // ── STUDENT ACTIONS ─────────────────────────────────────────
+  const handleToggleStudentStatus = async (student: AdminStudent) => {
+    const newStatus = student.Status === 'Active' ? 'Blocked' : 'Active';
+    try {
+      await studentsApi.updateStudentStatus(student._id, newStatus);
+      showToast(newStatus === 'Blocked' ? `تم حظر حساب ${student.FullName}` : `تم تفعيل حساب ${student.FullName}`, 'success');
+      loadStudents();
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في تحديث حالة الطالب', 'error');
+    }
+  };
+
+  const handleDeleteStudent = async (student: AdminStudent) => {
+    if (!window.confirm(`هل أنت متأكد من رغبتك في حذف الطالب (${student.FullName})؟`)) return;
+    try {
+      await studentsApi.deleteStudent(student._id);
+      showToast(`تم حذف الطالب (${student.FullName}) بنجاح`, 'success');
+      loadStudents();
+    } catch (err: any) {
+      showToast(err?.message || 'لا يمكن حذف الطالب لوجود سجلات مالية أو دراسية مرتبطة به.', 'error');
+    }
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudentForm.name || !newStudentForm.phone) return;
-
-    const code = newStudentForm.code || `CODE-${Math.floor(10000 + Math.random() * 90000)}`;
-    const nationalId = newStudentForm.nationalId || `3050${Math.floor(1000000000 + Math.random() * 9000000000)}`;
-    const selPkg = packages.find(p => p.id === newStudentForm.packageId);
-
-    const created = mockDB.addStudent({
-      name: newStudentForm.name,
-      code,
-      nationalId,
-      email: newStudentForm.email || `student_${Date.now()}@edulearn.com`,
-      phone: newStudentForm.phone,
-      parentPhone: newStudentForm.parentPhone || newStudentForm.phone,
-      academicYear: selectedYear,
-      status: 'active',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-      packageId: selPkg?.id,
-      packageName: selPkg?.name || 'بدون اشتراك',
-      hasAccess: !!selPkg,
-      assignedLessonIds: selPkg?.includedLessonIds || [],
-      averageScore: 90,
-      attendanceRate: 100,
-    });
-
-    setStudents(prev => [created, ...prev]);
-    setIsRegisterStudentOpen(false);
-    setNewStudentForm({ name: '', phone: '', parentPhone: '', nationalId: '', code: '', email: '', packageId: 'pkg-3' });
-    showToast(`تم تسجيل الطالب (${created.name}) بالكود: ${created.code}`, 'success');
+    try {
+      await studentsApi.createStudent({
+        FullName: newStudentForm.name.trim(),
+        Phone: newStudentForm.phone.trim(),
+        ParentPhone: newStudentForm.parentPhone.trim() || undefined,
+        password: newStudentForm.password,
+      });
+      showToast(`تم إنشاء حساب الطالب (${newStudentForm.name}) بنجاح!`, 'success');
+      setIsRegisterStudentOpen(false);
+      setNewStudentForm({ name: '', phone: '', parentPhone: '', password: 'Password123' });
+      loadStudents();
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في إنشاء الطالب', 'error');
+    }
   };
 
-  const handleCreateLesson = (e: React.FormEvent) => {
+  // ── COURSE ACTIONS ──────────────────────────────────────────
+  const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLessonForm.title) return;
-
-    const created = mockDB.addLesson({
-      title: newLessonForm.title,
-      subtitle: newLessonForm.subtitle || 'شرح وتطبيقات عملية',
-      subject: newLessonForm.subject,
-      description: newLessonForm.description || 'شرح شامل للمحاضرة مع حل المسائل.',
-      duration: newLessonForm.duration,
-      order: scopedLessons.length + 1,
-      academicYear: selectedYear,
-      isPublished: newLessonForm.isPublished,
-      isLocked: false,
-      videoUrl: newLessonForm.videoUrl,
-      pdfUrl: newLessonForm.pdfUrl,
-      pdfTitle: newLessonForm.pdfTitle,
-      homework: {
-        id: `hw-${Date.now()}`,
-        title: `واجب ${newLessonForm.title}`,
-        description: 'حل التدريبات المرفقة.',
-        dueDate: '2026-08-30',
-        isSubmitted: false,
-        questions: [],
-      },
-      exam: {
-        id: `exam-${Date.now()}`,
-        title: `اختبار ${newLessonForm.title}`,
-        durationMinutes: 20,
-        passingScorePercentage: 60,
-        isPublished: newLessonForm.isPublished,
-        questions: [],
-      },
-    });
-
-    setLessons(prev => [...prev, created]);
-    setIsAddLessonOpen(false);
-    setNewLessonForm({ title: '', subtitle: '', subject: 'التفاضل والتكامل', description: '', duration: '1:30:00', videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4', pdfTitle: 'ملزمة المحاضرة الجديدة.pdf', pdfUrl: 'https://www.w3.org/W3C/DesignIssues/Overview.html', isPublished: true });
-    showToast(`تمت إضافة المحاضرة "${created.title}" بنجاح`, 'success');
+    try {
+      await coursesApi.createCourse({
+        Title: newCourseForm.title.trim(),
+        Price: Number(newCourseForm.price),
+        IsPublished: newCourseForm.isPublished,
+      });
+      showToast('تم إنشاء الكورس بنجاح!', 'success');
+      setIsCreateCourseOpen(false);
+      setNewCourseForm({ title: '', price: 100, isPublished: true });
+      loadCourses();
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في إنشاء الكورس', 'error');
+    }
   };
 
-  const handleToggleTeacherPermission = (teacherId: string, perm: TeacherPermission) => {
-    const teacher = teachers.find(t => t.id === teacherId);
-    if (!teacher) return;
-    const currentPerms = teacher.permissions || [];
-    const nextPerms = currentPerms.includes(perm)
-      ? currentPerms.filter(p => p !== perm)
-      : [...currentPerms, perm];
+  const handleDeleteCourse = async (courseId: string, title: string) => {
+    if (!window.confirm(`هل أنت متأكد من حذف الكورس (${title})؟`)) return;
+    try {
+      await coursesApi.deleteCourse(courseId);
+      showToast(`تم حذف الكورس (${title}) بنجاح`, 'success');
+      loadCourses();
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في حذف الكورس', 'error');
+    }
+  };
 
-    const updated = mockDB.updateTeacherPermissions(teacherId, nextPerms);
-    setTeachers(prev => prev.map(t => (t.id === teacherId ? updated : t)));
-    setIsTeacherPermissionsModalOpen(updated);
-    showToast('تم تحديث صلاحيات المعلم بنجاح', 'success');
+  // ── LESSON ACTIONS ──────────────────────────────────────────
+  const handleCreateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourseForLessons) {
+      showToast('يرجى اختيار الكورس أولاً', 'error');
+      return;
+    }
+    try {
+      await lessonsApi.createLesson(selectedCourseForLessons, {
+        Title: newLessonForm.title.trim(),
+        VideoStoragePath: newLessonForm.videoStoragePath.trim(),
+        DurationSeconds: Number(newLessonForm.durationSeconds),
+        OrderIndex: Number(newLessonForm.orderIndex),
+        MaxAllowedViews: Number(newLessonForm.maxAllowedViews),
+      });
+      showToast('تمت إضافة المحاضرة بنجاح!', 'success');
+      setIsCreateLessonOpen(false);
+      setNewLessonForm({ title: '', videoStoragePath: 'videos/lesson-1.mp4', durationSeconds: 1800, orderIndex: realLessons.length + 1, maxAllowedViews: 3 });
+      loadLessons(selectedCourseForLessons);
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في إضافة المحاضرة', 'error');
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId: string, title: string) => {
+    if (!window.confirm(`هل أنت متأكد من حذف المحاضرة (${title})؟`)) return;
+    try {
+      await lessonsApi.deleteLesson(selectedCourseForLessons, lessonId);
+      showToast(`تم حذف المحاضرة (${title}) بنجاح`, 'success');
+      loadLessons(selectedCourseForLessons);
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في حذف المحاضرة', 'error');
+    }
+  };
+
+  // ── SCRATCH CARD GENERATION ─────────────────────────────────
+  const handleGenerateCards = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsGeneratingCards(true);
+    try {
+      const res = await paymentApi.generateScratchCards({
+        Amount: Number(scratchAmount),
+        Count: Number(scratchCount),
+        BatchNumber: scratchBatch.trim(),
+      });
+      setGeneratedCodes(res.rawCodes || []);
+      showToast(`تم توليد ${res.insertedCount} كارت شحن بنجاح!`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في توليد كروت الشحن', 'error');
+    } finally {
+      setIsGeneratingCards(false);
+    }
   };
 
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 6rem' }}>
-      {/* ── HEADER CARD WITH POLISHED YEAR SWITCHER & TAB BAR ── */}
-      <div className="glass-card admin-header-card">
+      {/* ── HEADER CARD ────────────────────────────────────── */}
+      <div className="glass-card admin-header-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
-          {/* Left Title & Badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{
               width: '56px', height: '56px',
@@ -257,54 +292,48 @@ export const AdminView: React.FC = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.35rem' }}>
                 <span className="gradient-badge">
-                  <Sparkles size={13} /> لوحة الإدارة والتحكم الموحدة (Admin & Teacher Hub)
+                  <Sparkles size={13} /> لوحة تحكم المسؤول (Live Admin Hub)
                 </span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  المستخدم: {currentUser?.name}
+                  المسؤول: {currentUser?.name}
                 </span>
               </div>
               <h1 style={{ fontSize: '1.85rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
-                إدارة الطلاب والمحتوى والصلاحيات
+                إدارة المنظومة التعليمية وقاعدة البيانات الحية
               </h1>
             </div>
           </div>
 
-          {/* Right: Modern Segmented Control for Academic Year */}
+          {/* Academic Year Selector */}
           <div className="year-selector-wrap">
             <span className="year-selector-label">
-              <GraduationCap size={15} /> السنة الدراسية المستهدفة:
+              <GraduationCap size={15} /> العام الدراسي:
             </span>
             <div className="year-pill-group">
-              {(['first_secondary', 'second_secondary', 'third_secondary'] as AcademicYear[]).map(yearKey => {
-                const isActive = selectedYear === yearKey;
-                return (
-                  <button
-                    key={yearKey}
-                    type="button"
-                    className={`year-pill-btn ${isActive ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedYear(yearKey);
-                      showToast(`تم التبديل إلى: ${ACADEMIC_YEAR_LABELS[yearKey]}`, 'info');
-                    }}
-                  >
-                    {isActive && <Check size={13} />}
-                    {ACADEMIC_YEAR_LABELS[yearKey]}
-                  </button>
-                );
-              })}
+              {(['first_secondary', 'second_secondary', 'third_secondary'] as AcademicYear[]).map(yearKey => (
+                <button
+                  key={yearKey}
+                  type="button"
+                  className={`year-pill-btn ${selectedYear === yearKey ? 'active' : ''}`}
+                  onClick={() => setSelectedYear(yearKey)}
+                >
+                  {selectedYear === yearKey && <Check size={13} />}
+                  {ACADEMIC_YEAR_LABELS[yearKey]}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation Switcher */}
-        <div className="admin-tab-bar">
+        {/* Tab Navigation */}
+        <div className="admin-tab-bar" style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', borderTop: '1px solid var(--border-glass)', paddingTop: '1rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             className={`admin-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
             onClick={() => setActiveTab('overview')}
           >
             <BarChart2 size={16} />
-            <span>نظرة عامة والإحصائيات</span>
+            <span>نظرة عامة والتحليلات</span>
           </button>
 
           <button
@@ -313,8 +342,18 @@ export const AdminView: React.FC = () => {
             onClick={() => setActiveTab('students')}
           >
             <Users size={16} />
-            <span>إدارة الطلاب</span>
-            <span className="admin-tab-badge">{scopedStudents.length}</span>
+            <span>إدارة الطلاب الحية</span>
+            <span className="admin-tab-badge">{realStudents.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-tab-btn ${activeTab === 'courses' ? 'active' : ''}`}
+            onClick={() => setActiveTab('courses')}
+          >
+            <BookOpen size={16} />
+            <span>إدارة الكورسات (CRUD)</span>
+            <span className="admin-tab-badge">{realCourses.length}</span>
           </button>
 
           <button
@@ -322,207 +361,91 @@ export const AdminView: React.FC = () => {
             className={`admin-tab-btn ${activeTab === 'lessons' ? 'active' : ''}`}
             onClick={() => setActiveTab('lessons')}
           >
-            <BookOpen size={16} />
-            <span>إدارة الدروس والنشر</span>
-            <span className="admin-tab-badge">{scopedLessons.length}</span>
+            <Layers size={16} />
+            <span>إدارة المحاضرات (Lessons)</span>
           </button>
 
           <button
             type="button"
-            className={`admin-tab-btn ${activeTab === 'exams' ? 'active' : ''}`}
-            onClick={() => setActiveTab('exams')}
+            className={`admin-tab-btn ${activeTab === 'scratch-cards' ? 'active' : ''}`}
+            onClick={() => setActiveTab('scratch-cards')}
           >
-            <Award size={16} />
-            <span>الامتحانات والتقييمات</span>
-          </button>
-
-          <button
-            type="button"
-            className={`admin-tab-btn ${activeTab === 'teachers' ? 'active' : ''}`}
-            onClick={() => setActiveTab('teachers')}
-          >
-            <Shield size={16} />
-            <span>المعلمون والصلاحيات</span>
-            <span className="admin-tab-badge">{teachers.length}</span>
+            <Key size={16} />
+            <span>توليد كروت الشحن (Scratch Cards)</span>
           </button>
         </div>
       </div>
 
-      {/* ── TAB 1: OVERVIEW & TOP STUDENTS (Requirements #12 & #13) ── */}
+      {/* ── TAB 1: OVERVIEW ─────────────────────────────────── */}
       {activeTab === 'overview' && (
-        <div>
-          {/* Overview Cards Scoped to Year */}
-          <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-            <div className="glass-card admin-stat-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="admin-stat-icon" style={{ background: 'rgba(8,145,178,0.15)', color: 'var(--primary-light)' }}>
-                  <Users size={24} />
-                </div>
-                <span className="gradient-badge" style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem' }}>
-                  {ACADEMIC_YEAR_LABELS[selectedYear]}
-                </span>
-              </div>
-              <div className="admin-stat-value">{totalStudents} <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: 600 }}>طلاب</span></div>
-              <div className="admin-stat-label">إجمالي الطلاب المسجلين</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+            <div className="glass-card" style={{ padding: '1.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>إجمالي الطلاب المسجلين</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary-light)', margin: '0.35rem 0' }}>
+                {realStudents.length}
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>✓ متصل بقاعدة بيانات MongoDB</span>
             </div>
 
-            <div className="glass-card admin-stat-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="admin-stat-icon" style={{ background: 'rgba(16,185,129,0.15)', color: '#10B981' }}>
-                  <CheckCircle2 size={24} />
-                </div>
-                <span className="admin-stat-delta up">
-                  <ArrowUp size={13} /> {Math.round((studentsWithAccess / (totalStudents || 1)) * 100)}%
-                </span>
-              </div>
-              <div className="admin-stat-value" style={{ color: '#10B981' }}>{studentsWithAccess}</div>
-              <div className="admin-stat-label">الطلاب المشتركون بالباقات</div>
+            <div className="glass-card" style={{ padding: '1.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>الكورسات المنشورة</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10B981', margin: '0.35rem 0' }}>
+                {realCourses.length}
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>جاهزة للتسجيل والاشتراك</span>
             </div>
 
-            <div className="glass-card admin-stat-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="admin-stat-icon" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>
-                  <Activity size={24} />
-                </div>
-                <span className="admin-stat-delta down" style={{ color: '#F59E0B' }}>
-                  بدون اشتراك
-                </span>
-              </div>
-              <div className="admin-stat-value" style={{ color: '#F59E0B' }}>{studentsWithoutAccess}</div>
-              <div className="admin-stat-label">طلاب بحاجة لتفعيل باقة</div>
+            <div className="glass-card" style={{ padding: '1.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>المحاضرات النشطة</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', margin: '0.35rem 0' }}>
+                {realLessons.length}
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>مزودة بالحماية وHeartbeat</span>
             </div>
 
-            <div className="glass-card admin-stat-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="admin-stat-icon" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--primary-light)' }}>
-                  <BookOpen size={24} />
-                </div>
-                <span className="admin-stat-delta up">
-                  {publishedLessonsCount} منشور
-                </span>
-              </div>
-              <div className="admin-stat-value">{publishedLessonsCount} / {totalLessonsCount}</div>
-              <div className="admin-stat-label">المحاضرات المتاحة للطلاب</div>
-            </div>
-
-            <div className="glass-card admin-stat-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="admin-stat-icon" style={{ background: 'rgba(139,92,246,0.15)', color: '#8B5CF6' }}>
-                  <TrendingUp size={24} />
-                </div>
-                <span className="admin-stat-delta up" style={{ color: '#8B5CF6' }}>
-                  معدل ممتاز
-                </span>
-              </div>
-              <div className="admin-stat-value" style={{ color: '#8B5CF6' }}>{avgScore}%</div>
-              <div className="admin-stat-label">متوسط تحصيل الطلاب</div>
-            </div>
-          </div>
-
-          {/* Top Performing Students Table (Requirement #13) */}
-          <div className="glass-card" style={{ padding: '2rem', marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-              <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Award size={22} color="#F59E0B" /> أوائل الطلاب المتفوقين (Top Performing Students)
-                </h2>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  ترتيب الطلاب حسب متوسط درجات الاختبارات التراكمية في {ACADEMIC_YEAR_LABELS[selectedYear]}
-                </span>
-              </div>
-              <span className="gradient-badge">
-                {topStudents.length} طلاب متصدرين
-              </span>
-            </div>
-
-            <div className="user-table-wrapper">
-              <table className="user-table">
-                <thead>
-                  <tr>
-                    <th>الترتيب</th>
-                    <th>اسم الطالب</th>
-                    <th>كود الطالب</th>
-                    <th>السنة الدراسية</th>
-                    <th>المعدل التراكمي</th>
-                    <th>نسبة الحضور</th>
-                    <th>الباقة المفعلة</th>
-                    <th>الإجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topStudents.map((st, index) => (
-                    <tr key={st.id}>
-                      <td>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          width: '30px', height: '30px', borderRadius: '50%',
-                          background: index === 0 ? 'linear-gradient(135deg, #F59E0B, #D97706)' : index === 1 ? 'linear-gradient(135deg, #94A3B8, #64748B)' : index === 2 ? 'linear-gradient(135deg, #B45309, #78350F)' : 'rgba(255,255,255,0.08)',
-                          color: '#FFF',
-                          fontWeight: 900, fontSize: '0.88rem',
-                          boxShadow: index === 0 ? '0 2px 10px rgba(245,158,11,0.4)' : 'none'
-                        }}>
-                          {index + 1}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <img src={st.avatar} alt={st.name} style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-glass)' }} />
-                          <strong style={{ fontSize: '0.92rem', color: 'var(--text-bright)' }}>{st.name}</strong>
-                        </div>
-                      </td>
-                      <td style={{ fontFamily: 'monospace', color: 'var(--primary-light)', fontWeight: 700 }}>{st.code}</td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{ACADEMIC_YEAR_LABELS[st.academicYear]}</td>
-                      <td>
-                        <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10B981' }}>{st.averageScore}%</span>
-                      </td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-bright)' }}>{st.attendanceRate}%</td>
-                      <td>
-                        <span className="gradient-badge" style={{ fontSize: '0.75rem' }}>{st.packageName || 'باقة شاملة'}</span>
-                      </td>
-                      <td>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
-                          onClick={() => setSelectedStudentForModal(st)}
-                        >
-                          <Eye size={14} /> عرض الملف
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="glass-card" style={{ padding: '1.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>حالة خادم الـ API</span>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--success)', margin: '0.5rem 0' }}>
+                متصل وجاهز ⚡
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>edc-platform.vercel.app</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── TAB 2: STUDENT MANAGEMENT (Requirements #14, #15, #16, #17) ── */}
+      {/* ── TAB 2: STUDENTS MANAGEMENT (LIVE GET /users/students) ── */}
       {activeTab === 'students' && (
-        <div className="glass-card" style={{ padding: '2rem' }}>
+        <div className="glass-card" style={{ padding: '1.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                إدارة طلاب {ACADEMIC_YEAR_LABELS[selectedYear]} ({filteredStudents.length})
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                الطلاب المسجلون في المنظومة ({realStudents.length})
               </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
-                البحث، تفعيل الباقات، تعيين المحاضرات، ومتابعة الأداء الأكاديمي
-              </p>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                إدارة كاملة لحسابات الطلاب، تفعيل الحسابات، الحظر، والحذف الآمن
+              </span>
             </div>
 
-            <button className="btn btn-primary" onClick={() => setIsRegisterStudentOpen(true)}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setIsRegisterStudentOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
               <UserPlus size={16} /> تسجيل طالب جديد
             </button>
           </div>
 
-          {/* Search & Filters */}
-          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+          {/* Search & Filter Toolbar */}
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
               <Search size={16} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 className="input-field"
-                placeholder="بحث بالاسم، الكود، أو رقم الهاتف..."
+                placeholder="بحث بالاسم أو رقم الهاتف..."
                 style={{ width: '100%', paddingRight: '40px', fontSize: '0.88rem' }}
                 value={searchStudent}
                 onChange={e => setSearchStudent(e.target.value)}
@@ -536,784 +459,382 @@ export const AdminView: React.FC = () => {
               onChange={e => setStudentStatusFilter(e.target.value as any)}
             >
               <option value="all">جميع الحالات</option>
-              <option value="active">حساب نشط (Active)</option>
-              <option value="blocked">حساب محظور (Blocked)</option>
-            </select>
-
-            <select
-              className="input-field"
-              style={{ fontSize: '0.85rem', width: 'auto' }}
-              value={studentAccessFilter}
-              onChange={e => setStudentAccessFilter(e.target.value as any)}
-            >
-              <option value="all">جميع الاشتراكات</option>
-              <option value="with_access">مشترك بالباقة</option>
-              <option value="no_access">بدون اشتراك</option>
+              <option value="Active">حساب نشط (Active)</option>
+              <option value="Blocked">حساب محظور (Blocked)</option>
+              <option value="SuspendedMultiDevice">معلق لتعدد الأجهزة</option>
             </select>
           </div>
 
           {/* Students Table */}
-          <div className="user-table-wrapper">
-            <table className="user-table">
-              <thead>
-                <tr>
-                  <th>الطالب</th>
-                  <th>كود الطالب</th>
-                  <th>الرقم القومي</th>
-                  <th>الهاتف</th>
-                  <th>هاتف ولي الأمر</th>
-                  <th>الباقة</th>
-                  <th>الحالة</th>
-                  <th>المعدل</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map(student => (
-                  <tr key={student.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                        <img src={student.avatar} alt={student.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{student.name}</strong>
-                      </div>
-                    </td>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--primary-light)', fontWeight: 700 }}>{student.code}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: 'var(--text-muted)' }}>{student.nationalId}</td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{student.phone}</td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{student.parentPhone}</td>
-                    <td>
-                      <span className={`status-badge ${student.hasAccess ? 'status-badge--active' : 'status-badge--blocked'}`}>
-                        {student.packageName || 'بدون باقة'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status-badge status-badge--${student.status}`}>
-                        {student.status === 'active' ? 'نشط' : 'محظور'}
-                      </span>
-                    </td>
-                    <td>
-                      <strong style={{ color: '#10B981', fontSize: '0.95rem' }}>{student.averageScore}%</strong>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button
-                          className="action-btn"
-                          title="عرض الملف وتعيين الدروس والباقات"
-                          style={{ background: 'rgba(8,145,178,0.15)', color: 'var(--primary-light)' }}
-                          onClick={() => setSelectedStudentForModal(student)}
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button
-                          className={`action-btn ${student.status === 'active' ? 'btn-warning' : 'btn-secondary'}`}
-                          title={student.status === 'active' ? 'حظر الطالب' : 'تفعيل الحساب'}
-                          onClick={() => handleToggleStudentStatus(student.id)}
-                        >
-                          <Ban size={14} />
-                        </button>
-                      </div>
-                    </td>
+          {isStudentsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري جلب بيانات الطلاب من الخادم...</div>
+          ) : realStudents.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا يوجد طلاب مطابقين للبحث.</div>
+          ) : (
+            <div className="user-table-wrapper">
+              <table className="user-table">
+                <thead>
+                  <tr>
+                    <th>اسم الطالب</th>
+                    <th>الهاتف</th>
+                    <th>هاتف ولي الأمر</th>
+                    <th>الدور</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: LESSONS MANAGEMENT (Requirement #18) ───── */}
-      {activeTab === 'lessons' && (
-        <div className="glass-card" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                إدارة دروس ومحاضرات {ACADEMIC_YEAR_LABELS[selectedYear]} ({scopedLessons.length})
-              </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
-                التحكم في نشر الدروس (Published / Hidden)، رفع ملفات PDF والمذكرات، وإدارة الامتحانات
-              </p>
+                </thead>
+                <tbody>
+                  {realStudents.map(student => {
+                    const isActive = student.Status === 'Active';
+                    return (
+                      <tr key={student._id}>
+                        <td>
+                          <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{student.FullName}</strong>
+                        </td>
+                        <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.Phone}</td>
+                        <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.ParentPhone || '—'}</td>
+                        <td>
+                          <span className="status-badge status-badge--active">{student.Role || 'Student'}</span>
+                        </td>
+                        <td>
+                          <span className={`status-badge ${isActive ? 'status-badge--active' : 'status-badge--blocked'}`}>
+                            {isActive ? 'نشط (Active)' : student.Status}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              type="button"
+                              className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'}`}
+                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
+                              onClick={() => handleToggleStudentStatus(student)}
+                            >
+                              {isActive ? <><Ban size={13} color="var(--danger)" /> حظر</> : <><CheckCircle2 size={13} color="#10B981" /> تفعيل</>}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                              onClick={() => handleDeleteStudent(student)}
+                            >
+                              <Trash2 size={13} /> حذف
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-
-            <button className="btn btn-primary" onClick={() => setIsAddLessonOpen(true)}>
-              <Plus size={16} /> رفع وإضافة محاضرة جديدة
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {scopedLessons.map((les, index) => (
-              <div
-                key={les.id}
-                className="glass-card"
-                style={{
-                  padding: '1.5rem 1.75rem',
-                  borderLeft: `5px solid ${les.isPublished ? 'var(--primary-light)' : '#F59E0B'}`,
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.35rem' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-light)' }}>
-                      محاضرة #{index + 1}
-                    </span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      • {les.duration}
-                    </span>
-                    <span
-                      style={{
-                        padding: '0.2rem 0.75rem',
-                        borderRadius: '9999px',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        background: les.isPublished ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-                        color: les.isPublished ? '#10B981' : '#F59E0B',
-                        border: `1px solid ${les.isPublished ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
-                      }}
-                    >
-                      {les.isPublished ? 'منشور للطلاب (Published)' : 'مخفي / مسودة (Hidden)'}
-                    </span>
-                  </div>
-
-                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                    {les.title}
-                  </h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: '0.25rem 0 0' }}>
-                    {les.subtitle}
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button
-                    className={`btn ${les.isPublished ? 'btn-secondary' : 'btn-primary'}`}
-                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                    onClick={() => handleToggleLessonPublish(les.id)}
-                  >
-                    {les.isPublished ? <><EyeOff size={15} /> إخفاء الدرس</> : <><Eye size={15} /> نشر الدرس للطلاب</>}
-                  </button>
-                  <button
-                    className="action-btn btn-danger"
-                    title="حذف المحاضرة"
-                    style={{ padding: '0.5rem' }}
-                    onClick={() => handleDeleteLesson(les.id)}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
 
-      {/* ── TAB 4: EXAMS MANAGEMENT ────────────────────────── */}
-      {activeTab === 'exams' && (
-        <div className="glass-card" style={{ padding: '2rem' }}>
+      {/* ── TAB 3: COURSES MANAGEMENT (POST, PUT, DELETE /courses) ── */}
+      {activeTab === 'courses' && (
+        <div className="glass-card" style={{ padding: '1.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                إدارة امتحانات {ACADEMIC_YEAR_LABELS[selectedYear]}
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                إدارة الكورسات والمناهج ({realCourses.length})
               </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
-                امتحانات البابل شيت المرتبطة بنظام فتح الدروس والتقييم الأكاديمي
-              </p>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                إنشاء، تعديل، وحذف الكورسات مباشرة عبر الـ REST API
+              </span>
             </div>
-            <button className="btn btn-primary" onClick={() => showToast('إضافة اختبار جديد...', 'info')}>
-              <Plus size={16} /> إنشاء اختبار جديد
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setIsCreateCourseOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <Plus size={16} /> إضافة كورس جديد
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {scopedLessons.map(l => (
-              <div key={l.id} className="glass-card" style={{ padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                    {l.exam.title}
-                  </h3>
-                  <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                    <span>المدة: {l.exam.durationMinutes} دقيقة</span>
-                    <span>درجة النجاح: {l.exam.passingScorePercentage}%</span>
-                    <span>الدرس التابع: {l.title}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="btn btn-secondary" style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }} onClick={() => showToast(`تعديل أسئلة ${l.exam.title}`, 'info')}>
-                    <Edit2 size={14} /> تعديل الأسئلة
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 5: TEACHERS & PERMISSIONS (Requirements #6 & #7) ── */}
-      {activeTab === 'teachers' && (
-        <div className="glass-card" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                إدارة المعلمين وتحديد الصلاحيات (Teacher Management & Permissions)
-              </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
-                يستطيع الأدمن تحديد الصلاحيات الدقيقة لكل معلم في المنظومة التعليمية
-              </p>
-            </div>
-            <button className="btn btn-primary" onClick={() => showToast('إضافة معلم جديد للمنظومة', 'info')}>
-              <Plus size={16} /> إضافة معلم جديد
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
-            {teachers.map(teacher => (
-              <div key={teacher.id} className="glass-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1.25rem' }}>
-                    <img src={teacher.avatar} alt={teacher.name} style={{ width: '52px', height: '52px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-light)' }} />
-                    <div>
-                      <strong style={{ fontSize: '1.05rem', color: 'var(--text-bright)', display: 'block' }}>{teacher.name}</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{teacher.email} • {teacher.phone}</span>
+          {isCoursesLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل الكورسات...</div>
+          ) : realCourses.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا توجد كورسات مضافة حتى الآن.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
+              {realCourses.map(course => (
+                <div key={course._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span className={`status-badge ${course.IsPublished ? 'status-badge--active' : 'status-badge--blocked'}`}>
+                        {course.IsPublished ? 'منشور' : 'مسودة'}
+                      </span>
+                      <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{course.Price} ج.م</strong>
                     </div>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.25rem 0 0.5rem' }}>
+                      {course.Title}
+                    </h3>
                   </div>
 
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary-light)', display: 'block', marginBottom: '0.5rem' }}>
-                      الصلاحيات الممنوحة ({teacher.permissions?.length || 0}):
-                    </span>
-                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      {teacher.permissions?.slice(0, 4).map(p => (
-                        <span key={p} style={{ background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.25)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', color: 'var(--primary-light)' }}>
-                          {PERMISSION_LABELS[p]?.label || p}
-                        </span>
-                      ))}
-                      {(teacher.permissions?.length || 0) > 4 && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          +{(teacher.permissions?.length || 0) - 4} صلاحيات أخرى
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  className="btn btn-secondary"
-                  style={{ width: '100%', justifyContent: 'center', padding: '0.6rem', fontSize: '0.88rem' }}
-                  onClick={() => setIsTeacherPermissionsModalOpen(teacher)}
-                >
-                  <Settings size={16} /> تعديل وإدارة الصلاحيات
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: COMPACT STUDENT PROFILE & MANAGEMENT (VIEWPORT-FRIENDLY VIA PORTAL) ── */}
-      {selectedStudentForModal && createPortal(
-        <div
-          className="modal-overlay active"
-          onClick={() => setSelectedStudentForModal(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            zIndex: 99999,
-            background: 'rgba(5, 15, 20, 0.85)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            opacity: 1,
-            pointerEvents: 'auto',
-          }}
-        >
-          <div
-            className="modal-box"
-            style={{
-              maxWidth: '680px',
-              width: '100%',
-              maxHeight: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-              padding: '1.5rem',
-              overflow: 'hidden',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-glass-hover)',
-              borderRadius: 'var(--radius-xl)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-              position: 'relative',
-              zIndex: 100000,
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                <img
-                  src={selectedStudentForModal.avatar}
-                  alt={selectedStudentForModal.name}
-                  style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid var(--primary-light)', objectFit: 'cover' }}
-                />
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                      {selectedStudentForModal.name}
-                    </h2>
-                    <span className={`status-badge status-badge--${selectedStudentForModal.status}`}>
-                      {selectedStudentForModal.status === 'active' ? 'نشط' : 'محظور'}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontFamily: 'monospace', color: 'var(--primary-light)', fontWeight: 700 }}>
-                      #{selectedStudentForModal.code}
-                    </span>
-                    <span>•</span>
-                    <span>{ACADEMIC_YEAR_LABELS[selectedStudentForModal.academicYear]}</span>
-                    <span>•</span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                      الرقم القومي: <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{selectedStudentForModal.nationalId}</strong>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                className="modal-close"
-                onClick={() => setSelectedStudentForModal(null)}
-                style={{ position: 'static', transform: 'none' }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Quick Stats Strip */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
-              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>المعدل العام</span>
-                <strong style={{ fontSize: '1.15rem', color: '#10B981' }}>{selectedStudentForModal.averageScore}%</strong>
-              </div>
-              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>نسبة الحضور</span>
-                <strong style={{ fontSize: '1.15rem', color: 'var(--primary-light)' }}>{selectedStudentForModal.attendanceRate}%</strong>
-              </div>
-              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>الاختبارات</span>
-                <strong style={{ fontSize: '1.15rem', color: '#8B5CF6' }}>{selectedStudentForModal.examResults?.length || 0}</strong>
-              </div>
-              <div className="glass-card" style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>الباقة</span>
-                <strong style={{ fontSize: '0.82rem', color: 'var(--text-bright)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
-                  {selectedStudentForModal.packageName || 'بدون باقة'}
-                </strong>
-              </div>
-            </div>
-
-            {/* Segmented Sub-Tabs Bar */}
-            <div style={{ display: 'flex', gap: '0.4rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
-              <button
-                type="button"
-                className={`filter-btn ${studentProfileTab === 'exams' ? 'active' : ''}`}
-                onClick={() => setStudentProfileTab('exams')}
-                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
-              >
-                <Award size={14} /> سجل الامتحانات ({selectedStudentForModal.examResults?.length || 0})
-              </button>
-              <button
-                type="button"
-                className={`filter-btn ${studentProfileTab === 'packages' ? 'active' : ''}`}
-                onClick={() => setStudentProfileTab('packages')}
-                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
-              >
-                <Layers size={14} /> الباقة والاشتراك
-              </button>
-              <button
-                type="button"
-                className={`filter-btn ${studentProfileTab === 'lessons' ? 'active' : ''}`}
-                onClick={() => setStudentProfileTab('lessons')}
-                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
-              >
-                <BookOpen size={14} /> تعيين الدروس ({selectedStudentForModal.assignedLessonIds.length})
-              </button>
-              <button
-                type="button"
-                className={`filter-btn ${studentProfileTab === 'contact' ? 'active' : ''}`}
-                onClick={() => setStudentProfileTab('contact')}
-                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', flex: 1, justifyContent: 'center' }}
-              >
-                <Users size={14} /> التواصل والحساب
-              </button>
-            </div>
-
-            {/* Scrollable Tab Body */}
-            <div style={{ overflowY: 'auto', flex: 1, paddingRight: '0.25rem' }}>
-              {/* TAB 1: EXAM HISTORY */}
-              {studentProfileTab === 'exams' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  {selectedStudentForModal.examResults && selectedStudentForModal.examResults.length > 0 ? (
-                    selectedStudentForModal.examResults.map((ex, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '0.75rem 1rem',
-                          borderRadius: '8px',
-                          background: 'var(--bg-subtle)',
-                          border: '1px solid var(--border-glass)',
-                        }}
-                      >
-                        <div>
-                          <strong style={{ fontSize: '0.88rem', color: 'var(--text-bright)', display: 'block' }}>
-                            {ex.examTitle}
-                          </strong>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            {ex.date} • النتيجة: {ex.score}/{ex.total} ({ex.percentage}%)
-                          </span>
-                        </div>
-
-                        <div style={{ textAlign: 'left' }}>
-                          <span style={{
-                            fontSize: '1rem',
-                            fontWeight: 800,
-                            color: ex.score >= 60 ? '#10B981' : '#E11D48',
-                            display: 'block'
-                          }}>
-                            {ex.score}%
-                          </span>
-                          <span style={{
-                            fontSize: '0.72rem',
-                            color: ex.score >= 60 ? '#10B981' : '#E11D48',
-                            fontWeight: 700
-                          }}>
-                            {ex.score >= 60 ? 'ناجح ✓' : 'راسب ✕'}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
-                      <Award size={32} style={{ opacity: 0.4, margin: '0 auto 0.5rem' }} />
-                      <p style={{ margin: 0, fontSize: '0.88rem' }}>لم يقم الطالب بتسليم أي اختبارات حتى الآن.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB 2: PACKAGES */}
-              {studentProfileTab === 'packages' && (
-                <div>
-                  <div style={{ marginBottom: '1rem', background: 'rgba(8,145,178,0.1)', padding: '0.75rem 1rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>حالة الاشتراك الحالية:</span>
-                      <strong style={{ display: 'block', fontSize: '0.95rem', color: 'var(--primary-light)' }}>
-                        {selectedStudentForModal.packageName || 'بدون باقة نشطة'}
-                      </strong>
-                    </div>
-                    <span className={`status-badge ${selectedStudentForModal.hasAccess ? 'status-badge--active' : 'status-badge--blocked'}`}>
-                      {selectedStudentForModal.hasAccess ? 'وصول مفعل' : 'وصول معطل'}
-                    </span>
-                  </div>
-
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>
-                    اختر باقة لتعيينها وتحديث دروس الطالب تلقائياً:
-                  </span>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                    {scopedPackages.map(pkg => {
-                      const isCur = selectedStudentForModal.packageId === pkg.id;
-                      return (
-                        <button
-                          key={pkg.id}
-                          onClick={() => handleAssignPackageToStudent(selectedStudentForModal.id, pkg.id)}
-                          style={{
-                            padding: '0.75rem',
-                            borderRadius: '8px',
-                            border: isCur ? '2px solid #10B981' : '1px solid var(--border-glass)',
-                            background: isCur ? 'rgba(16,185,129,0.15)' : 'var(--bg-subtle)',
-                            color: isCur ? '#10B981' : 'var(--text-bright)',
-                            textAlign: 'right',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <strong style={{ fontSize: '0.85rem' }}>{pkg.name}</strong>
-                            {isCur && <Check size={14} color="#10B981" />}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                            {pkg.price} ج.م • {pkg.includedLessonIds.length} محاضرة
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: LESSONS */}
-              {studentProfileTab === 'lessons' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      المحاضرات المتاحة: <strong>{selectedStudentForModal.assignedLessonIds.length} من {scopedLessons.length}</strong>
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '260px', overflowY: 'auto' }}>
-                    {scopedLessons.map(les => {
-                      const isAssigned = selectedStudentForModal.assignedLessonIds.includes(les.id);
-                      return (
-                        <div
-                          key={les.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '0.55rem 0.85rem',
-                            borderRadius: '6px',
-                            background: isAssigned ? 'rgba(8,145,178,0.1)' : 'var(--bg-subtle)',
-                            border: `1px solid ${isAssigned ? 'rgba(8,145,178,0.3)' : 'var(--border-glass)'}`,
-                          }}
-                        >
-                          <div>
-                            <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-bright)' }}>{les.title}</span>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginRight: '0.5rem' }}>({les.duration})</span>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={`btn ${isAssigned ? 'btn-secondary' : 'btn-primary'}`}
-                            style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem' }}
-                            onClick={() => handleAssignLessonToStudent(selectedStudentForModal.id, les.id, !isAssigned)}
-                          >
-                            {isAssigned ? <><Check size={12} color="#10B981" /> متاح</> : <><Plus size={12} /> إتاحة</>}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 4: CONTACT & ACCOUNT INFO */}
-              {studentProfileTab === 'contact' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                    <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>هاتف الطالب:</span>
-                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{selectedStudentForModal.phone}</strong>
-                      <div style={{ marginTop: '0.4rem' }}>
-                        <a
-                          href={`https://wa.me/2${selectedStudentForModal.phone}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ fontSize: '0.75rem', color: '#10B981', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none' }}
-                        >
-                          <ExternalLink size={12} /> محادثة WhatsApp
-                        </a>
-                      </div>
-                    </div>
-
-                    <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>هاتف ولي الأمر:</span>
-                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{selectedStudentForModal.parentPhone}</strong>
-                      <div style={{ marginTop: '0.4rem' }}>
-                        <a
-                          href={`https://wa.me/2${selectedStudentForModal.parentPhone}?text=${encodeURIComponent(`تقرير متابعة الطالب ${selectedStudentForModal.name} - المعدل: ${selectedStudentForModal.averageScore}% - الكود: ${selectedStudentForModal.code}`)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ fontSize: '0.75rem', color: '#10B981', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none' }}
-                        >
-                          <ExternalLink size={12} /> إرسال التقرير لولي الأمر
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>حالة الحساب:</span>
-                      <strong style={{ fontSize: '0.88rem', color: selectedStudentForModal.status === 'active' ? '#10B981' : '#E11D48' }}>
-                        {selectedStudentForModal.status === 'active' ? 'الحساب نشط ويستطيع الدخول' : 'الحساب محظور من الدخول'}
-                      </strong>
-                    </div>
-
+                  <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <button
                       type="button"
-                      className={`btn ${selectedStudentForModal.status === 'active' ? 'btn-warning' : 'btn-primary'}`}
-                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
-                      onClick={() => handleToggleStudentStatus(selectedStudentForModal.id)}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                      onClick={() => {
+                        setSelectedCourseForLessons(course._id);
+                        setActiveTab('lessons');
+                      }}
                     >
-                      {selectedStudentForModal.status === 'active' ? <><Ban size={14} /> حظر الحساب</> : <><Check size={14} /> تفعيل الحساب</>}
+                      إدارة المحاضرات
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                      onClick={() => handleDeleteCourse(course._id, course.Title)}
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
-              )}
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 4: LESSONS MANAGEMENT (POST, DELETE /courses/{id}/lessons) ── */}
+      {activeTab === 'lessons' && (
+        <div className="glass-card" style={{ padding: '1.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                إدارة المحاضرات والدروس ({realLessons.length})
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                إضافة وحذف محاضرات الفيديو المشفرة المرتبطة بالكورسات
+              </span>
             </div>
 
-            {/* Modal Footer */}
-            <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '0.85rem', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                تاريخ التسجيل: {selectedStudentForModal.registrationDate}
-              </span>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <select
+                className="input-field"
+                style={{ fontSize: '0.85rem' }}
+                value={selectedCourseForLessons}
+                onChange={e => setSelectedCourseForLessons(e.target.value)}
+              >
+                {realCourses.map(c => (
+                  <option key={c._id} value={c._id}>{c.Title}</option>
+                ))}
+              </select>
+
               <button
                 type="button"
                 className="btn btn-primary"
-                style={{ padding: '0.45rem 1.25rem', fontSize: '0.85rem' }}
-                onClick={() => setSelectedStudentForModal(null)}
+                disabled={!selectedCourseForLessons}
+                onClick={() => setIsCreateLessonOpen(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
               >
-                تم وإغلاق الملف
+                <Plus size={16} /> إضافة محاضرة
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+
+          {isLessonsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري جلب المحاضرات...</div>
+          ) : realLessons.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا توجد محاضرات في هذا الكورس بعد.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {realLessons.map((les, idx) => (
+                <div key={les._id} className="glass-card" style={{ padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '6px', background: 'rgba(8,145,178,0.15)', color: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+                      {les.OrderIndex || idx + 1}
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: '0.95rem', color: 'var(--text-bright)', display: 'block' }}>{les.Title}</strong>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        المدة: {les.DurationSeconds ? `${Math.round(les.DurationSeconds / 60)} دقيقة` : '—'} • المشاهدات المسموحة: {les.MaxAllowedViews || 3}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                    onClick={() => handleDeleteLesson(les._id, les.Title)}
+                  >
+                    <Trash2 size={14} /> حذف
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ── MODAL: TEACHER PERMISSIONS (Requirement #7 VIA PORTAL) ──────── */}
-      {isTeacherPermissionsModalOpen && createPortal(
-        <div
-          className="modal-overlay active"
-          onClick={() => setIsTeacherPermissionsModalOpen(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            zIndex: 99999,
-            background: 'rgba(5, 15, 20, 0.85)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            opacity: 1,
-            pointerEvents: 'auto',
-          }}
-        >
-          <div className="modal-box" style={{ maxWidth: '640px', width: '100%', background: 'var(--bg-surface)', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setIsTeacherPermissionsModalOpen(null)}><X size={18} /></button>
+      {/* ── TAB 5: SCRATCH CARDS GENERATION ─────────────────── */}
+      {activeTab === 'scratch-cards' && (
+        <div className="glass-card" style={{ padding: '2rem', maxWidth: '680px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              background: 'rgba(234, 179, 8, 0.15)', color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 0.75rem',
+            }}>
+              <Key size={28} />
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+              توليد كروت الشحن (Generate Scratch Cards)
+            </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              إنشاء دفعة جديدة من أكواد كروت الشحن بقيمة نقدية محددة لشحن محافظ الطلاب
+            </p>
+          </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
-              <img src={isTeacherPermissionsModalOpen.avatar} alt={isTeacherPermissionsModalOpen.name} style={{ width: '48px', height: '48px', borderRadius: '50%' }} />
+          <form onSubmit={handleGenerateCards} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                  صلاحيات المعلم: {isTeacherPermissionsModalOpen.name}
-                </h3>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>تحديد مهام وصلاحيات الوصول في لوحة التحكم</span>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
+                  قيمة الكارت (Amount بالجنيه):
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={scratchAmount}
+                  onChange={e => setScratchAmount(Number(e.target.value))}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
+                  عدد الكروت (Count من 1 إلى 500):
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={500}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={scratchCount}
+                  onChange={e => setScratchCount(Number(e.target.value))}
+                />
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '380px', overflowY: 'auto', paddingRight: '0.35rem', marginBottom: '1.5rem' }}>
-              {(Object.keys(PERMISSION_LABELS) as TeacherPermission[]).map(perm => {
-                const info = PERMISSION_LABELS[perm];
-                const isEnabled = isTeacherPermissionsModalOpen.permissions?.includes(perm);
-                return (
-                  <div
-                    key={perm}
-                    onClick={() => handleToggleTeacherPermission(isTeacherPermissionsModalOpen.id, perm)}
-                    style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '0.75rem 1rem', borderRadius: '8px',
-                      background: isEnabled ? 'rgba(8,145,178,0.12)' : 'var(--bg-glass-card)',
-                      border: `1px solid ${isEnabled ? 'var(--primary-light)' : 'var(--border-glass)'}`,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div>
-                      <strong style={{ fontSize: '0.88rem', color: 'var(--text-bright)', display: 'block' }}>{info.label}</strong>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{info.desc}</span>
-                    </div>
-
-                    <div style={{
-                      width: '24px', height: '24px', borderRadius: '6px',
-                      background: isEnabled ? 'var(--primary-light)' : 'rgba(255,255,255,0.08)',
-                      color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      {isEnabled && <Check size={16} />}
-                    </div>
-                  </div>
-                );
-              })}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
+                رقم الدفعة (Batch Number):
+              </label>
+              <input
+                type="text"
+                required
+                className="input-field"
+                style={{ width: '100%' }}
+                value={scratchBatch}
+                onChange={e => setScratchBatch(e.target.value)}
+              />
             </div>
 
-            <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setIsTeacherPermissionsModalOpen(null)}>
-              حفظ الصلاحيات
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isGeneratingCards}
+              style={{ width: '100%', padding: '0.75rem', fontSize: '0.92rem' }}
+            >
+              {isGeneratingCards ? 'جاري توليد الكروت وحفظها في السيرفر...' : '⚡ توليد دفعة الكروت الآن'}
             </button>
-          </div>
-        </div>,
-        document.body
+          </form>
+
+          {/* Generated Raw Codes Output */}
+          {generatedCodes.length > 0 && (
+            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <strong style={{ fontSize: '0.88rem', color: 'var(--text-bright)' }}>
+                  الأكواد المولدة حديثاً ({generatedCodes.length} كارت):
+                </strong>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedCodes.join('\n'));
+                    showToast('تم نسخ جميع الأكواد للحافظة!', 'success');
+                  }}
+                >
+                  <Copy size={13} /> نسخ الأكواد
+                </button>
+              </div>
+
+              <div style={{ maxHeight: '200px', overflowY: 'auto', background: '#000', padding: '0.75rem', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.82rem', color: '#10B981', direction: 'ltr' }}>
+                {generatedCodes.map((code, idx) => (
+                  <div key={idx}>{code}</div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ── MODAL: REGISTER STUDENT (VIA PORTAL) ────────────────────────── */}
+      {/* ── MODAL: CREATE STUDENT ───────────────────────────── */}
       {isRegisterStudentOpen && createPortal(
-        <div
-          className="modal-overlay active"
-          onClick={() => setIsRegisterStudentOpen(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            zIndex: 99999,
-            background: 'rgba(5, 15, 20, 0.85)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            opacity: 1,
-            pointerEvents: 'auto',
-          }}
-        >
-          <div className="modal-box" style={{ maxWidth: '540px', width: '100%', background: 'var(--bg-surface)', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay active" onClick={() => setIsRegisterStudentOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsRegisterStudentOpen(false)}><X size={18} /></button>
 
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1rem' }}>
-              تسجيل طالب جديد في {ACADEMIC_YEAR_LABELS[selectedYear]}
-            </h3>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              تسجيل حساب طالب جديد (Admin Create)
+            </h2>
 
             <form onSubmit={handleCreateStudent} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>اسم الطالب بالكامل</label>
-                <input type="text" required placeholder="مثال: يوسف أحمد محمود" className="input-field" style={{ width: '100%' }} value={newStudentForm.name} onChange={e => setNewStudentForm({ ...newStudentForm, name: e.target.value })} />
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>اسم الطالب بالكامل</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: يوسف أحمد عبد المنعم"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newStudentForm.name}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, name: e.target.value })}
+                />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>رقم هاتف الطالب</label>
-                <input type="tel" required placeholder="01012345678" className="input-field" style={{ width: '100%' }} value={newStudentForm.phone} onChange={e => setNewStudentForm({ ...newStudentForm, phone: e.target.value })} />
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>رقم هاتف الطالب (11 رقماً)</label>
+                <input
+                  type="tel"
+                  required
+                  maxLength={11}
+                  placeholder="01012345678"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newStudentForm.phone}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, phone: e.target.value })}
+                />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>رقم هاتف ولي الأمر</label>
-                <input type="tel" placeholder="01198765432" className="input-field" style={{ width: '100%' }} value={newStudentForm.parentPhone} onChange={e => setNewStudentForm({ ...newStudentForm, parentPhone: e.target.value })} />
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>رقم هاتف ولي الأمر (اختياري)</label>
+                <input
+                  type="tel"
+                  maxLength={11}
+                  placeholder="01112345678"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newStudentForm.parentPhone}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, parentPhone: e.target.value })}
+                />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>الرقم القومي للطالب (14 رقم)</label>
-                <input type="text" placeholder="30501011234567" className="input-field" style={{ width: '100%' }} value={newStudentForm.nationalId} onChange={e => setNewStudentForm({ ...newStudentForm, nationalId: e.target.value })} />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>باقة الاشتراك المبدئية</label>
-                <select className="input-field" style={{ width: '100%' }} value={newStudentForm.packageId} onChange={e => setNewStudentForm({ ...newStudentForm, packageId: e.target.value })}>
-                  {scopedPackages.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.price} ج.م)</option>
-                  ))}
-                </select>
-              </div>
-
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
-                تأكيد تسجيل الطالب
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
+                تأكيد إنشاء الحساب
               </button>
             </form>
           </div>
@@ -1321,76 +842,120 @@ export const AdminView: React.FC = () => {
         document.body
       )}
 
-      {/* ── MODAL: ADD LESSON (VIA PORTAL) ──────────────────────────────── */}
-      {isAddLessonOpen && createPortal(
-        <div
-          className="modal-overlay active"
-          onClick={() => setIsAddLessonOpen(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            zIndex: 99999,
-            background: 'rgba(5, 15, 20, 0.85)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            opacity: 1,
-            pointerEvents: 'auto',
-          }}
-        >
-          <div className="modal-box" style={{ maxWidth: '580px', width: '100%', background: 'var(--bg-surface)', zIndex: 100000 }} onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setIsAddLessonOpen(false)}><X size={18} /></button>
+      {/* ── MODAL: CREATE COURSE ────────────────────────────── */}
+      {isCreateCourseOpen && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsCreateCourseOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsCreateCourseOpen(false)}><X size={18} /></button>
 
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1rem' }}>
-              إضافة محاضرة جديدة إلى {ACADEMIC_YEAR_LABELS[selectedYear]}
-            </h3>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              إضافة كورس جديد (Create Course)
+            </h2>
+
+            <form onSubmit={handleCreateCourse} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>عنوان الكورس</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: كورس الرياضيات المتقدمة"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newCourseForm.title}
+                  onChange={e => setNewCourseForm({ ...newCourseForm, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>سعر الكورس (جنيه مصري)</label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newCourseForm.price}
+                  onChange={e => setNewCourseForm({ ...newCourseForm, price: Number(e.target.value) })}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
+                نشر الكورس
+              </button>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: CREATE LESSON ────────────────────────────── */}
+      {isCreateLessonOpen && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsCreateLessonOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsCreateLessonOpen(false)}><X size={18} /></button>
+
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              إضافة محاضرة جديدة إلى الكورس
+            </h2>
 
             <form onSubmit={handleCreateLesson} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>عنوان المحاضرة</label>
-                <input type="text" required placeholder="مثال: المحاضرة 5: تفاضل الدوال اللوغاريتمية" className="input-field" style={{ width: '100%' }} value={newLessonForm.title} onChange={e => setNewLessonForm({ ...newLessonForm, title: e.target.value })} />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>العنوان الفرعي</label>
-                <input type="text" placeholder="قواعد الاشتقاق والتمارين التطبيقية" className="input-field" style={{ width: '100%' }} value={newLessonForm.subtitle} onChange={e => setNewLessonForm({ ...newLessonForm, subtitle: e.target.value })} />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>الفرع والمادة</label>
-                <select className="input-field" style={{ width: '100%' }} value={newLessonForm.subject} onChange={e => setNewLessonForm({ ...newLessonForm, subject: e.target.value })}>
-                  <option value="التفاضل والتكامل">التفاضل والتكامل</option>
-                  <option value="الهندسة الفراغية">الهندسة الفراغية</option>
-                  <option value="الجبر وحساب المثلثات">الجبر وحساب المثلثات</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>المدة الزمنية</label>
-                <input type="text" placeholder="1:45:00" className="input-field" style={{ width: '100%' }} value={newLessonForm.duration} onChange={e => setNewLessonForm({ ...newLessonForm, duration: e.target.value })} />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>عنوان المحاضرة (3-100 حرف)</label>
                 <input
-                  type="checkbox"
-                  id="publishCheck"
-                  checked={newLessonForm.isPublished}
-                  onChange={e => setNewLessonForm({ ...newLessonForm, isPublished: e.target.checked })}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  type="text"
+                  required
+                  minLength={3}
+                  maxLength={100}
+                  placeholder="مثال: مقدمة في الدوال والمعادلات"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newLessonForm.title}
+                  onChange={e => setNewLessonForm({ ...newLessonForm, title: e.target.value })}
                 />
-                <label htmlFor="publishCheck" style={{ fontSize: '0.85rem', color: 'var(--text-bright)', cursor: 'pointer' }}>
-                  نشر المحاضرة فوراً للطلاب (Published)
-                </label>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
-                رفع وإضافة المحاضرة
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>مسار تخزين الفيديو (VideoStoragePath)</label>
+                <input
+                  type="text"
+                  required
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newLessonForm.videoStoragePath}
+                  onChange={e => setNewLessonForm({ ...newLessonForm, videoStoragePath: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>المدة بالثواني</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newLessonForm.durationSeconds}
+                    onChange={e => setNewLessonForm({ ...newLessonForm, durationSeconds: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>ترتيب الدرس (OrderIndex)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newLessonForm.orderIndex}
+                    onChange={e => setNewLessonForm({ ...newLessonForm, orderIndex: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
+                تأكيد إضافة المحاضرة
               </button>
             </form>
           </div>

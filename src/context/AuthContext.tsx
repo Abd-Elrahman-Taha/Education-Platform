@@ -10,8 +10,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (user: User, token?: string) => void;
   logout: () => void;
-  signinApi: (phone: string, password: string) => Promise<void>;
-  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<void>;
+  signinApi: (phone: string, password: string) => Promise<UserRole>;
+  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<any>;
   changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
 }
 
@@ -101,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /**
    * Real backend signin using Phone, Password, and persistent device UUID.
    */
-  const signinApi = async (phone: string, password: string) => {
+  const signinApi = async (phone: string, password: string): Promise<UserRole> => {
     const deviceUuid = getDeviceUuid();
     const res = await authApi.signin({
       Phone: phone.trim(),
@@ -110,15 +110,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const jwtToken = res.token;
+    if (!jwtToken) {
+      throw new Error('لم يتم استلام مفتاح المصادقة من الخادم.');
+    }
     setToken(jwtToken);
 
-    // Decode user payload from JWT or response
+    // Decode user payload from JWT (Backend returns Role: "Student" | "Admin")
     const payload = parseJwt(jwtToken) || {};
-    const roleString = (payload.role || res.user?.role || 'student').toLowerCase();
-    const normalizedRole: UserRole =
-      roleString.includes('admin') ? 'admin' :
-      roleString.includes('teacher') ? 'teacher' :
-      roleString.includes('parent') ? 'parent' : 'student';
+    const roleRaw = (payload.Role || payload.role || res.user?.Role || res.user?.role || 'Student').toString();
+    const normalizedRole: UserRole = roleRaw.toLowerCase() === 'admin' ? 'admin' : 'student';
 
     const userObj: User = {
       id: payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`,
@@ -132,41 +132,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     login(userObj, jwtToken);
+    return normalizedRole;
   };
 
   /**
    * Real backend signup (Backend automatically forces role to Student).
+   * Returns registered successfully message (no token returned on 201).
    */
   const signupApi = async (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => {
-    const res = await authApi.signup({
+    return await authApi.signup({
       FullName: fullName.trim(),
       NationalId: nationalId.trim(),
       Phone: phone.trim(),
       ParentPhone: parentPhone.trim(),
       password,
     });
-
-    // If backend returns token upon signup, log in immediately; otherwise sign in
-    if (res.token) {
-      const jwtToken = res.token;
-      setToken(jwtToken);
-      const payload = parseJwt(jwtToken) || {};
-      const userObj: User = {
-        id: payload.userId || payload.sub || `usr-${Date.now()}`,
-        name: fullName.trim(),
-        email: `${phone}@lms.edu`,
-        phone: phone.trim(),
-        nationalId: nationalId.trim(),
-        role: 'student',
-        status: 'active',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-        registrationDate: new Date().toISOString().slice(0, 10),
-      };
-      login(userObj, jwtToken);
-    } else {
-      // Automatically sign in with credentials
-      await signinApi(phone, password);
-    }
   };
 
   /**

@@ -193,7 +193,7 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                         flexShrink: 0,
                       }}
                     >
-                      {lesson.Order || idx + 1}
+                      {lesson.OrderIndex ?? lesson.Order ?? idx + 1}
                     </div>
 
                     <div>
@@ -201,9 +201,9 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                         {lesson.Title}
                       </strong>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                        {lesson.DurationMinutes && (
+                        {(lesson.DurationSeconds || lesson.DurationMinutes) && (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <Clock size={12} /> {lesson.DurationMinutes} دقيقة
+                            <Clock size={12} /> {lesson.DurationSeconds ? Math.round(lesson.DurationSeconds / 60) : lesson.DurationMinutes} دقيقة
                           </span>
                         )}
                         {lesson.PrerequisiteExamId && (

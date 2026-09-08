@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '../api/studentApi';
+import { enrollmentsApi } from '../../../api/enrollments.api';
 import { AppView } from '../../../types';
 import {
   GraduationCap, BookOpen, Clock, Award, Flame, Calendar,
@@ -59,6 +60,13 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
   const dash = dashboardRes.data;
   const timeline = timelineRes?.data;
 
+  const { data: enrollments, isLoading: isEnrollmentsLoading } = useQuery({
+    queryKey: ['my-enrollments'],
+    queryFn: () => enrollmentsApi.getMyCourses(),
+  });
+
+  const enrolledList = enrollments || [];
+
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem' }}>
       {/* ── WELCOME BANNER ─────────────────────────────────── */}
@@ -68,30 +76,100 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
             <span style={{ background: 'rgba(8,145,178,0.25)', color: 'var(--primary-light)', padding: '0.3rem 0.85rem', borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 700 }}>
               لوحة التحكم الشخصية للتعليم
             </span>
-            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <Clock size={14} /> آخر دخول: {dash.lastLogin}
-            </span>
           </div>
           <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
-            Welcome back, {dash.studentName} 👋
+            مرحباً بك في لوحة تحليلاتك 🎓
           </h1>
           <p style={{ color: 'var(--text-muted)', marginTop: '0.35rem', fontSize: '0.95rem' }}>
-            أهلاً بعودتك! أداءك ممتاز هذا الأسبوع، استمر في الحفاظ على سلسلة التعلم المتميزة.
+            تابع تقدمك في الكورسات المسجل بها والامتحانات الدورية ومؤشرات أدائك الشاملة.
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#F59E0B', fontWeight: 800, fontSize: '1.25rem' }}>
-              <Flame size={20} fill="#F59E0B" /> {dash.currentLearningStreak} أيام
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>سلسلة التعلم</span>
-          </div>
-
-          <button className="btn btn-primary" onClick={() => onNavigateView('view-drm-player')}>
-            <BookOpen size={18} /> تصفح جميع الدروس
+          <button className="btn btn-primary" onClick={() => onNavigateView('view-courses')}>
+            <BookOpen size={18} /> تصفح جميع الكورسات
           </button>
         </div>
+      </div>
+
+      {/* ── MY ENROLLED COURSES (GET /enrollments/my-courses) ── */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <BookOpen size={22} color="var(--primary-light)" /> كورساتي المشترك بها ({enrolledList.length})
+          </h2>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+            onClick={() => onNavigateView('view-courses')}
+          >
+            استكشاف كورسات جديدة
+          </button>
+        </div>
+
+        {isEnrollmentsLoading ? (
+          <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            جاري استرجاع الكورسات المشترك بها من الخادم...
+          </div>
+        ) : enrolledList.length === 0 ? (
+          <div className="glass-card" style={{ padding: '2.5rem', textAlign: 'center' }}>
+            <p style={{ color: 'var(--text-muted)', margin: '0 0 1rem', fontSize: '0.92rem' }}>
+              لم تشترك في أي كورس بعد. ابدأ باستكشاف الكورسات المتاحة والالتحاق بها.
+            </p>
+            <button className="btn btn-primary" onClick={() => onNavigateView('view-courses')}>
+              تصفح الكورسات الآن
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
+            {enrolledList.map((enrollment) => {
+              const c = enrollment.CourseId;
+              if (!c) return null;
+              return (
+                <div
+                  key={enrollment._id}
+                  className="glass-card"
+                  style={{
+                    padding: '1.5rem',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    border: '1px solid rgba(8,145,178,0.25)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <span className="status-badge status-badge--active">
+                        ✓ {enrollment.Status === 'Active' ? 'اشتراك نشط' : enrollment.Status}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        طريقة الاشتراك: {enrollment.AcquisitionMethod}
+                      </span>
+                    </div>
+
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
+                      {c.Title}
+                    </h3>
+                  </div>
+
+                  <div style={{ marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 700 }}>
+                      {c.Price > 0 ? `${c.Price} ج.م` : 'مجاني'}
+                    </span>
+                    <button
+                      className="btn btn-primary"
+                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
+                      onClick={() => onNavigateView('view-courses')}
+                    >
+                      دخول المحاضرات
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── CONTINUE LEARNING BANNER CARD ──────────────────── */}

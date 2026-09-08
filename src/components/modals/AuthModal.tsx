@@ -102,9 +102,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
       setIsSubmitting(true);
       try {
         await signupApi(cleanName, cleanNationalId, cleanPhone, cleanParentPhone, formData.password);
-        showToast('تم إنشاء الحساب بنجاح! مرحباً بك في المنصة التعليمية.', 'success');
-        onClose();
-        if (onLoginSuccess) onLoginSuccess('student');
+        showToast('تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول بحسابك الجديد.', 'success');
+        setActiveTab('login');
+        setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
       } catch (err: any) {
         const rawStr = JSON.stringify(err?.raw || '').toLowerCase();
         const errMsg = (err?.message || '').toLowerCase();
@@ -112,6 +112,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           setApiError(
             'تنبيه تعارض العقد (Contract Mismatch): خادم الـ Backend رفض حقل NationalId. تم إرساله كنص مطلوب وفق متطلبات التسجيل المحدثة.'
           );
+        } else if (errMsg.includes('phone') && (errMsg.includes('exist') || errMsg.includes('duplicate') || err?.status === 409)) {
+          setApiError('رقم الهاتف مسجل مسبقاً. يرجى تسجيل الدخول أو استخدام رقم آخر.');
         } else {
           setApiError(err?.message || 'فشل في إنشاء الحساب. يرجى التحقق من صحة البيانات.');
         }
@@ -139,10 +141,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
     setIsSubmitting(true);
     try {
-      await signinApi(cleanPhone, formData.password);
+      const userRole = await signinApi(cleanPhone, formData.password);
       showToast('تم تسجيل الدخول بنجاح!', 'success');
       onClose();
-      if (onLoginSuccess) onLoginSuccess('student');
+      if (onLoginSuccess) onLoginSuccess(userRole);
     } catch (err: any) {
       if (err?.isForbidden || err?.status === 403) {
         setApiError('تم قفل الحساب أو تم تسجيل الدخول من جهاز آخر (Device Lock). تواصل مع الدعم الفني.');

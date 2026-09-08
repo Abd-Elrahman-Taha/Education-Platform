@@ -6,6 +6,7 @@
 // ── Common & Error ────────────────────────────────────────────────────────
 export interface ApiErrorResponse {
   status?: 'error' | 'fail' | string;
+  success?: boolean;
   message: string;
   statusCode?: number;
   errors?: Record<string, string[]>;
@@ -35,13 +36,14 @@ export interface SigninRequest {
 
 export interface AuthResponse {
   message: string;
-  token: string;
+  token?: string;
   user?: {
     id?: string;
     _id?: string;
     FullName?: string;
     Phone?: string;
-    role?: 'Student' | 'Teacher' | 'Admin' | string;
+    Role?: 'Student' | 'Admin' | string;
+    role?: 'Student' | 'Admin' | string;
   };
 }
 
@@ -55,12 +57,25 @@ export interface Course {
   _id: string;
   Title: string;
   Description?: string;
+  TeacherId?: string;
   Price: number;
-  IsPublished?: boolean;
+  IsPublished: boolean;
   Thumbnail?: string;
   createdAt?: string;
   updatedAt?: string;
   LessonsCount?: number;
+}
+
+export interface CreateCourseRequest {
+  Title: string;
+  Price: number;
+  IsPublished: boolean;
+}
+
+export interface UpdateCourseRequest {
+  Title?: string;
+  Price?: number;
+  IsPublished?: boolean;
 }
 
 export interface CourseQueryParams {
@@ -69,25 +84,134 @@ export interface CourseQueryParams {
   sort?: string;
   fields?: string;
   search?: string;
+  Title?: string;
+  Price?: number;
+  IsPublished?: boolean;
 }
 
 export interface CoursesResponse {
+  status?: string;
+  results?: number;
   courses?: Course[];
-  data?: Course[];
+  data?: {
+    courses?: Course[];
+    course?: Course;
+  };
   pagination: PaginationMeta;
 }
 
 // ── Lessons ───────────────────────────────────────────────────────────────
 export interface Lesson {
   _id: string;
+  CourseId?: string;
   Title: string;
   Description?: string;
+  VideoStoragePath?: string;
+  VideoUrl?: string;
+  DurationSeconds?: number;
   DurationMinutes?: number;
   Order?: number;
-  VideoUrl?: string;
+  OrderIndex?: number;
   PrerequisiteExamId?: string | null;
+  MaxAllowedViews?: number;
   IsLocked?: boolean;
-  CourseId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateLessonRequest {
+  Title: string;
+  VideoStoragePath: string;
+  DurationSeconds: number;
+  OrderIndex: number;
+  PrerequisiteExamId?: string | null;
+  MaxAllowedViews?: number;
+}
+
+export interface UpdateLessonRequest {
+  Title?: string;
+  VideoStoragePath?: string;
+  DurationSeconds?: number;
+  OrderIndex?: number;
+  PrerequisiteExamId?: string | null;
+  MaxAllowedViews?: number;
+}
+
+export interface LessonQueryParams {
+  page?: number;
+  limit?: number;
+  sort?: string;
+  fields?: string;
+  search?: string;
+  Title?: string;
+  OrderIndex?: number;
+}
+
+// ── Enrollments ("My Courses") ────────────────────────────────────────────
+export interface EnrollmentCourse {
+  _id: string;
+  Title: string;
+  Price: number;
+  IsPublished: boolean;
+  createdAt?: string;
+}
+
+export interface Enrollment {
+  _id: string;
+  StudentId: string;
+  CourseId: EnrollmentCourse;
+  Status: 'Active' | 'Expired' | string;
+  AcquisitionMethod: 'Purchase' | 'ScratchCard' | 'AdminGrant' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MyCoursesResponse {
+  status: string;
+  results: number;
+  pagination?: PaginationMeta;
+  data: {
+    enrollments: Enrollment[];
+  };
+}
+
+// ── Admin Student Management ──────────────────────────────────────────────
+export interface AdminStudent {
+  _id: string;
+  FullName: string;
+  Phone: string;
+  ParentPhone?: string;
+  Role: 'Student' | string;
+  Status: 'Active' | 'SuspendedMultiDevice' | 'Blocked' | string;
+  WalletBalance?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StudentsListResponse {
+  status: string;
+  results: number;
+  pagination: PaginationMeta;
+  data: {
+    students: AdminStudent[];
+  };
+}
+
+export interface CreateStudentRequest {
+  FullName: string;
+  Phone: string;
+  ParentPhone?: string;
+  password: string;
+}
+
+export interface UpdateStudentRequest {
+  FullName?: string;
+  Phone?: string;
+  ParentPhone?: string;
+}
+
+export interface UpdateStudentStatusRequest {
+  status: 'Active' | 'SuspendedMultiDevice' | 'Blocked';
 }
 
 // ── Videos & Watermark ────────────────────────────────────────────────────
@@ -108,6 +232,8 @@ export interface HeartbeatProgress {
 }
 
 export interface HeartbeatResponse {
+  status: string;
+  message: string;
   progress: HeartbeatProgress;
 }
 
@@ -120,17 +246,23 @@ export interface ExamInfo {
 
 export interface ExamQuestion {
   _id: string;
+  ExamId?: string;
   QuestionType: string;
   QuestionText: string;
   Options: string[];
   Points: number;
-  // NOTE: Backend never sends CorrectAnswer; do not add client-side
 }
 
 export interface StartExamResponse {
-  exam: ExamInfo;
-  attemptId: string;
-  questions: ExamQuestion[];
+  message?: string;
+  exam?: ExamInfo;
+  attemptId?: string;
+  questions?: ExamQuestion[];
+  data?: {
+    exam: ExamInfo;
+    attemptId: string;
+    questions: ExamQuestion[];
+  };
 }
 
 export interface ExamAnswer {
@@ -142,15 +274,17 @@ export interface SubmitExamRequest {
   answers: ExamAnswer[];
 }
 
-export type ExamResultStatus = 'Passed' | 'Failed' | 'PendingReview' | 'AutoSubmitted' | string;
-
 export interface SubmitExamResponse {
-  status: ExamResultStatus;
-  score: number;
-  passingScore?: number;
-  totalPoints?: number;
-  attemptId?: string;
   message?: string;
+  score?: number;
+  totalPoints?: number;
+  status?: 'Passed' | 'Failed' | 'PendingReview' | 'AutoSubmitted' | string;
+  passingScore?: number;
+  data?: {
+    score: number;
+    status: 'Passed' | 'Failed' | 'PendingReview' | 'AutoSubmitted' | string;
+    passingScore?: number;
+  };
 }
 
 // ── Payment & Scratch Cards ───────────────────────────────────────────────
@@ -165,6 +299,20 @@ export interface CheckoutResponse {
   orderId: string;
 }
 
+export interface GenerateScratchCardsRequest {
+  Amount: number;
+  Count: number;
+  BatchNumber: string;
+}
+
+export interface GenerateScratchCardsResponse {
+  message: string;
+  BatchNumber: string;
+  Amount: number;
+  insertedCount: number;
+  rawCodes: string[];
+}
+
 export interface ScratchCardRequest {
   code: string;
 }
@@ -173,4 +321,10 @@ export interface ScratchCardResponse {
   message?: string;
   creditedAmount: number;
   newWalletBalance: number;
+  card?: {
+    _id: string;
+    BatchNumber: string;
+    IsRedeemed: boolean;
+    RedeemedAt?: string;
+  };
 }

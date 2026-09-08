@@ -4,12 +4,13 @@ import {
   CheckoutResponse,
   ScratchCardRequest,
   ScratchCardResponse,
+  GenerateScratchCardsRequest,
+  GenerateScratchCardsResponse,
 } from '../types/api.types';
 
 export const paymentApi = {
   /**
-   * Initialize course checkout.
-   * Generates a fresh UUID idempotency key for every request.
+   * Initialize course checkout with fresh UUID idempotency key (Student only).
    */
   checkout: async (data: CheckoutRequest): Promise<CheckoutResponse> => {
     let idempotencyKey: string;
@@ -28,7 +29,20 @@ export const paymentApi = {
   },
 
   /**
-   * Redeem a scratch card voucher code for wallet balance.
+   * Generate scratch card vouchers (Admin only).
+   */
+  generateScratchCards: async (
+    data: GenerateScratchCardsRequest
+  ): Promise<GenerateScratchCardsResponse> => {
+    const response = await apiClient.post<GenerateScratchCardsResponse>(
+      '/payment/scratch-cards/generate',
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Redeem a scratch card voucher code for wallet balance (Student/Admin).
    */
   redeemScratchCard: async (data: ScratchCardRequest): Promise<ScratchCardResponse> => {
     const response = await apiClient.post<ScratchCardResponse>(

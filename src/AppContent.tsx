@@ -74,29 +74,30 @@ const VIEW_TO_ROUTE: Record<AppView, string> = {
 };
 
 const getInitialState = () => {
-  const path = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
+  const rawPath = window.location.pathname.replace(/\/$/, '') || '/';
+  const path = rawPath.toLowerCase();
   let initialCourseId: string | undefined;
   let initialExamId: string | undefined;
   let initialLessonId: string | undefined;
   let initialView: AppView = 'view-landing';
 
-  if (path.startsWith('/courses/')) {
-    const parts = path.split('/');
-    initialCourseId = parts[2];
-    if (parts[3] === 'lessons' && parts[4]) {
-      initialLessonId = parts[4];
+  if (path.startsWith('/courses/') || path.startsWith('/course/')) {
+    const rawParts = rawPath.split('/');
+    initialCourseId = rawParts[2];
+    if ((rawParts[3]?.toLowerCase() === 'lessons' || rawParts[3]?.toLowerCase() === 'lesson') && rawParts[4]) {
+      initialLessonId = rawParts[4];
       initialView = 'view-lesson-detail';
     } else {
       initialView = 'view-course-details';
     }
-  } else if (path.startsWith('/exams/')) {
-    const parts = path.split('/');
-    initialExamId = parts[2];
+  } else if (path.startsWith('/exams/') || path.startsWith('/exam/')) {
+    const rawParts = rawPath.split('/');
+    initialExamId = rawParts[2];
     initialView = 'view-exam-session';
   } else if (ROUTE_TO_VIEW[path]) {
     initialView = ROUTE_TO_VIEW[path];
   } else {
-    // Check localStorage
+    // Check localStorage fallback
     try {
       const saved = localStorage.getItem('syntax_active_view') as AppView;
       if (saved && VIEW_TO_ROUTE[saved]) {
@@ -148,9 +149,9 @@ export const AppContent: React.FC = () => {
     const handlePopState = () => {
       const state = getInitialState();
       setCurrentView(state.initialView);
-      if (state.initialCourseId) setSelectedCourseId(state.initialCourseId);
-      if (state.initialLessonId) setSelectedLessonId(state.initialLessonId);
-      if (state.initialExamId) setSelectedExamId(state.initialExamId);
+      setSelectedCourseId(state.initialCourseId);
+      setSelectedLessonId(state.initialLessonId);
+      setSelectedExamId(state.initialExamId);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -239,47 +240,59 @@ export const AppContent: React.FC = () => {
         )}
 
         {/* Course Details Page (GET /courses/:courseId) */}
-        {currentView === 'view-course-details' && selectedCourseId && (
-          <CourseDetailsPage
-            courseId={selectedCourseId}
-            onSelectLesson={handleSelectLessonInCourse}
-            onSelectExam={handleOpenExam}
-            onBackToCourses={() => handleNavigateView('view-courses')}
-          />
+        {currentView === 'view-course-details' && (
+          selectedCourseId ? (
+            <CourseDetailsPage
+              courseId={selectedCourseId}
+              onSelectLesson={handleSelectLessonInCourse}
+              onSelectExam={handleOpenExam}
+              onBackToCourses={() => handleNavigateView('view-courses')}
+            />
+          ) : (
+            <CoursesPage onSelectCourse={handleSelectCourse} />
+          )
         )}
 
         {/* Lesson View Page with Secure Video Player & Heartbeat */}
-        {currentView === 'view-lesson-detail' && selectedCourseId && selectedLessonId && (
-          <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
-            onNavigateHome={() => setIsAuthModalOpen(true)}
-          >
-            <LessonViewPage
-              courseId={selectedCourseId}
-              lessonId={selectedLessonId}
-              onBackToCourse={() => handleSelectCourse(selectedCourseId)}
-              onOpenExam={handleOpenExam}
-            />
-          </RoleGuard>
+        {currentView === 'view-lesson-detail' && (
+          selectedCourseId && selectedLessonId ? (
+            <RoleGuard
+              allowedRoles={['student', 'teacher', 'admin']}
+              onNavigateHome={() => setIsAuthModalOpen(true)}
+            >
+              <LessonViewPage
+                courseId={selectedCourseId}
+                lessonId={selectedLessonId}
+                onBackToCourse={() => handleSelectCourse(selectedCourseId)}
+                onOpenExam={handleOpenExam}
+              />
+            </RoleGuard>
+          ) : (
+            <CoursesPage onSelectCourse={handleSelectCourse} />
+          )
         )}
 
         {/* Exam Taking Page (POST /exams/:id/start & submit) */}
-        {currentView === 'view-exam-session' && selectedExamId && (
-          <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
-            onNavigateHome={() => setIsAuthModalOpen(true)}
-          >
-            <ExamPage
-              examId={selectedExamId}
-              onBack={() => {
-                if (selectedCourseId) {
-                  handleSelectCourse(selectedCourseId);
-                } else {
-                  handleNavigateView('view-courses');
-                }
-              }}
-            />
-          </RoleGuard>
+        {currentView === 'view-exam-session' && (
+          selectedExamId ? (
+            <RoleGuard
+              allowedRoles={['student', 'teacher', 'admin']}
+              onNavigateHome={() => setIsAuthModalOpen(true)}
+            >
+              <ExamPage
+                examId={selectedExamId}
+                onBack={() => {
+                  if (selectedCourseId) {
+                    handleSelectCourse(selectedCourseId);
+                  } else {
+                    handleNavigateView('view-courses');
+                  }
+                }}
+              />
+            </RoleGuard>
+          ) : (
+            <CoursesPage onSelectCourse={handleSelectCourse} />
+          )
         )}
 
         {/* Profile Page with Device UUID, Scratch Card & Change Password */}

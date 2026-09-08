@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { coursesApi } from '../api/courses.api';
-import { CourseQueryParams } from '../types/api.types';
+import { Course, CourseQueryParams } from '../types/api.types';
 
 export function useCourses(initialParams?: CourseQueryParams) {
   const [params, setParams] = useState<CourseQueryParams>({
@@ -29,8 +29,11 @@ export function useCourses(initialParams?: CourseQueryParams) {
     setParams((prev) => ({ ...prev, sort, page: 1 }));
   };
 
+  const rawList = query.data?.courses || query.data?.data?.courses;
+  const coursesList: Course[] = Array.isArray(rawList) ? rawList : [];
+
   return {
-    courses: query.data?.courses || query.data?.data || [],
+    courses: coursesList,
     pagination: query.data?.pagination,
     isLoading: query.isLoading,
     isFetching: query.isFetching,

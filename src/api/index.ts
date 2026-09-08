@@ -5,3 +5,5 @@ export * from './lessons.api';
 export * from './videos.api';
 export * from './exams.api';
 export * from './payment.api';
+export * from './enrollments.api';
+export * from './students.api';
