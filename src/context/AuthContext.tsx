@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserRole, User } from '../types';
 import { authApi } from '../api/auth.api';
-import { AUTH_TOKEN_KEY } from '../api/axios';
+import { apiClient, AUTH_TOKEN_KEY } from '../api/axios';
 import { getDeviceUuid } from '../utils/device';
 
 interface AuthContextType {
@@ -20,27 +20,37 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'syntax_current_user_v2';
 
-export function resolveDisplayName(rawName?: string, phoneNum?: string, role?: string): string {
-  // If rawName is present and NOT solely numeric digits/symbols
-  if (rawName && /[^\d\s\+\-]/.test(rawName)) {
-    return rawName.trim();
-  }
-  const p = (phoneNum || '').trim();
-  if (p) {
-    const fromPhone = localStorage.getItem(`syntax_user_name_${p}`);
-    if (fromPhone && /[^\d\s\+\-]/.test(fromPhone)) return fromPhone.trim();
-  }
-  const generic = localStorage.getItem('syntax_user_name');
-  if (generic && /[^\d\s\+\-]/.test(generic)) return generic.trim();
+/**
+ * Query the live backend API to retrieve the exact FullName stored in the database.
+ */
+export async function fetchBackendUserName(userId: string, authToken: string, phone?: string): Promise<string | null> {
+  if (!userId || !authToken) return null;
 
-  const lastReg = localStorage.getItem('syntax_last_registered_name');
-  if (lastReg && /[^\d\s\+\-]/.test(lastReg)) return lastReg.trim();
+  // 1. Direct query: GET /users/students/:userId
+  try {
+    const res = await apiClient.get<any>(`/users/students/${userId}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const fullName = res.data?.data?.student?.FullName || res.data?.student?.FullName || res.data?.FullName;
+    if (fullName && /[^\d\s\+\-]/.test(fullName)) {
+      return fullName.trim();
+    }
+  } catch {}
 
-  const rLower = (role || '').toLowerCase();
-  if (rLower === 'admin' || rLower === 'superadmin' || rLower === 'administrator') {
-    return 'المشرف العام';
-  }
-  return 'طالب المنصة';
+  // 2. Query: GET /users/students?search=:phone
+  try {
+    const listRes = await apiClient.get<any>('/users/students', {
+      headers: { Authorization: `Bearer ${authToken}` },
+      params: phone ? { search: phone.trim() } : undefined,
+    });
+    const students: any[] = listRes.data?.data?.students || listRes.data?.students || [];
+    const match = students.find((s) => s._id === userId || (phone && s.Phone === phone.trim()));
+    if (match?.FullName && /[^\d\s\+\-]/.test(match.FullName)) {
+      return match.FullName.trim();
+    }
+  } catch {}
+
+  return null;
 }
 
 function parseJwt(token: string): any {
@@ -76,7 +86,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!saved) return null;
       const parsed = JSON.parse(saved);
       if (parsed) {
-        parsed.name = resolveDisplayName(parsed.name, parsed.phone, parsed.role);
+        // If name is phone or empty, check if we have the real FullName cached from signup/backend
+        if (!parsed.name || /^\+?[0-9\s\-]+$/.test(parsed.name)) {
+          const cachedName = parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null;
+          if (cachedName) {
+            parsed.name = cachedName;
+          } else if (parsed.role === 'admin') {
+            parsed.name = 'المشرف العام';
+          }
+        }
       }
       return parsed;
     } catch {
@@ -106,7 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (token) {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
-      // Automatically decode token and synchronize currentUser role with the token claims
       const payload = parseJwt(token);
       if (payload) {
         const roleRaw = (
@@ -120,27 +137,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const roleLower = roleRaw.toLowerCase();
         const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
         const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
+        const userId = payload.userId || payload.sub || payload._id;
+        const phone = payload.Phone || payload.phone || '';
 
-        setCurrentUser((prev) => {
-          const pPhone = payload.Phone || payload.phone || prev?.phone || '';
-          const resolved = resolveDisplayName(payload.FullName || payload.name || prev?.name, pPhone, normalizedRole);
-          if (!prev) {
-            return {
-              id: payload.userId || payload.sub || payload._id || `usr-${Date.now()}`,
-              name: resolved,
-              email: payload.email || 'user@lms.edu',
-              phone: pPhone,
-              role: normalizedRole,
-              status: 'active',
-              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-              registrationDate: new Date().toISOString().slice(0, 10),
-            };
-          }
-          if (prev.role !== normalizedRole || prev.name !== resolved) {
-            return { ...prev, role: normalizedRole, name: resolved };
-          }
-          return prev;
-        });
+        // Automatically fetch real student / user name from live backend API
+        if (userId) {
+          fetchBackendUserName(userId, token, phone).then((nameFromApi) => {
+            const resolvedName =
+              nameFromApi ||
+              (phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null) ||
+              (isAdmin ? 'المشرف العام' : null);
+
+            if (resolvedName) {
+              if (phone) {
+                try {
+                  localStorage.setItem(`user_fullname_${phone.trim()}`, resolvedName);
+                } catch {}
+              }
+              setCurrentUser((prev) => {
+                if (!prev) {
+                  return {
+                    id: userId,
+                    name: resolvedName,
+                    email: payload.email || `${phone || 'user'}@lms.edu`,
+                    phone: phone,
+                    role: normalizedRole,
+                    status: 'active',
+                    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+                    registrationDate: new Date().toISOString().slice(0, 10),
+                  };
+                }
+                return { ...prev, name: resolvedName, role: normalizedRole };
+              });
+            }
+          });
+        }
       }
     } else {
       localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -196,15 +227,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
     const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
 
-    const resolvedName = resolveDisplayName(
-      payload.FullName || payload.name || res.user?.FullName,
-      phone,
-      normalizedRole
-    );
+    const userId = payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`;
+
+    // Get the name directly from the backend API
+    let backendName = res.user?.FullName || payload.FullName || payload.name;
+    if (!backendName || /^\+?[0-9\s\-]+$/.test(backendName)) {
+      backendName = await fetchBackendUserName(userId, jwtToken, phone.trim());
+    }
+    if (!backendName || /^\+?[0-9\s\-]+$/.test(backendName)) {
+      const cached = localStorage.getItem(`user_fullname_${phone.trim()}`);
+      if (cached) backendName = cached;
+    }
+    if (backendName && !/^\+?[0-9\s\-]+$/.test(backendName)) {
+      try {
+        localStorage.setItem(`user_fullname_${phone.trim()}`, backendName.trim());
+      } catch {}
+    }
+
+    const finalName = backendName || (isAdmin ? 'المشرف العام' : 'طالب المنصة');
 
     const userObj: User = {
-      id: payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`,
-      name: resolvedName,
+      id: userId,
+      name: finalName,
       email: payload.email || `${phone}@lms.edu`,
       phone: phone.trim(),
       role: normalizedRole,
@@ -219,41 +263,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /**
    * Real backend signup (Backend automatically forces role to Student).
-   * Persists name locally so subsequent logins identify the user with their name.
    */
   const signupApi = async (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => {
-    const cleanP = phone.trim();
-    const cleanN = fullName.trim();
-    if (cleanP && cleanN) {
-      try {
-        localStorage.setItem(`syntax_user_name_${cleanP}`, cleanN);
-        localStorage.setItem('syntax_user_name', cleanN);
-        localStorage.setItem('syntax_last_registered_name', cleanN);
-      } catch {}
-    }
-    return await authApi.signup({
-      FullName: cleanN,
+    const res = await authApi.signup({
+      FullName: fullName.trim(),
       NationalId: nationalId.trim(),
-      Phone: cleanP,
+      Phone: phone.trim(),
       ParentPhone: parentPhone.trim(),
       password,
     });
+    // Immediately persist registered FullName associated with this phone
+    try {
+      localStorage.setItem(`user_fullname_${phone.trim()}`, fullName.trim());
+    } catch {}
+    return res;
   };
 
   /**
-   * Update student / admin display name directly and persist it.
+   * Update student / admin display name directly.
    */
   const updateUserName = (newName: string) => {
     const clean = newName.trim();
     if (!clean) return;
-    try {
-      if (currentUser?.phone) {
-        localStorage.setItem(`syntax_user_name_${currentUser.phone}`, clean);
+    setCurrentUser((prev) => {
+      if (!prev) return null;
+      if (prev.phone) {
+        try {
+          localStorage.setItem(`user_fullname_${prev.phone.trim()}`, clean);
+        } catch {}
       }
-      localStorage.setItem('syntax_user_name', clean);
-      localStorage.setItem('syntax_last_registered_name', clean);
-    } catch {}
-    setCurrentUser((prev) => (prev ? { ...prev, name: clean } : null));
+      return { ...prev, name: clean };
+    });
   };
 
   /**
@@ -291,71 +331,3 @@ export const useAuth = () => {
   return context;
 };
 
-// Demo users preserved for optional offline demo testing
-export const DEMO_USERS: Record<'student' | 'teacher' | 'admin', User & { defaultPassword?: string }> = {
-  student: {
-    id: 'u_student_demo',
-    name: 'أحمد طالب (طالب)',
-    email: 'student.demo@edulearn.com',
-    phone: '01012345678',
-    nationalId: '30501011234567',
-    role: 'student',
-    academicYear: 'third_secondary',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
-    registrationDate: '2026-01-15',
-    defaultPassword: 'Student123!',
-  },
-  teacher: {
-    id: 'u_teacher_admin_demo',
-    name: 'أ. د. محمد الشريف (معلم ومدير المنظومة)',
-    email: 'admin.demo@edulearn.com',
-    phone: '01000000001',
-    role: 'admin',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80',
-    registrationDate: '2025-09-01',
-    defaultPassword: 'Admin123!',
-    permissions: [
-      'view_students',
-      'view_reports',
-      'upload_lessons',
-      'edit_lessons',
-      'publish_lessons',
-      'upload_exams',
-      'edit_exams',
-      'publish_exams',
-      'assign_lessons',
-      'assign_packages',
-      'view_payments',
-      'manage_students',
-      'manage_teachers',
-    ],
-  },
-  admin: {
-    id: 'u_teacher_admin_demo',
-    name: 'أ. د. محمد الشريف (معلم ومدير المنظومة)',
-    email: 'admin.demo@edulearn.com',
-    phone: '01000000001',
-    role: 'admin',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80',
-    registrationDate: '2025-09-01',
-    defaultPassword: 'Admin123!',
-    permissions: [
-      'view_students',
-      'view_reports',
-      'upload_lessons',
-      'edit_lessons',
-      'publish_lessons',
-      'upload_exams',
-      'edit_exams',
-      'publish_exams',
-      'assign_lessons',
-      'assign_packages',
-      'view_payments',
-      'manage_students',
-      'manage_teachers',
-    ],
-  },
-};

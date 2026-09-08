@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, AlertCircle, CreditCard } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { useAuth, DEMO_USERS } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 
 interface AuthModalProps {
@@ -156,14 +156,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickDemoLogin = (role: 'student' | 'admin') => {
-    const demo = DEMO_USERS[role];
-    login(demo);
-    showToast(`تم الدخول كـ (${demo.name}) - حساب تجريبي`, 'success');
-    onClose();
-    if (onLoginSuccess) onLoginSuccess(role === 'admin' ? 'admin' : 'student');
   };
 
   return (
@@ -376,33 +368,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
               : 'إنشاء حساب الطالب'}
           </button>
         </form>
-
-        {/* Demo Login Quick Shortcut */}
-        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px dashed var(--border-glass)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.65rem' }}>
-            <Zap size={14} color="var(--accent)" />
-            <strong style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>حسابات تجريبية سريعة (Demo):</strong>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ padding: '0.55rem', fontSize: '0.8rem', justifyContent: 'center' }}
-              onClick={() => handleQuickDemoLogin('student')}
-            >
-              <GraduationCap size={16} color="#10B981" /> طالب تجريبي
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ padding: '0.55rem', fontSize: '0.8rem', justifyContent: 'center' }}
-              onClick={() => handleQuickDemoLogin('admin')}
-            >
-              <Shield size={16} color="#22D3EE" /> معلم / مدير
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

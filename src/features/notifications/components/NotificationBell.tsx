@@ -14,12 +14,13 @@ export const NotificationBell: React.FC<Props> = ({ onNavigateView }) => {
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
 
-  const userId = currentUser?.id || 'u_student_demo';
+  const userId = currentUser?.id;
 
   const { data: notificationsRes } = useQuery({
     queryKey: ['notifications', userId],
-    queryFn: () => notificationsApi.getNotifications(userId),
-    refetchInterval: 5000, // Real-time notification polling simulation
+    queryFn: () => (userId ? notificationsApi.getNotifications(userId) : Promise.resolve({ data: [] as any })),
+    enabled: !!userId,
+    refetchInterval: 15000,
   });
 
   const markReadMutation = useMutation({
@@ -30,14 +31,14 @@ export const NotificationBell: React.FC<Props> = ({ onNavigateView }) => {
   });
 
   const markAllReadMutation = useMutation({
-    mutationFn: () => notificationsApi.markAllAsRead(userId),
+    mutationFn: () => notificationsApi.markAllAsRead(userId || ''),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
     },
   });
 
-  const notifications = notificationsRes?.data || [];
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const notifications: any[] = notificationsRes?.data || [];
+  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
 
   const handleNotificationClick = (notif: any) => {
     if (!notif.isRead) {
@@ -107,7 +108,7 @@ export const NotificationBell: React.FC<Props> = ({ onNavigateView }) => {
             </div>
           ) : (
             <div className="notification-list">
-              {notifications.map(n => (
+              {notifications.map((n: any) => (
                 <div
                   key={n.id}
                   onClick={() => handleNotificationClick(n)}

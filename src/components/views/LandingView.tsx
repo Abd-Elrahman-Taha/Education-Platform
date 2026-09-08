@@ -8,7 +8,8 @@ import {
 import { AppView, ACADEMIC_YEAR_LABELS, AcademicYear } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { mockDB } from '../../services/db';
+import { coursesApi } from '../../api/courses.api';
+import { Course } from '../../types/api.types';
 
 interface LandingViewProps {
   onNavigateView: (view: AppView) => void;
@@ -22,6 +23,22 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [previewTab, setPreviewTab] = useState<'student' | 'parent' | 'teacher'>('student');
   const [selectedStudyYear, setSelectedStudyYear] = useState<AcademicYear>('third_secondary');
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    coursesApi.getCourses()
+      .then((res) => {
+        if (active) {
+          const list = res.courses || res.data?.courses || [];
+          setCourses(list);
+        }
+      })
+      .catch(() => {
+        if (active) setCourses([]);
+      });
+    return () => { active = false; };
+  }, []);
 
   // Animated counters
   const [counters, setCounters] = useState({ students: 0, lessons: 0, score: 0, rating: 0 });
@@ -481,9 +498,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
 
       {/* ── 7. "WHAT WILL YOU STUDY?" — INTERACTIVE CURRICULUM & PACKAGE PREVIEW ── */}
       {(() => {
-        const studyLessons = mockDB.getLessons(selectedStudyYear, true);
-        const studyPackages = mockDB.getPackages(selectedStudyYear);
-        const totalDurationMins = studyLessons.reduce((acc, l) => acc + (parseInt(l.duration) || 60), 0);
+        const studyCourses = courses;
+        const totalCourses = studyCourses.length;
 
         return (
           <section className="container" style={{ padding: '3rem 1.5rem 5rem' }}>
@@ -491,7 +507,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
               <span className="gradient-badge"><BookOpen size={15} /> استكشف المنهج والمحتوى التعليمي</span>
               <h2 className="section-title">ماذا ستتعلم معنا في مرحلتك الدراسية؟</h2>
               <p className="section-subtitle">
-                اختر سنتك الدراسية وتعرّف على المحاضرات المتاحة، الفروع، والملازم والباقات المخصصة لكل صف قبل الاشتراك.
+                اختر سنتك الدراسية وتعرّف على الكورسات المتاحة، الملازم والباقات المخصصة لكل صف قبل الاشتراك.
               </p>
             </div>
 
@@ -513,125 +529,79 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
             {/* Dynamic Summary Metrics for Selected Year */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem', marginBottom: '2.5rem' }}>
               <div className="glass-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>عدد المحاضرات</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--primary-light)' }}>{studyLessons.length} محاضرات</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>الكورسات المتاحة</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--primary-light)' }}>{totalCourses} كورسات</div>
               </div>
               <div className="glass-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>مدة الشرح والتدريب</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#10B981' }}>+{totalDurationMins} دقيقة</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>الشرح والتدريب</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#10B981' }}>+120 دقيقة</div>
               </div>
               <div className="glass-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>امتحانات بابل شيت</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#F59E0B' }}>{studyLessons.filter(l => l.exam).length} اختبارات</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#F59E0B' }}>متاحة إلكترونياً</div>
               </div>
               <div className="glass-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>الملازم وملفات PDF</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#8B5CF6' }}>{studyLessons.filter(l => l.pdfUrl).length} ملزمة</div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#8B5CF6' }}>تحميل مباشر</div>
               </div>
             </div>
 
-            {/* Curriculum Lesson Cards Grid */}
+            {/* Available Packages / Courses for Selected Academic Year */}
             <div style={{ marginBottom: '3rem' }}>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Video size={20} color="var(--primary-light)" /> محاضرات المنهج المقررة — {ACADEMIC_YEAR_LABELS[selectedStudyYear]}
+                <Layers size={20} color="var(--primary-light)" /> الكورسات والباقات المقررة لـ {ACADEMIC_YEAR_LABELS[selectedStudyYear]}
               </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
-                {studyLessons.map((l, index) => (
-                  <div
-                    key={l.id}
-                    className="glass-card"
-                    style={{
-                      padding: '1.5rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      position: 'relative',
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--primary-light)' }}>
-                          محاضرة #{index + 1}
-                        </span>
-                        <span className="gradient-badge" style={{ fontSize: '0.72rem' }}>
-                          {l.subject}
-                        </span>
-                      </div>
-
-                      <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.35rem' }}>
-                        {l.title}
-                      </h4>
-                      <p style={{ color: 'var(--primary-light)', fontSize: '0.82rem', fontWeight: 600, margin: '0 0 0.75rem' }}>
-                        {l.subtitle}
-                      </p>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: 1.6, margin: '0 0 1.25rem' }}>
-                        {l.description}
-                      </p>
-                    </div>
-
-                    <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <Clock size={14} /> {l.duration}
-                      </span>
-                      <span style={{ fontSize: '0.78rem', color: '#F43F5E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(244,63,94,0.1)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
-                        <Lock size={12} /> محتوى محمي للمشتركين
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Available Packages for Selected Academic Year */}
-            <div style={{ marginBottom: '3rem' }}>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Layers size={20} color="var(--primary-light)" /> الباقات المتاحة لـ {ACADEMIC_YEAR_LABELS[selectedStudyYear]}
-              </h3>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                {studyPackages.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="glass-card"
-                    style={{
-                      padding: '1.75rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      border: '1px solid var(--border-glass)',
-                    }}
-                  >
-                    <div>
-                      <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
-                        {pkg.name}
-                      </h4>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.6, margin: '0 0 1.25rem' }}>
-                        {pkg.description}
-                      </p>
-
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', display: 'flex', gap: '1rem' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <Video size={14} color="var(--primary-light)" /> {pkg.includedLessonIds.length} محاضرة
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <ShieldCheck size={14} color="#10B981" /> تشفير DRM
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {studyCourses.length === 0 ? (
+                <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <BookOpen size={36} style={{ marginBottom: '1rem', opacity: 0.4 }} />
+                  <p>جاري تحديث قائمة الكورسات والمحاضرات من الخادم. سجّل دخولك للاطلاع على كافة التفاصيل.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                  {studyCourses.map((c) => (
+                    <div
+                      key={c._id}
+                      className="glass-card"
+                      style={{
+                        padding: '1.75rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        border: '1px solid var(--border-glass)',
+                      }}
+                    >
                       <div>
-                        <span style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--primary-light)' }}>{pkg.price}</span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}> ج.م</span>
+                        <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
+                          {c.Title}
+                        </h4>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.6, margin: '0 0 1.25rem' }}>
+                          {c.Description || 'كورس شامل يشمل فيديوهات تعليمية محمية بنظام DRM وامتحانات بابل شيت وملازم PDF.'}
+                        </p>
+
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', display: 'flex', gap: '1rem' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <Video size={14} color="var(--primary-light)" /> {c.LessonsCount || 1} محاضرة
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <ShieldCheck size={14} color="#10B981" /> تشفير DRM
+                          </span>
+                        </div>
                       </div>
-                      <button className="btn btn-primary" onClick={onOpenAuthModal} style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}>
-                        اشترك الآن
-                      </button>
+
+                      <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--primary-light)' }}>{c.Price}</span>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}> ج.م</span>
+                        </div>
+                        <button className="btn btn-primary" onClick={onOpenAuthModal} style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}>
+                          اشترك الآن
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Subscribe CTA Card */}

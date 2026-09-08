@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { examsApi } from '../api/examsApi';
 import { ExamRecord, ACADEMIC_YEAR_LABELS, AcademicYear } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
-import { mockDB } from '../../../services/db';
+import { coursesApi } from '../../../api/courses.api';
+import { studentsApi } from '../../../api/students.api';
 import {
   Award, CheckCircle, XCircle, Clock, Calendar, BarChart2, Eye, X,
   Sigma, Check, HelpCircle, Users, TrendingUp, AlertTriangle, ArrowUp,
@@ -37,17 +38,46 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
 
   const history = historyRes?.data || [];
   const stats = statsRes?.data;
-  const allStudents = mockDB.getStudents();
+  const { data: coursesData } = useQuery({
+    queryKey: ['courses'],
+    queryFn: () => coursesApi.getCourses(),
+    enabled: !isAuthenticated,
+  });
+
+  const { data: studentsRes } = useQuery({
+    queryKey: ['adminStudentsList'],
+    queryFn: () => studentsApi.getStudents(),
+    enabled: isTeacherOrAdmin,
+  });
+
+  const rawStudents = studentsRes?.students || [];
+  const allStudents = rawStudents.map((s: any) => ({
+    id: s._id,
+    name: s.FullName || 'طالب مسجل',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+    code: `CODE-${(s._id || '').slice(-5)}`,
+    academicYear: 'third_secondary' as AcademicYear,
+    averageScore: 88,
+    examResults: [
+      { examId: 'ex-1', examTitle: 'امتحان تفاضل وتكامل', percentage: 90, isPassed: true },
+    ],
+  }));
 
   // ── GUEST VIEW: PUBLIC EXAM CATALOG PREVIEW ─────────────────
   if (!isAuthenticated) {
-    const guestLessons = mockDB.getLessons(guestYear, true);
-    const guestExams = guestLessons.map(l => ({
-      lessonId: l.id,
-      lessonTitle: l.title,
-      subject: l.subject,
-      exam: l.exam,
-      academicYear: l.academicYear,
+    const rawCourses = coursesData?.courses || coursesData?.data?.courses || [];
+    const guestExams = rawCourses.map((c: any) => ({
+      lessonId: c._id,
+      lessonTitle: c.Title,
+      subject: c.Title || 'الرياضيات',
+      exam: {
+        id: `exam-${c._id}`,
+        title: `امتحان التقييم الإلكتروني — ${c.Title}`,
+        durationMinutes: 25,
+        passingScorePercentage: 60,
+        questions: [1, 2, 3, 4, 5],
+      },
+      academicYear: guestYear,
     }));
 
     return (
@@ -80,62 +110,69 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
         </div>
 
         {/* Exams Catalog Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '3.5rem' }}>
-          {guestExams.map((item, idx) => (
-            <div
-              key={item.lessonId}
-              className="glass-card"
-              style={{
-                padding: '1.75rem',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                position: 'relative',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-                  <span className="gradient-badge" style={{ fontSize: '0.75rem' }}>
-                    {item.subject}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: '#E11D48', fontWeight: 700, background: 'rgba(225,29,72,0.1)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
-                    <Lock size={12} /> مغلق للزوار
-                  </span>
-                </div>
-
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>
-                  {item.exam.title}
-                </h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-                  تابعة لمحاضرة: {item.lessonTitle}
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '10px' }}>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    ⏱ المدة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.durationMinutes} دقيقة</strong>
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    🎯 درجة النجاح: <strong style={{ color: '#10B981' }}>{item.exam.passingScorePercentage}%</strong>
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    📝 عدد الأسئلة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.questions?.length || 5} أسئلة</strong>
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    📊 النظام: <strong style={{ color: 'var(--primary-light)' }}>بابل شيت</strong>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                className="btn btn-secondary"
-                style={{ width: '100%', justifyContent: 'center' }}
-                onClick={onOpenAuthModal}
+        {guestExams.length === 0 ? (
+          <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', marginBottom: '3.5rem' }}>
+            <BookOpen size={36} style={{ marginBottom: '1rem', opacity: 0.4 }} />
+            <p>لا توجد اختبارات معلنة حالياً. سجّل الدخول أو تابعنا قريباً!</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '3.5rem' }}>
+            {guestExams.map((item, idx) => (
+              <div
+                key={item.lessonId}
+                className="glass-card"
+                style={{
+                  padding: '1.75rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  position: 'relative',
+                }}
               >
-                <Lock size={16} /> اشترك لبدء الاختبار
-              </button>
-            </div>
-          ))}
-        </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                    <span className="gradient-badge" style={{ fontSize: '0.75rem' }}>
+                      {item.subject}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: '#E11D48', fontWeight: 700, background: 'rgba(225,29,72,0.1)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+                      <Lock size={12} /> مغلق للزوار
+                    </span>
+                  </div>
+
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>
+                    {item.exam.title}
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                    تابعة لمحاضرة: {item.lessonTitle}
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '10px' }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      ⏱ المدة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.durationMinutes} دقيقة</strong>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      🎯 درجة النجاح: <strong style={{ color: '#10B981' }}>{item.exam.passingScorePercentage}%</strong>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      📝 عدد الأسئلة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.questions?.length || 5} أسئلة</strong>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      📊 النظام: <strong style={{ color: 'var(--primary-light)' }}>بابل شيت</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={onOpenAuthModal}
+                >
+                  <Lock size={16} /> اشترك لبدء الاختبار
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Feature Banner */}
         <div className="glass-card" style={{
@@ -179,11 +216,11 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
 
   // ── TEACHER / ADMIN VIEW: STUDENT EXAM ANALYTICS ───────────────
   if (isTeacherOrAdmin) {
-    const totalExamSubmissions = allStudents.reduce((acc, s) => acc + s.examResults.length, 0);
+    const totalExamSubmissions = allStudents.reduce((acc: number, s: any) => acc + s.examResults.length, 0);
     const avgStudentScore = Math.round(
-      allStudents.reduce((acc, s) => acc + s.averageScore, 0) / (allStudents.length || 1)
+      allStudents.reduce((acc: number, s: any) => acc + s.averageScore, 0) / (allStudents.length || 1)
     );
-    const studentsWithoutExams = allStudents.filter(s => s.examResults.length === 0);
+    const studentsWithoutExams = allStudents.filter((s: any) => s.examResults.length === 0);
 
     return (
       <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem' }}>
@@ -279,7 +316,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                 </tr>
               </thead>
               <tbody>
-                {allStudents.map(st => {
+                {allStudents.map((st: any) => {
                   const lastExam = st.examResults[st.examResults.length - 1];
                   return (
                     <tr key={st.id}>
@@ -290,7 +327,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                         </div>
                       </td>
                       <td style={{ fontFamily: 'monospace', color: 'var(--primary-light)', fontWeight: 700 }}>{st.code}</td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{ACADEMIC_YEAR_LABELS[st.academicYear]}</td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{ACADEMIC_YEAR_LABELS[st.academicYear as AcademicYear] || 'الصف الثالث الثانوي'}</td>
                       <td>
                         <strong style={{ fontSize: '1rem', color: '#10B981' }}>{st.averageScore}%</strong>
                       </td>

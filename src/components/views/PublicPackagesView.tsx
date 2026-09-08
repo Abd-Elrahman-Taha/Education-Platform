@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { mockDB } from '../../services/db';
-import { AcademicYear, ACADEMIC_YEAR_LABELS, Package } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { coursesApi } from '../../api/courses.api';
+import { Course } from '../../types/api.types';
+import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { CheckCircle2, BookOpen, ClipboardList, Video, Star, LogIn, UserPlus, Layers, Sigma, Box, Zap, ShieldCheck } from 'lucide-react';
 
@@ -11,30 +12,31 @@ interface Props {
 
 const YEAR_ORDER: AcademicYear[] = ['third_secondary', 'second_secondary', 'first_secondary'];
 
-const PACKAGE_FEATURES: Record<string, string[]> = {
-  'pkg-1': ['جميع محاضرات التفاضل والتكامل', 'امتحانات بابل شيت تفاعلية', 'ملازم PDF عالية الجودة', 'نظام فتح الدروس التدريجي', 'مساعد الذكاء الاصطناعي'],
-  'pkg-2': ['جميع محاضرات الهندسة الفراغية', 'امتحانات بابل شيت تفاعلية', 'ملازم PDF وقوانين المجسمات', 'نظام فتح الدروس التدريجي', 'مساعد الذكاء الاصطناعي'],
-  'pkg-3': ['كل محاضرات التفاضل والهندسة', 'امتحانات بابل شيت الشاملة', 'بث مباشر أسبوعي مع المعلم', 'مساعد الذكاء الاصطناعي', 'متابعة لحظية لولي الأمر', 'ملازم PDF وقوانين شاملة'],
-  'pkg-4': ['محاضرات الجبر والمثلثات', 'الهندسة المستوية الأساسية', 'امتحانات تفاعلية', 'ملازم PDF'],
-  'pkg-5': ['الدوال الحقيقية والنهايات', 'التفاضل والتكامل التأسيسي', 'امتحانات بابل شيت', 'ملازم PDF'],
-};
-
-const PACKAGE_ICONS: Record<string, React.ElementType> = {
-  'pkg-1': Sigma,
-  'pkg-2': Box,
-  'pkg-3': Star,
-  'pkg-4': BookOpen,
-  'pkg-5': Layers,
-};
-
 export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYear }) => {
   const { isAuthenticated } = useAuth();
-  const allPackages = mockDB.getPackages();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState<AcademicYear>(initialYear || 'third_secondary');
 
-  const filtered = allPackages.filter(p => p.academicYear === selectedYear);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    coursesApi.getCourses()
+      .then((res) => {
+        if (active) {
+          const list = res.courses || res.data?.courses || [];
+          setCourses(list);
+        }
+      })
+      .catch(() => {
+        if (active) setCourses([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-  const getLessonCount = (pkg: Package) => pkg.includedLessonIds.length;
+    return () => { active = false; };
+  }, []);
 
   return (
     <div style={{ padding: '0' }}>
@@ -66,21 +68,24 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
       </div>
 
       {/* Package Cards */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div className="spinner" style={{ margin: '0 auto 1rem', width: '32px', height: '32px', border: '3px solid var(--border-glass)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <p>جاري تحميل الدورات والباقات المتاحة من الخادم...</p>
+        </div>
+      ) : courses.length === 0 ? (
         <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           <BookOpen size={36} style={{ marginBottom: '1rem', opacity: 0.4 }} />
-          <p>لا توجد باقات متاحة لهذا الصف حالياً. تابعنا قريباً!</p>
+          <p>لا توجد كورسات معلنة حالياً. سجّل الدخول أو تابع المنصة لمعرفة أحدث المحاضرات!</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-          {filtered.map((pkg, idx) => {
-            const Icon = PACKAGE_ICONS[pkg.id] || BookOpen;
-            const features = PACKAGE_FEATURES[pkg.id] || [];
-            const isFeatured = pkg.id === 'pkg-3' || idx === 1;
+          {courses.map((course, idx) => {
+            const isFeatured = idx === 0;
 
             return (
               <div
-                key={pkg.id}
+                key={course._id}
                 className="glass-card"
                 style={{
                   padding: '2rem',
@@ -107,7 +112,7 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
                     padding: '0.25rem 1rem', borderRadius: '9999px',
                     whiteSpace: 'nowrap',
                   }}>
-                    ⭐ الأكثر اشتراكاً
+                    ⭐ كورس مميز
                   </div>
                 )}
 
@@ -118,27 +123,27 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
                     background: isFeatured ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'rgba(8,145,178,0.15)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Icon size={22} color={isFeatured ? '#fff' : 'var(--primary-light)'} />
+                    <BookOpen size={22} color={isFeatured ? '#fff' : 'var(--primary-light)'} />
                   </div>
                   <div>
                     <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                      {pkg.name}
+                      {course.Title}
                     </h3>
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {ACADEMIC_YEAR_LABELS[pkg.academicYear]}
+                      {course.IsPublished ? 'متاح للتسجيل' : 'قريباً'}
                     </span>
                   </div>
                 </div>
 
                 {/* Description */}
                 <p style={{ fontSize: '0.87rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '1.25rem' }}>
-                  {pkg.description}
+                  {course.Description || 'دورة تعليمية متكاملة تشمل فيديوهات تفاعلية، شروحات منهجية وتدريبات بابل شيت.'}
                 </p>
 
                 {/* Stats Row */}
                 <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Video size={14} color="var(--primary-light)" /> {getLessonCount(pkg)} محاضرة
+                    <Video size={14} color="var(--primary-light)" /> {course.LessonsCount || 'محاضرات مكثفة'}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <ClipboardList size={14} color="var(--primary-light)" /> امتحانات بابل شيت
@@ -149,23 +154,27 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
                 </div>
 
                 {/* Features List */}
-                {features.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginBottom: '1.5rem', flex: 1 }}>
-                    {features.map(f => (
-                      <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-bright)' }}>
-                        <CheckCircle2 size={15} color="#10B981" style={{ flexShrink: 0 }} />
-                        {f}
-                      </div>
-                    ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginBottom: '1.5rem', flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-bright)' }}>
+                    <CheckCircle2 size={15} color="#10B981" style={{ flexShrink: 0 }} />
+                    جميع محاضرات الكورس ومذكرات PDF
                   </div>
-                )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-bright)' }}>
+                    <CheckCircle2 size={15} color="#10B981" style={{ flexShrink: 0 }} />
+                    امتحانات بابل شيت تدريبية
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-bright)' }}>
+                    <CheckCircle2 size={15} color="#10B981" style={{ flexShrink: 0 }} />
+                    حماية كاملة بعلامة مائية رقمية
+                  </div>
+                </div>
 
                 {/* Price + CTA */}
                 <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '1.25rem', marginTop: 'auto' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div>
-                      <span style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--primary-light)' }}>{pkg.price}</span>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}> جنيه / فصل دراسي</span>
+                      <span style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--primary-light)' }}>{course.Price}</span>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}> جنيه مصري</span>
                     </div>
                     <button
                       className={`btn ${isFeatured ? 'btn-primary' : 'btn-secondary'}`}

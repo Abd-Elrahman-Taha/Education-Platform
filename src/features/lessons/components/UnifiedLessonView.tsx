@@ -7,7 +7,8 @@ import { useToast } from '../../../context/ToastContext';
 import { AskTeacherSection } from '../../messages/components/AskTeacherSection';
 import { PublicPackagesView } from '../../../components/views/PublicPackagesView';
 import { FAQView } from '../../../components/views/FAQView';
-import { mockDB } from '../../../services/db';
+import { coursesApi } from '../../../api/courses.api';
+import { lessonsApi as apiLessonsApi } from '../../../api/lessons.api';
 import {
   Lock, Unlock, Play, Pause, ShieldCheck, Download, FileText,
   CheckCircle2, Star, Send, Award, Clock, ChevronLeft, ChevronRight,
@@ -67,8 +68,61 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
   // Teacher/Admin: always authorized. Authenticated Student with access: authorized. Guest: preview only.
   const isAuthorized = isTeacherOrAdmin || (isAuthenticated && currentUser?.status !== 'blocked');
 
-  // Fetch all lessons for current academic year
-  const allYearLessons = mockDB.getLessons(selectedAcademicYear, isTeacherOrAdmin);
+  const [liveLessons, setLiveLessons] = useState<Lesson[]>([]);
+  const [loadingLessons, setLoadingLessons] = useState(false);
+
+  // Fetch live lessons from backend API for current academic year & courses
+  useEffect(() => {
+    let active = true;
+    setLoadingLessons(true);
+
+    coursesApi.getCourses()
+      .then(async (res) => {
+        const coursesList = res.courses || res.data?.courses || [];
+        if (!coursesList.length) {
+          if (active) setLiveLessons([]);
+          return;
+        }
+
+        const gathered: Lesson[] = [];
+        for (const c of coursesList) {
+          try {
+            const lessons = await apiLessonsApi.getCourseLessons(c._id);
+            if (Array.isArray(lessons)) {
+              for (const l of lessons) {
+                gathered.push({
+                  id: l._id,
+                  title: l.Title,
+                  description: l.Description || 'شرح تفصيلي للمحاضرة وتطبيقات مباشرة على المنهج المقرر.',
+                  subject: c.Title || 'الرياضيات',
+                  academicYear: selectedAcademicYear,
+                  videoUrl: l.VideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+                  duration: l.DurationMinutes ? `${l.DurationMinutes} دقيقة` : (l.DurationSeconds ? `${Math.round(l.DurationSeconds / 60)} دقيقة` : '45 دقيقة'),
+                  isLocked: l.IsLocked ?? false,
+                  userExamPassed: false,
+                  pdfNotes: {
+                    title: `ملزمة ${l.Title}.pdf`,
+                    downloadUrl: '#',
+                    size: '4.5 MB',
+                  },
+                } as any);
+              }
+            }
+          } catch {}
+        }
+        if (active) setLiveLessons(gathered);
+      })
+      .catch(() => {
+        if (active) setLiveLessons([]);
+      })
+      .finally(() => {
+        if (active) setLoadingLessons(false);
+      });
+
+    return () => { active = false; };
+  }, [selectedAcademicYear]);
+
+  const allYearLessons = liveLessons;
 
   // Ensure selectedLessonId belongs to the current year's lessons
   useEffect(() => {
@@ -80,7 +134,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
   }, [selectedAcademicYear, allYearLessons, selectedLessonId]);
 
   // Fetch active lesson details
-  const lesson = mockDB.getLessonById(selectedLessonId) || allYearLessons[0];
+  const lesson = allYearLessons.find(l => l.id === selectedLessonId) || allYearLessons[0];
 
   const homeworkMutation = useMutation({
     mutationFn: (answers: Record<number, string>) =>
@@ -937,7 +991,24 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                 )}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="glass-card" style={{ padding: '3.5rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <BookOpen size={48} style={{ margin: '0 auto 1.25rem', opacity: 0.4 }} />
+              <h3 style={{ color: 'var(--text-bright)', marginBottom: '0.5rem', fontSize: '1.25rem' }}>
+                لا توجد محاضرات مدرجة حالياً لهذا الصف
+              </h3>
+              <p style={{ maxWidth: '500px', margin: '0 auto 1.5rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                يمكنك الاطلاع على باقات الاشتراك المتاحة، أو متابعة التحديثات القادمة فور قيام المعلم بنشر المحتوى التعليمي.
+              </p>
+              <button
+                className="btn btn-primary"
+                onClick={() => setMainTab('packages')}
+                style={{ padding: '0.65rem 1.75rem' }}
+              >
+                تصفح باقات الاشتراك المتاحة
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

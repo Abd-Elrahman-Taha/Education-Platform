@@ -170,8 +170,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="اضغط لتعديل الاسم الظاهر"
               >
                 <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
-                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {cleanDisplayName.split(' ').slice(0, 2).join(' ')}
+                <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {cleanDisplayName.split(' ').slice(0, 3).join(' ')}
                 </span>
                 <Edit3 size={12} color="var(--primary-light)" style={{ opacity: 0.7 }} />
                 <span className={`role-badge role-badge--${currentUser.role}`} style={{ padding: '0.1rem 0.5rem', fontSize: '0.7rem' }}>

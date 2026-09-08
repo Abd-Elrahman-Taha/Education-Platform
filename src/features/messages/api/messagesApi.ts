@@ -3,12 +3,12 @@ import { mockDB } from '../../../services/db';
 import { TeacherMessage } from '../../../types';
 
 export const messagesApi = {
-  getStudentMessages: (lessonId?: string): Promise<ApiResponse<TeacherMessage[]>> => {
+  getStudentMessages: (lessonId?: string, studentId?: string): Promise<ApiResponse<TeacherMessage[]>> => {
     return fakeApiCall(() => {
       if (lessonId) {
         return mockDB.getMessagesForLesson(lessonId);
       }
-      return mockDB.getTeacherMessages().filter(m => m.studentId === 'u_student_demo');
+      return mockDB.getTeacherMessages().filter(m => !studentId || m.studentId === studentId);
     });
   },
 

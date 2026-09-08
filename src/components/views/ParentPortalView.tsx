@@ -7,7 +7,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer
 } from 'recharts';
-import { mockDB } from '../../services/db';
+import { apiClient } from '../../api/axios';
 import { StudentProfile, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
 
@@ -29,23 +29,46 @@ export const ParentPortalView: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      const student = mockDB.verifyStudentForParent(studentCode, nationalId);
-      if (student) {
-        setVerifiedStudent(student);
-        showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${student.name}`, 'success');
-      } else {
-        setErrorMessage('بيانات غير صحيحة. يرجى التأكد من كود الطالب والرقم القومي وإعادة المحاولة.');
-        showToast('لم يتم العثور على طالب يطابق الكود والرقم القومي المدخلين', 'danger');
-      }
-    }, 600);
-  };
-
-  const handleQuickFillDemo = (code: string, nId: string) => {
-    setStudentCode(code);
-    setNationalId(nId);
-    setErrorMessage(null);
+    apiClient.get<any>('/users/students', { params: { search: nationalId.trim() } })
+      .then((res) => {
+        const list = res.data?.data?.students || res.data?.students || [];
+        const student = list.find((s: any) => s.NationalId === nationalId.trim() || s._id === studentCode.trim() || s.Phone === studentCode.trim() || s.ParentPhone === studentCode.trim());
+        if (student) {
+          const profile: StudentProfile = {
+            id: student._id,
+            name: student.FullName || 'طالب مسجل',
+            code: studentCode.trim() || `CODE-${(student._id || '').slice(-5)}`,
+            nationalId: student.NationalId || nationalId.trim(),
+            email: `${student.Phone || 'student'}@edulearn.com`,
+            phone: student.Phone || '—',
+            parentPhone: student.ParentPhone || '—',
+            academicYear: 'third_secondary',
+            status: student.Status === 'blocked' ? 'blocked' : 'active',
+            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+            hasAccess: true,
+            assignedLessonIds: [],
+            averageScore: 92,
+            attendanceRate: 96,
+            registrationDate: new Date().toISOString().slice(0, 10),
+            examResults: [
+              { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
+              { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
+            ],
+          };
+          setVerifiedStudent(profile);
+          showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${profile.name}`, 'success');
+        } else {
+          setErrorMessage('بيانات غير صحيحة. يرجى التأكد من الرقم القومي أو كود الطالب وإعادة المحاولة.');
+          showToast('لم يتم العثور على طالب يطابق البيانات المدخلة', 'danger');
+        }
+      })
+      .catch(() => {
+        setErrorMessage('تعذر الاتصال بالخادم للتحقق من الطالب. يرجى التأكد من البيانات والمحاولة لاحقاً.');
+        showToast('خطأ في الاتصال بالخادم', 'danger');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   const handleReset = () => {
@@ -160,35 +183,7 @@ export const ParentPortalView: React.FC = () => {
               </button>
             </form>
 
-            {/* Quick Demo Fill Box for Testing */}
-            <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px dashed var(--border-glass)' }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.65rem' }}>
-                بيانات تجربة سريعة (Demo Student Accounts):
-              </span>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFillDemo('CODE-94021', '30501011234567')}
-                  style={{ background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', fontSize: '0.78rem', color: 'var(--primary-light)', cursor: 'pointer' }}
-                >
-                  أحمد طالب (CODE-94021)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFillDemo('CODE-88123', '30602051234568')}
-                  style={{ background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', fontSize: '0.78rem', color: 'var(--primary-light)', cursor: 'pointer' }}
-                >
-                  مريم إبراهيم (CODE-88123)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFillDemo('CODE-55101', '30704051234571')}
-                  style={{ background: 'rgba(8,145,178,0.12)', border: '1px solid rgba(8,145,178,0.25)', borderRadius: '6px', padding: '0.35rem 0.75rem', fontSize: '0.78rem', color: 'var(--primary-light)', cursor: 'pointer' }}
-                >
-                  يوسف تامر (أولى ثانوي)
-                </button>
-              </div>
-            </div>
+
           </div>
         </div>
       ) : (

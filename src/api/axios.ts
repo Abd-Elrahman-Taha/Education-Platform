@@ -43,10 +43,13 @@ apiClient.interceptors.response.use(
     // 401 Unauthorized: Invalidate session and redirect to signin
     if (status === 401) {
       try {
-        localStorage.removeItem(AUTH_TOKEN_KEY);
+        const hadToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (hadToken) {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          // Emit auth:logout event so AuthContext reactively updates
+          window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: '401' } }));
+        }
       } catch {}
-      // Emit auth:logout event so AuthContext reactively updates
-      window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: '401' } }));
     }
 
     // Standardized error object preserving backend status & message
