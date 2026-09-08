@@ -77,6 +77,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (token) {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
+      // Automatically decode token and synchronize currentUser role with the token claims
+      const payload = parseJwt(token);
+      if (payload) {
+        const roleRaw = (
+          payload.Role ||
+          payload.role ||
+          payload.user?.Role ||
+          payload.user?.role ||
+          payload.userRole ||
+          'Student'
+        ).toString();
+        const roleLower = roleRaw.toLowerCase();
+        const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
+        const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
+
+        setCurrentUser((prev) => {
+          if (!prev) {
+            return {
+              id: payload.userId || payload.sub || payload._id || `usr-${Date.now()}`,
+              name: payload.FullName || payload.name || payload.Phone || 'مستخدم',
+              email: payload.email || 'user@lms.edu',
+              phone: payload.Phone || payload.phone || '',
+              role: normalizedRole,
+              status: 'active',
+              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+              registrationDate: new Date().toISOString().slice(0, 10),
+            };
+          }
+          if (prev.role !== normalizedRole) {
+            return { ...prev, role: normalizedRole };
+          }
+          return prev;
+        });
+      }
     } else {
       localStorage.removeItem(AUTH_TOKEN_KEY);
     }
@@ -117,8 +151,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Decode user payload from JWT (Backend returns Role: "Student" | "Admin")
     const payload = parseJwt(jwtToken) || {};
-    const roleRaw = (payload.Role || payload.role || res.user?.Role || res.user?.role || 'Student').toString();
-    const normalizedRole: UserRole = roleRaw.toLowerCase() === 'admin' ? 'admin' : 'student';
+    const roleRaw = (
+      payload.Role ||
+      payload.role ||
+      payload.user?.Role ||
+      payload.user?.role ||
+      payload.userRole ||
+      res.user?.Role ||
+      res.user?.role ||
+      'Student'
+    ).toString();
+    const roleLower = roleRaw.toLowerCase();
+    const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
+    const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
 
     const userObj: User = {
       id: payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`,
