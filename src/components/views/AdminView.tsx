@@ -51,6 +51,7 @@ export const AdminView: React.FC = () => {
   const [scratchAmount, setScratchAmount] = useState<number>(100);
   const [scratchCount, setScratchCount] = useState<number>(10);
   const [scratchBatch, setScratchBatch] = useState<string>('BATCH-' + new Date().getFullYear());
+  const [scratchYear, setScratchYear] = useState<AcademicYear | 'all'>('third_secondary');
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
   const [isGeneratingCards, setIsGeneratingCards] = useState(false);
 
@@ -405,9 +406,12 @@ export const AdminView: React.FC = () => {
         Amount: Number(scratchAmount),
         Count: Number(scratchCount),
         BatchNumber: scratchBatch.trim(),
+        academicYear: scratchYear !== 'all' ? scratchYear : undefined,
+        AcademicYear: scratchYear !== 'all' ? scratchYear : undefined,
       });
       setGeneratedCodes(res.rawCodes || []);
-      showToast(`تم توليد ${res.insertedCount} كارت شحن بنجاح!`, 'success');
+      const yearLabel = scratchYear !== 'all' ? `لـ ${ACADEMIC_YEAR_LABELS[scratchYear]}` : 'لكافة المراحل';
+      showToast(`تم توليد ${res.insertedCount} كارت شحن بنجاح ${yearLabel}!`, 'success');
     } catch (err: any) {
       showToast(err?.message || 'فشل في توليد كروت الشحن', 'error');
     } finally {
@@ -939,6 +943,28 @@ export const AdminView: React.FC = () => {
                   onChange={e => setScratchCount(Number(e.target.value))}
                 />
               </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
+                الصف الدراسي (المرحلة التعليمية المستهدفة):
+              </label>
+              <select
+                className="input-field"
+                style={{ width: '100%', fontSize: '0.9rem' }}
+                value={scratchYear}
+                onChange={e => {
+                  const val = e.target.value as AcademicYear | 'all';
+                  setScratchYear(val);
+                  const suffix = val === 'first_secondary' ? '-SEC1' : val === 'second_secondary' ? '-SEC2' : val === 'third_secondary' ? '-SEC3' : '';
+                  setScratchBatch(`BATCH-${new Date().getFullYear()}${suffix}`);
+                }}
+              >
+                <option value="third_secondary">الصف الثالث الثانوي (الثانوية العامة)</option>
+                <option value="second_secondary">الصف الثاني الثانوي</option>
+                <option value="first_secondary">الصف الأول الثانوي</option>
+                <option value="all">جميع الصفوف (عام لكافة المراحل)</option>
+              </select>
             </div>
 
             <div>

@@ -311,6 +311,9 @@ export interface GenerateScratchCardsRequest {
   Amount: number;
   Count: number;
   BatchNumber: string;
+  academicYear?: string;
+  AcademicYear?: string;
+  Grade?: string;
 }
 
 export interface GenerateScratchCardsResponse {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   ShieldCheck, Search, CheckCircle2, XCircle, Calendar,
-  TrendingUp, Award, Phone, User, BookOpen, AlertCircle, ArrowLeft, RefreshCw, BarChart2
+  TrendingUp, Award, Phone, BookOpen, AlertCircle, ArrowLeft, RefreshCw, BarChart2
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -13,7 +13,6 @@ import { useToast } from '../../context/ToastContext';
 
 export const ParentPortalView: React.FC = () => {
   const { showToast } = useToast();
-  const [studentCode, setStudentCode] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [verifiedStudent, setVerifiedStudent] = useState<StudentProfile | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -21,28 +20,35 @@ export const ParentPortalView: React.FC = () => {
 
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentCode.trim() || !nationalId.trim()) {
-      setErrorMessage('يرجى إدخال كود الطالب والرقم القومي معاً');
+    const trimmedId = nationalId.trim();
+    if (!trimmedId) {
+      setErrorMessage('يرجى إدخال الرقم القومي للطالب');
       return;
     }
 
     setIsLoading(true);
     setErrorMessage(null);
 
-    apiClient.get<any>('/users/students', { params: { search: nationalId.trim() } })
+    apiClient.get<any>('/users/students', { params: { search: trimmedId } })
       .then((res) => {
         const list = res.data?.data?.students || res.data?.students || [];
-        const student = list.find((s: any) => s.NationalId === nationalId.trim() || s._id === studentCode.trim() || s.Phone === studentCode.trim() || s.ParentPhone === studentCode.trim());
+        const student = list.find((s: any) => 
+          (s.NationalId && String(s.NationalId).trim() === trimmedId) ||
+          (s.nationalId && String(s.nationalId).trim() === trimmedId) ||
+          (s.national_id && String(s.national_id).trim() === trimmedId) ||
+          (s.Phone && String(s.Phone).trim() === trimmedId)
+        ) || (list.length === 1 ? list[0] : null);
+
         if (student) {
           const profile: StudentProfile = {
             id: student._id,
-            name: student.FullName || 'طالب مسجل',
-            code: studentCode.trim() || `CODE-${(student._id || '').slice(-5)}`,
-            nationalId: student.NationalId || nationalId.trim(),
+            name: student.FullName || student.name || 'طالب مسجل',
+            code: student.Code || student.code || `CODE-${(student._id || '').slice(-5)}`,
+            nationalId: student.NationalId || student.nationalId || trimmedId,
             email: `${student.Phone || 'student'}@edulearn.com`,
             phone: student.Phone || '—',
             parentPhone: student.ParentPhone || '—',
-            academicYear: 'third_secondary',
+            academicYear: student.AcademicYear || student.academicYear || 'third_secondary',
             status: student.Status === 'blocked' ? 'blocked' : 'active',
             avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
             hasAccess: true,
@@ -58,8 +64,8 @@ export const ParentPortalView: React.FC = () => {
           setVerifiedStudent(profile);
           showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${profile.name}`, 'success');
         } else {
-          setErrorMessage('بيانات غير صحيحة. يرجى التأكد من الرقم القومي أو كود الطالب وإعادة المحاولة.');
-          showToast('لم يتم العثور على طالب يطابق البيانات المدخلة', 'danger');
+          setErrorMessage('لم يتم العثور على طالب يطابق هذا الرقم القومي. يرجى التأكد من صحة الرقم والمحاولة مرة أخرى.');
+          showToast('لم يتم العثور على طالب يطابق الرقم القومي المدخل', 'danger');
         }
       })
       .catch(() => {
@@ -73,7 +79,6 @@ export const ParentPortalView: React.FC = () => {
 
   const handleReset = () => {
     setVerifiedStudent(null);
-    setStudentCode('');
     setNationalId('');
     setErrorMessage(null);
   };
@@ -124,38 +129,23 @@ export const ParentPortalView: React.FC = () => {
             <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
-                  1. كود الطالب (Student Code)
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <User size={18} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                  <input
-                    type="text"
-                    required
-                    placeholder="مثال: CODE-94021"
-                    className="input-field"
-                    style={{ width: '100%', paddingRight: '44px', fontSize: '0.95rem' }}
-                    value={studentCode}
-                    onChange={e => setStudentCode(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
-                  2. الرقم القومي للطالب / رقم الهوية (National ID)
+                  الرقم القومي للطالب (National ID)
                 </label>
                 <div style={{ position: 'relative' }}>
                   <ShieldCheck size={18} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
                     required
-                    placeholder="مثال: 30501011234567 أو رقم الهاتف المسجل"
+                    placeholder="أدخل الرقم القومي للطالب (14 رقم)"
                     className="input-field"
                     style={{ width: '100%', paddingRight: '44px', fontSize: '0.95rem' }}
                     value={nationalId}
                     onChange={e => setNationalId(e.target.value)}
                   />
                 </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.45rem', marginInlineStart: '0.25rem' }}>
+                  يمكن لولي الأمر الاستعلام مباشرة ومتابعة مستوى الطالب بالرقم القومي المسجل فقط دون الحاجة لأي كود.
+                </p>
               </div>
 
               {errorMessage && (
