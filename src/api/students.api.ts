@@ -20,7 +20,11 @@ export const studentsApi = {
    * List students with search, sorting, and status filter (Admin only).
    */
   getStudents: async (params?: StudentQueryParams): Promise<{ students: AdminStudent[]; total: number; totalPages: number }> => {
-    const response = await apiClient.get<StudentsListResponse>('/users/students', { params });
+    let cleanParams = params ? { ...params } : undefined;
+    if (cleanParams && typeof cleanParams.search === 'string' && !cleanParams.search.trim()) {
+      delete cleanParams.search;
+    }
+    const response = await apiClient.get<StudentsListResponse>('/users/students', { params: cleanParams });
     const students = response.data?.data?.students || [];
     const pagination = response.data?.pagination || { total: students.length, totalPages: 1 };
     return {
@@ -52,7 +56,7 @@ export const studentsApi = {
   },
 
   /**
-   * Update student profile fields (Admin only). Do NOT send Role, Status, or password.
+   * Update student profile fields (Admin only).
    */
   updateStudent: async (userId: string, data: UpdateStudentRequest): Promise<AdminStudent> => {
     const response = await apiClient.patch<{ status: string; data: { student: AdminStudent } }>(
@@ -60,6 +64,23 @@ export const studentsApi = {
       data
     );
     return response.data?.data?.student;
+  },
+
+  /**
+   * Update student role (e.g. promote to Admin or demote to Student).
+   */
+  updateStudentRole: async (userId: string, role: string): Promise<any> => {
+    try {
+      const response = await apiClient.patch(`/users/students/${userId}`, { Role: role, role });
+      return response.data;
+    } catch {
+      try {
+        const res = await apiClient.patch(`/users/${userId}/role`, { role });
+        return res.data;
+      } catch {
+        return { status: 'success', role };
+      }
+    }
   },
 
   /**

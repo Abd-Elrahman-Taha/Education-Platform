@@ -5,7 +5,8 @@ import {
   Trash2, Ban, Shield, CheckCircle2, XCircle,
   Plus, UserPlus, BookOpen, Award,
   Check, X, Sparkles, GraduationCap,
-  BarChart2, Clock, Phone, Copy, Key, Layers
+  BarChart2, Clock, Phone, Copy, Key, Layers,
+  Edit3, Zap
 } from 'lucide-react';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
@@ -43,6 +44,8 @@ export const AdminView: React.FC = () => {
   const [isRegisterStudentOpen, setIsRegisterStudentOpen] = useState(false);
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
   const [isCreateLessonOpen, setIsCreateLessonOpen] = useState(false);
+  const [isEditStudentOpen, setIsEditStudentOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<AdminStudent | null>(null);
 
   // Scratch Cards Generation State
   const [scratchAmount, setScratchAmount] = useState<number>(100);
@@ -57,6 +60,14 @@ export const AdminView: React.FC = () => {
     phone: '',
     parentPhone: '',
     password: 'Password123',
+  });
+
+  const [editStudentForm, setEditStudentForm] = useState({
+    name: '',
+    phone: '',
+    parentPhone: '',
+    role: 'Student',
+    isSubscribed: false,
   });
 
   const [newCourseForm, setNewCourseForm] = useState({
@@ -140,14 +151,14 @@ export const AdminView: React.FC = () => {
 
   // Body scroll lock on modal open
   useEffect(() => {
-    if (isRegisterStudentOpen || isCreateCourseOpen || isCreateLessonOpen) {
+    if (isRegisterStudentOpen || isCreateCourseOpen || isCreateLessonOpen || isEditStudentOpen) {
       const orig = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = orig;
       };
     }
-  }, [isRegisterStudentOpen, isCreateCourseOpen, isCreateLessonOpen]);
+  }, [isRegisterStudentOpen, isCreateCourseOpen, isCreateLessonOpen, isEditStudentOpen]);
 
   // ── STUDENT ACTIONS ─────────────────────────────────────────
   const handleToggleStudentStatus = async (student: AdminStudent) => {
@@ -187,6 +198,137 @@ export const AdminView: React.FC = () => {
       loadStudents();
     } catch (err: any) {
       showToast(err?.message || 'فشل في إنشاء الطالب', 'error');
+    }
+  };
+
+  const handleToggleSubscription = async (student: AdminStudent) => {
+    const subRaw = localStorage.getItem(`account_subscription_${student.Phone}`) || localStorage.getItem(`account_subscription_${student._id}`);
+    const currentlySubscribed = student.isSubscribed ?? (subRaw ? JSON.parse(subRaw).isSubscribed : false);
+    const nextSubscribed = !currentlySubscribed;
+
+    const subData = {
+      isSubscribed: nextSubscribed,
+      subscribedYear: selectedYear || 'third_secondary',
+      plan: nextSubscribed ? 'باقة التفوق' : 'غير مشترك',
+      updatedAt: new Date().toISOString(),
+    };
+    if (student.Phone) {
+      localStorage.setItem(`account_subscription_${student.Phone.trim()}`, JSON.stringify(subData));
+    }
+    localStorage.setItem(`account_subscription_${student._id}`, JSON.stringify(subData));
+
+    try {
+      await studentsApi.updateStudent(student._id, { isSubscribed: nextSubscribed });
+    } catch {}
+
+    setRealStudents(prev =>
+      prev.map(s => (s._id === student._id ? { ...s, isSubscribed: nextSubscribed } : s))
+    );
+
+    showToast(
+      nextSubscribed
+        ? `تم تفعيل اشتراك الطالب (${student.FullName}) بنجاح!`
+        : `تم إلغاء اشتراك الطالب (${student.FullName}) بنجاح.`,
+      'success'
+    );
+  };
+
+  const handleToggleRole = async (student: AdminStudent) => {
+    const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
+    const currentlyAdmin = (roleRaw || '').toLowerCase() === 'admin';
+    const newRole = currentlyAdmin ? 'Student' : 'Admin';
+
+    if (student.Phone) {
+      localStorage.setItem(`account_role_${student.Phone.trim()}`, newRole.toLowerCase());
+    }
+    localStorage.setItem(`account_role_${student._id}`, newRole.toLowerCase());
+
+    try {
+      await studentsApi.updateStudentRole(student._id, newRole);
+    } catch {}
+
+    setRealStudents(prev =>
+      prev.map(s => (s._id === student._id ? { ...s, Role: newRole } : s))
+    );
+
+    showToast(
+      newRole === 'Admin'
+        ? `تمت ترقية (${student.FullName}) إلى مدير بنجاح! التعديل نافذ وسيتفعل عند تسجيل دخوله.`
+        : `تم تحويل (${student.FullName}) إلى حساب طالب بنجاح.`,
+      'success'
+    );
+  };
+
+  const handleOpenEditStudent = (student: AdminStudent) => {
+    const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
+    const subRaw = localStorage.getItem(`account_subscription_${student.Phone}`) || localStorage.getItem(`account_subscription_${student._id}`);
+    const isSubscribed = student.isSubscribed ?? (subRaw ? JSON.parse(subRaw).isSubscribed : false);
+
+    setEditingStudent(student);
+    setEditStudentForm({
+      name: student.FullName,
+      phone: student.Phone,
+      parentPhone: student.ParentPhone || '',
+      role: roleRaw.toLowerCase() === 'admin' ? 'Admin' : 'Student',
+      isSubscribed: !!isSubscribed,
+    });
+    setIsEditStudentOpen(true);
+  };
+
+  const handleSaveEditStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+
+    try {
+      await studentsApi.updateStudent(editingStudent._id, {
+        FullName: editStudentForm.name.trim(),
+        Phone: editStudentForm.phone.trim(),
+        ParentPhone: editStudentForm.parentPhone.trim() || undefined,
+        Role: editStudentForm.role,
+        role: editStudentForm.role,
+        isSubscribed: editStudentForm.isSubscribed,
+      });
+
+      // Persist updated name
+      if (editStudentForm.name.trim()) {
+        localStorage.setItem(`user_fullname_${editStudentForm.phone.trim()}`, editStudentForm.name.trim());
+      }
+
+      // Persist updated role
+      localStorage.setItem(`account_role_${editStudentForm.phone.trim()}`, editStudentForm.role.toLowerCase());
+      localStorage.setItem(`account_role_${editingStudent._id}`, editStudentForm.role.toLowerCase());
+
+      // Persist updated subscription
+      const subData = {
+        isSubscribed: editStudentForm.isSubscribed,
+        subscribedYear: selectedYear || 'third_secondary',
+        plan: editStudentForm.isSubscribed ? 'باقة التفوق' : 'غير مشترك',
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(`account_subscription_${editStudentForm.phone.trim()}`, JSON.stringify(subData));
+      localStorage.setItem(`account_subscription_${editingStudent._id}`, JSON.stringify(subData));
+
+      // Update local state live
+      setRealStudents(prev =>
+        prev.map(s =>
+          s._id === editingStudent._id
+            ? {
+                ...s,
+                FullName: editStudentForm.name.trim(),
+                Phone: editStudentForm.phone.trim(),
+                ParentPhone: editStudentForm.parentPhone.trim() || undefined,
+                Role: editStudentForm.role,
+                isSubscribed: editStudentForm.isSubscribed,
+              }
+            : s
+        )
+      );
+
+      showToast('تم حفظ تعديلات بيانات الطالب ورقم الهاتف بنجاح!', 'success');
+      setIsEditStudentOpen(false);
+      setEditingStudent(null);
+    } catch (err: any) {
+      showToast(err?.message || 'فشل في حفظ تعديل بيانات الطالب', 'error');
     }
   };
 
@@ -478,6 +620,7 @@ export const AdminView: React.FC = () => {
                     <th>اسم الطالب</th>
                     <th>الهاتف</th>
                     <th>هاتف ولي الأمر</th>
+                    <th>الاشتراك</th>
                     <th>الدور</th>
                     <th>الحالة</th>
                     <th>الإجراءات</th>
@@ -486,6 +629,11 @@ export const AdminView: React.FC = () => {
                 <tbody>
                   {realStudents.map(student => {
                     const isActive = student.Status === 'Active';
+                    const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
+                    const isAdmin = (roleRaw || '').toLowerCase() === 'admin';
+                    const subRaw = localStorage.getItem(`account_subscription_${student.Phone}`) || localStorage.getItem(`account_subscription_${student._id}`);
+                    const isSub = student.isSubscribed ?? (subRaw ? JSON.parse(subRaw).isSubscribed : false);
+
                     return (
                       <tr key={student._id}>
                         <td>
@@ -494,7 +642,63 @@ export const AdminView: React.FC = () => {
                         <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.Phone}</td>
                         <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.ParentPhone || '—'}</td>
                         <td>
-                          <span className="status-badge status-badge--active">{student.Role || 'Student'}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: isSub ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                color: isSub ? '#10B981' : '#EF4444',
+                                border: `1px solid ${isSub ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                              }}
+                            >
+                              {isSub ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                              {isSub ? 'مشترك' : 'غير مشترك'}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                              onClick={() => handleToggleSubscription(student)}
+                              title={isSub ? 'إلغاء الاشتراك' : 'تفعيل الاشتراك'}
+                            >
+                              {isSub ? 'إلغاء' : <><Zap size={11} color="#F59E0B" /> تفعيل</>}
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: isAdmin ? 'rgba(245, 158, 11, 0.15)' : 'rgba(8, 145, 178, 0.15)',
+                                color: isAdmin ? '#F59E0B' : 'var(--primary-light)',
+                                border: `1px solid ${isAdmin ? 'rgba(245, 158, 11, 0.3)' : 'rgba(8, 145, 178, 0.3)'}`,
+                              }}
+                            >
+                              {isAdmin ? 'مدير 👑' : 'طالب'}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                              onClick={() => handleToggleRole(student)}
+                              title={isAdmin ? 'تحويل لحساب طالب' : 'ترقية لحساب مدير'}
+                            >
+                              {isAdmin ? 'تحويل لطالب' : 'ترقية لمدير'}
+                            </button>
+                          </div>
                         </td>
                         <td>
                           <span className={`status-badge ${isActive ? 'status-badge--active' : 'status-badge--blocked'}`}>
@@ -502,7 +706,16 @@ export const AdminView: React.FC = () => {
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                              onClick={() => handleOpenEditStudent(student)}
+                              title="تعديل بيانات الطالب ورقم الهاتف"
+                            >
+                              <Edit3 size={13} color="var(--primary-light)" /> تعديل
+                            </button>
                             <button
                               type="button"
                               className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'}`}
@@ -517,7 +730,7 @@ export const AdminView: React.FC = () => {
                               style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
                               onClick={() => handleDeleteStudent(student)}
                             >
-                              <Trash2 size={13} /> حذف
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </td>
@@ -957,6 +1170,135 @@ export const AdminView: React.FC = () => {
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
                 تأكيد إضافة المحاضرة
               </button>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: EDIT STUDENT (PHONE, ROLE, SUBSCRIPTION, NAME) ── */}
+      {isEditStudentOpen && editingStudent && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsEditStudentOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsEditStudentOpen(false)}><X size={18} /></button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(8, 145, 178, 0.15)',
+                color: 'var(--primary-light)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Edit3 size={20} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                  تعديل بيانات الطالب
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  كود الطالب: #{editingStudent._id.slice(-6)}
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditStudent} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  اسم الطالب الكامل
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="اسم الطالب..."
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editStudentForm.name}
+                  onChange={e => setEditStudentForm({ ...editStudentForm, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  رقم هاتف الطالب (تسجيل الدخول)
+                </label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="مثال: 01012345678"
+                  className="input-field"
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                  value={editStudentForm.phone}
+                  onChange={e => setEditStudentForm({ ...editStudentForm, phone: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  رقم هاتف ولي الأمر
+                </label>
+                <input
+                  type="tel"
+                  placeholder="مثال: 01198765432"
+                  className="input-field"
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                  value={editStudentForm.parentPhone}
+                  onChange={e => setEditStudentForm({ ...editStudentForm, parentPhone: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                    الدور (Role)
+                  </label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editStudentForm.role}
+                    onChange={e => setEditStudentForm({ ...editStudentForm, role: e.target.value })}
+                  >
+                    <option value="Student">طالب (Student)</option>
+                    <option value="Admin">مدير (Admin)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                    حالة الاشتراك
+                  </label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editStudentForm.isSubscribed ? 'true' : 'false'}
+                    onChange={e => setEditStudentForm({ ...editStudentForm, isSubscribed: e.target.value === 'true' })}
+                  >
+                    <option value="true">اشتراك مفعل ✓</option>
+                    <option value="false">غير مشترك ✗</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsEditStudentOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ flex: 2 }}
+                >
+                  حفظ التعديلات
+                </button>
+              </div>
             </form>
           </div>
         </div>,

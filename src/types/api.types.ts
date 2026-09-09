@@ -181,9 +181,12 @@ export interface AdminStudent {
   FullName: string;
   Phone: string;
   ParentPhone?: string;
-  Role: 'Student' | string;
+  Role: 'Student' | 'Admin' | string;
   Status: 'Active' | 'SuspendedMultiDevice' | 'Blocked' | string;
   WalletBalance?: number;
+  isSubscribed?: boolean;
+  subscribedYear?: string;
+  academicYear?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -208,6 +211,11 @@ export interface UpdateStudentRequest {
   FullName?: string;
   Phone?: string;
   ParentPhone?: string;
+  Role?: string;
+  role?: string;
+  isSubscribed?: boolean;
+  subscribedYear?: string;
+  academicYear?: string;
 }
 
 export interface UpdateStudentStatusRequest {

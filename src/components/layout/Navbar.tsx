@@ -92,10 +92,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   const cleanDisplayName = (() => {
     if (!currentUser) return '';
     const raw = (currentUser.name || '').trim();
-    if (raw && /[^\d\s\+\-]/.test(raw)) {
+    if (raw && raw !== 'المشرف العام') {
       return raw;
     }
-    if (currentUser.role === 'admin' || currentUser.role === 'teacher') return 'المشرف العام';
+    const cachedName = currentUser.phone ? localStorage.getItem(`user_fullname_${currentUser.phone.trim()}`) : null;
+    if (cachedName && cachedName !== 'المشرف العام') {
+      return cachedName;
+    }
+    if (currentUser.phone) {
+      return currentUser.phone;
+    }
+    if (currentUser.role === 'admin') return 'مدير';
+    if (currentUser.role === 'teacher') return 'معلم';
     return 'طالب';
   })();
 

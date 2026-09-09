@@ -12,7 +12,7 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
-// Request Interceptor: Automatically attach Bearer token
+// Request Interceptor: Automatically attach Bearer token and sanitize query params
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     try {
@@ -23,6 +23,22 @@ apiClient.interceptors.request.use(
     } catch {
       // localStorage may fail in restricted sandboxes
     }
+
+    // Sanitize query params: Never send empty or whitespace strings to backend (prevents validation errors)
+    if (config.params && typeof config.params === 'object') {
+      const cleaned: Record<string, any> = {};
+      for (const [key, val] of Object.entries(config.params)) {
+        if (typeof val === 'string') {
+          if (val.trim() !== '') {
+            cleaned[key] = val.trim();
+          }
+        } else if (val !== undefined && val !== null) {
+          cleaned[key] = val;
+        }
+      }
+      config.params = cleaned;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

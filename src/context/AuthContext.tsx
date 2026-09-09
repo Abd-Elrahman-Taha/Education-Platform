@@ -86,13 +86,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!saved) return null;
       const parsed = JSON.parse(saved);
       if (parsed) {
-        // If name is phone or empty, check if we have the real FullName cached from signup/backend
-        if (!parsed.name || /^\+?[0-9\s\-]+$/.test(parsed.name)) {
+        // If name is phone, المشرف العام, or empty, check if we have the real FullName cached from signup/backend
+        if (!parsed.name || parsed.name === 'المشرف العام' || /^\+?[0-9\s\-]+$/.test(parsed.name)) {
           const cachedName = parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null;
-          if (cachedName) {
+          if (cachedName && cachedName !== 'المشرف العام') {
             parsed.name = cachedName;
-          } else if (parsed.role === 'admin') {
-            parsed.name = 'المشرف العام';
+          }
+        }
+        // Check for live admin override
+        if (parsed.phone) {
+          const cachedRole = localStorage.getItem(`account_role_${parsed.phone.trim()}`);
+          if (cachedRole) {
+            parsed.role = cachedRole as UserRole;
+          }
+          const subRaw = localStorage.getItem(`account_subscription_${parsed.phone.trim()}`);
+          if (subRaw) {
+            try {
+              const subObj = JSON.parse(subRaw);
+              parsed.isSubscribed = subObj.isSubscribed ?? false;
+              parsed.subscribedYear = subObj.subscribedYear || 'third_secondary';
+              parsed.subscription = {
+                isActive: !!subObj.isSubscribed,
+                year: subObj.subscribedYear || 'third_secondary',
+                plan: subObj.plan || 'باقة التفوق',
+              };
+            } catch {}
           }
         }
       }
@@ -136,20 +154,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ).toString();
         const roleLower = roleRaw.toLowerCase();
         const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
-        const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
         const userId = payload.userId || payload.sub || payload._id;
         const phone = payload.Phone || payload.phone || '';
+
+        // Check if role was upgraded by admin in dashboard
+        const cachedRole = phone
+          ? localStorage.getItem(`account_role_${phone.trim()}`) || (userId ? localStorage.getItem(`account_role_${userId}`) : null)
+          : null;
+        const normalizedRole: UserRole = cachedRole === 'admin' ? 'admin' : (cachedRole === 'student' ? 'student' : (isAdmin ? 'admin' : 'student'));
+
+        // Check for subscription override
+        let studentSub: any = undefined;
+        if (phone || userId) {
+          try {
+            const subRaw = (phone && localStorage.getItem(`account_subscription_${phone.trim()}`)) || (userId && localStorage.getItem(`account_subscription_${userId}`));
+            if (subRaw) {
+              studentSub = JSON.parse(subRaw);
+            }
+          } catch {}
+        }
 
         // Automatically fetch real student / user name from live backend API
         if (userId) {
           fetchBackendUserName(userId, token, phone).then((nameFromApi) => {
+            const cachedName = phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null;
             const resolvedName =
               nameFromApi ||
-              (phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null) ||
-              (isAdmin ? 'المشرف العام' : null);
+              (cachedName && cachedName !== 'المشرف العام' ? cachedName : null) ||
+              payload.FullName ||
+              payload.name ||
+              (phone ? phone : (normalizedRole === 'admin' ? 'مدير المنصة' : 'طالب'));
 
             if (resolvedName) {
-              if (phone) {
+              if (phone && resolvedName !== 'المشرف العام') {
                 try {
                   localStorage.setItem(`user_fullname_${phone.trim()}`, resolvedName);
                 } catch {}
@@ -165,9 +202,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     status: 'active',
                     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
                     registrationDate: new Date().toISOString().slice(0, 10),
+                    isSubscribed: studentSub?.isSubscribed ?? false,
+                    subscribedYear: studentSub?.subscribedYear || 'third_secondary',
+                    subscription: studentSub ? {
+                      isActive: !!studentSub.isSubscribed,
+                      year: studentSub.subscribedYear || 'third_secondary',
+                      plan: studentSub.plan || 'باقة التفوق',
+                    } : undefined,
                   };
                 }
-                return { ...prev, name: resolvedName, role: normalizedRole };
+                return {
+                  ...prev,
+                  name: resolvedName,
+                  role: normalizedRole,
+                  isSubscribed: studentSub?.isSubscribed ?? prev.isSubscribed,
+                  subscribedYear: studentSub?.subscribedYear || prev.subscribedYear,
+                  subscription: studentSub ? {
+                    isActive: !!studentSub.isSubscribed,
+                    year: studentSub.subscribedYear || 'third_secondary',
+                    plan: studentSub.plan || 'باقة التفوق',
+                  } : prev.subscription,
+                };
               });
             }
           });
@@ -223,28 +278,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       res.user?.role ||
       'Student'
     ).toString();
-    const roleLower = roleRaw.toLowerCase();
-    const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
-    const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
+    // Check if role was upgraded by admin in dashboard
+    const cachedRole = phone
+      ? localStorage.getItem(`account_role_${phone.trim()}`) || (userId ? localStorage.getItem(`account_role_${userId}`) : null)
+      : null;
+    const normalizedRole: UserRole = cachedRole === 'admin' ? 'admin' : (cachedRole === 'student' ? 'student' : (isAdmin ? 'admin' : 'student'));
 
-    const userId = payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`;
+    // Check for subscription assigned by admin
+    let studentSub: any = undefined;
+    if (phone || userId) {
+      try {
+        const subRaw = (phone && localStorage.getItem(`account_subscription_${phone.trim()}`)) || (userId && localStorage.getItem(`account_subscription_${userId}`));
+        if (subRaw) {
+          studentSub = JSON.parse(subRaw);
+        }
+      } catch {}
+    }
 
     // Get the name directly from the backend API
     let backendName = res.user?.FullName || payload.FullName || payload.name;
-    if (!backendName || /^\+?[0-9\s\-]+$/.test(backendName)) {
+    if (!backendName || backendName === 'المشرف العام' || /^\+?[0-9\s\-]+$/.test(backendName)) {
       backendName = await fetchBackendUserName(userId, jwtToken, phone.trim());
     }
-    if (!backendName || /^\+?[0-9\s\-]+$/.test(backendName)) {
+    if (!backendName || backendName === 'المشرف العام' || /^\+?[0-9\s\-]+$/.test(backendName)) {
       const cached = localStorage.getItem(`user_fullname_${phone.trim()}`);
-      if (cached) backendName = cached;
+      if (cached && cached !== 'المشرف العام') backendName = cached;
     }
-    if (backendName && !/^\+?[0-9\s\-]+$/.test(backendName)) {
+    if (backendName && backendName !== 'المشرف العام' && !/^\+?[0-9\s\-]+$/.test(backendName)) {
       try {
         localStorage.setItem(`user_fullname_${phone.trim()}`, backendName.trim());
       } catch {}
     }
 
-    const finalName = backendName || (isAdmin ? 'المشرف العام' : 'طالب المنصة');
+    const finalName = (backendName && backendName !== 'المشرف العام')
+      ? backendName
+      : (phone || (normalizedRole === 'admin' ? 'مدير المنصة' : 'طالب المنصة'));
 
     const userObj: User = {
       id: userId,
@@ -255,6 +323,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'active',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
       registrationDate: new Date().toISOString().slice(0, 10),
+      isSubscribed: studentSub?.isSubscribed ?? false,
+      subscribedYear: studentSub?.subscribedYear || 'third_secondary',
+      subscription: studentSub ? {
+        isActive: !!studentSub.isSubscribed,
+        year: studentSub.subscribedYear || 'third_secondary',
+        plan: studentSub.plan || 'باقة التفوق',
+      } : undefined,
     };
 
     login(userObj, jwtToken);

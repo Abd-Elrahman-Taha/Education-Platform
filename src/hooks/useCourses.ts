@@ -8,7 +8,7 @@ export function useCourses(initialParams?: CourseQueryParams) {
     page: initialParams?.page || 1,
     limit: initialParams?.limit || 12,
     sort: initialParams?.sort || '-createdAt',
-    search: initialParams?.search || '',
+    search: initialParams?.search?.trim() || undefined,
   });
 
   const query = useQuery({
@@ -22,7 +22,8 @@ export function useCourses(initialParams?: CourseQueryParams) {
   };
 
   const handleSearchChange = (search: string) => {
-    setParams((prev) => ({ ...prev, search, page: 1 }));
+    const trimmed = search.trim();
+    setParams((prev) => ({ ...prev, search: trimmed ? trimmed : undefined, page: 1 }));
   };
 
   const handleSortChange = (sort: string) => {

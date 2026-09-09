@@ -12,7 +12,11 @@ export const coursesApi = {
    * Fetch paginated courses with optional search and sorting.
    */
   getCourses: async (params?: CourseQueryParams): Promise<CoursesResponse> => {
-    const response = await apiClient.get<any>('/courses', { params });
+    let cleanParams = params ? { ...params } : undefined;
+    if (cleanParams && typeof cleanParams.search === 'string' && !cleanParams.search.trim()) {
+      delete cleanParams.search;
+    }
+    const response = await apiClient.get<any>('/courses', { params: cleanParams });
     const raw = response.data;
     const coursesList = raw?.data?.courses || raw?.courses || raw?.data || [];
     const pagination = raw?.pagination || { total: coursesList.length, page: 1, limit: 20, totalPages: 1 };

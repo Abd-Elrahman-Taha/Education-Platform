@@ -73,6 +73,14 @@ export interface User {
   avatar: string;
   registrationDate: string;
   academicYear?: AcademicYear;
+  subscribedYear?: AcademicYear | string;
+  isSubscribed?: boolean;
+  subscription?: {
+    isActive: boolean;
+    year?: AcademicYear | string;
+    plan?: string;
+    expiresAt?: string | null;
+  };
   permissions?: TeacherPermission[];
 }
 
