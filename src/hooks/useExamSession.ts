@@ -5,6 +5,7 @@ import {
   ExamQuestion,
   SubmitExamResponse,
 } from '../types/api.types';
+import { getFriendlyErrorMessage } from '../utils/errors';
 
 export function useExamSession(examId: string) {
   const [exam, setExam] = useState<ExamInfo | null>(null);
@@ -44,7 +45,7 @@ export function useExamSession(examId: string) {
       setAttemptId(attemptIdVal);
       setIsTimerExpired(false);
     } catch (err: any) {
-      setError(err?.message || 'فشل في بدء جلسة الامتحان');
+      setError(getFriendlyErrorMessage(err, 'تعذر بدء الاختبار حالياً. يرجى المحاولة مرة أخرى.'));
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +84,7 @@ export function useExamSession(examId: string) {
       setIsFinished(true);
       return normalizedResult;
     } catch (err: any) {
-      setError(err?.message || 'حدث خطأ أثناء تسليم الامتحان');
+      setError(getFriendlyErrorMessage(err, 'تعذر تسليم الاختبار، يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.'));
       throw err;
     } finally {
       setIsSubmitting(false);

@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/common/ErrorState';
 import { CheckoutModal } from '../../components/payment/CheckoutModal';
 import { Lesson } from '../../types/api.types';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface CourseDetailsPageProps {
   courseId: string;
@@ -40,7 +41,7 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
     return (
       <ErrorState
         title="تعذر تحميل الكورس"
-        message={courseError?.message || 'الكورس المطلوب غير موجود أو تم حذفه.'}
+        message={getFriendlyErrorMessage(courseError, 'الكورس المطلوب غير متوفر حالياً.')}
         onRetry={refetchCourse}
       />
     );

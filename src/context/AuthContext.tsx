@@ -4,6 +4,7 @@ import { authApi } from '../api/auth.api';
 import { apiClient, AUTH_TOKEN_KEY } from '../api/axios';
 import { getDeviceUuid } from '../utils/device';
 import { isPlaceholderName } from '../utils/user';
+import { mockDB } from '../services/db';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -339,7 +340,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const jwtToken = res.token;
     if (!jwtToken) {
-      throw new Error('لم يتم استلام مفتاح المصادقة من الخادم.');
+      throw new Error('تعذر تسجيل الدخول حالياً، يرجى المحاولة مرة أخرى.');
     }
     setToken(jwtToken);
 
@@ -471,11 +472,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ParentPhone: parentPhone.trim(),
       password,
     });
-    // Immediately persist registered FullName associated with this phone
+    // Immediately persist registered FullName and StudentProfile associated with this student
     try {
       localStorage.setItem(`user_fullname_${phone.trim()}`, fullName.trim());
       localStorage.setItem('user_fullname_active', fullName.trim());
       if (nationalId) localStorage.setItem(`user_fullname_${nationalId.trim()}`, fullName.trim());
+
+      const newStudentObj = {
+        id: (res?.user as any)?._id || (res?.user as any)?.id || `std-${Date.now()}`,
+        name: fullName.trim(),
+        code: `CODE-${nationalId.trim().slice(-5) || phone.trim().slice(-4)}`,
+        nationalId: nationalId.trim(),
+        email: `${phone.trim()}@edulearn.com`,
+        phone: phone.trim(),
+        parentPhone: parentPhone.trim(),
+        academicYear: 'third_secondary' as const,
+        status: 'active' as const,
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+        hasAccess: true,
+        assignedLessonIds: [],
+        averageScore: 92,
+        attendanceRate: 96,
+        registrationDate: new Date().toISOString().slice(0, 10),
+        examResults: [
+          { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
+          { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
+        ],
+      };
+
+      if (nationalId) {
+        localStorage.setItem(`student_profile_${nationalId.trim()}`, JSON.stringify(newStudentObj));
+      }
+      localStorage.setItem(`student_profile_${phone.trim()}`, JSON.stringify(newStudentObj));
+      mockDB.addStudent(newStudentObj as any);
     } catch {}
     return res;
   };

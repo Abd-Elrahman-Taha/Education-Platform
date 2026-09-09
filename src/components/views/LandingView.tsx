@@ -555,7 +555,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
               {studyCourses.length === 0 ? (
                 <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                   <BookOpen size={36} style={{ marginBottom: '1rem', opacity: 0.4 }} />
-                  <p>جاري تحديث قائمة الكورسات والمحاضرات من الخادم. سجّل دخولك للاطلاع على كافة التفاصيل.</p>
+                  <p>جاري تحديث قائمة الكورسات والمحاضرات. سجّل دخولك للاطلاع على كافة التفاصيل والمحتوى المتاح.</p>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>

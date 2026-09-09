@@ -9,6 +9,7 @@ import { Course } from '../../types/api.types';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { SubscriptionPlansModal } from '../../components/payment/SubscriptionPlansModal';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface CoursesPageProps {
   onSelectCourse: (courseId: string) => void;
@@ -248,8 +249,8 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
       {/* Error state */}
       {isError && (
         <ErrorState
-          title="فشل في جلب الكورسات"
-          message={error?.message || 'تعذر الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت والمحاولة ثانية.'}
+          title="تعذر عرض الكورسات"
+          message={getFriendlyErrorMessage(error, 'تعذر تحميل الكورسات حالياً. يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.')}
           onRetry={refetch}
         />
       )}

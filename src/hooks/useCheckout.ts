@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { paymentApi } from '../api/payment.api';
 import { ScratchCardResponse } from '../types/api.types';
+import { getFriendlyErrorMessage } from '../utils/errors';
 
 export function useCheckout() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -25,10 +26,10 @@ export function useCheckout() {
       if (res.paymentUrl) {
         window.location.href = res.paymentUrl;
       } else {
-        throw new Error('لم يتم استلام رابط الدفع من الخادم.');
+        throw new Error('تعذر إتمام عملية الدفع حالياً، يرجى المحاولة مرة أخرى.');
       }
     } catch (err: any) {
-      setCheckoutError(err?.message || 'فشل في إتمام عملية الاشتراك.');
+      setCheckoutError(getFriendlyErrorMessage(err, 'تعذر إتمام عملية الاشتراك، يرجى المحاولة لاحقاً.'));
     } finally {
       setIsCheckingOut(false);
     }
@@ -47,7 +48,8 @@ export function useCheckout() {
       setRedeemSuccess(res);
       return res;
     } catch (err: any) {
-      setRedeemError(err?.message || 'كود الكارت غير صحيح أو تم استخدامه مسبقاً.');
+      const friendly = getFriendlyErrorMessage(err, 'كود الكارت غير صالح أو تم استخدامه مسبقاً.');
+      setRedeemError(friendly);
       throw err;
     } finally {
       setIsRedeeming(false);

@@ -71,7 +71,7 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
       {loading ? (
         <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           <div className="spinner" style={{ margin: '0 auto 1rem', width: '32px', height: '32px', border: '3px solid var(--border-glass)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-          <p>جاري تحميل الدورات والباقات المتاحة من الخادم...</p>
+          <p>جاري تحميل الدورات والباقات المتاحة...</p>
         </div>
       ) : courses.length === 0 ? (
         <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>

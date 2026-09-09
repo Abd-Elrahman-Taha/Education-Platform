@@ -183,7 +183,7 @@ export const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
             المحتوى محمي ومقفل
           </h3>
           <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.88rem', maxWidth: '420px', margin: 0 }}>
-            {lockMessage || 'تم قفل المحاضرة لتجاوز الحد الأقصى للمشاهدات المسموح بها من الخادم.'}
+            {lockMessage || 'تم قفل المحاضرة لتجاوز الحد الأقصى للمشاهدات المسموح بها.'}
           </p>
         </div>
       )}

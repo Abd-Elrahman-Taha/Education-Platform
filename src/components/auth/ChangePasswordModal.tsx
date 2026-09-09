@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Lock, Key, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -46,7 +47,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       onClose();
       if (onPasswordChanged) onPasswordChanged();
     } catch (err: any) {
-      setError(err?.message || 'فشل في تغيير كلمة المرور. تأكد من صحة كلمة المرور الحالية.');
+      setError(getFriendlyErrorMessage(err, 'تعذر تغيير كلمة المرور، يرجى التأكد من صحة كلمة المرور الحالية والمحاولة مجدداً.'));
     } finally {
       setIsLoading(false);
     }

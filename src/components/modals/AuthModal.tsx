@@ -3,6 +3,7 @@ import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, Aler
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -29,14 +30,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   if (!isOpen) return null;
 
-  // Egyptian phone number: starts with 01[0125] and 11 digits total
-  const validateEgyptianPhone = (p: string) => /^01[0125]\d{8}$/.test(p.trim());
+  const validateEgyptianPhone = (phone: string): boolean => {
+    return /^01[0125][0-9]{8}$/.test(phone);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setApiError(null);
 
-    // ── REGISTER VALIDATION ──
+    // ── SIGNUP VALIDATION & FLOW ──
     if (activeTab === 'register') {
       const cleanName = formData.fullName.trim();
       const cleanNationalId = formData.nationalId.trim();
@@ -45,7 +47,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
       // 1. FullName: Required, 3–60 characters
       if (!cleanName) {
-        setApiError('الاسم بالكامل مطلوب (Full Name is required).');
+        setApiError('يرجى إدخال الاسم بالكامل.');
         return;
       }
       if (cleanName.length < 3 || cleanName.length > 60) {
@@ -53,9 +55,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         return;
       }
 
-      // 2. NationalId: Required, 14 digits string (no conversion to number, preserves leading zeros)
+      // 2. NationalId: Required, 14 digits string
       if (!cleanNationalId) {
-        setApiError('الرقم القومي مطلوب (National ID is required).');
+        setApiError('يرجى إدخال الرقم القومي.');
         return;
       }
       if (!/^\d{14}$/.test(cleanNationalId)) {
@@ -65,7 +67,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
       // 3. Phone: Required, Egyptian phone format
       if (!cleanPhone) {
-        setApiError('رقم الهاتف مطلوب (Phone is required).');
+        setApiError('يرجى إدخال رقم الهاتف.');
         return;
       }
       if (!validateEgyptianPhone(cleanPhone)) {
@@ -73,9 +75,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         return;
       }
 
-      // 4. ParentPhone: REQUIRED for Signup (Not optional)
+      // 4. ParentPhone: REQUIRED for Signup
       if (!cleanParentPhone) {
-        setApiError('رقم هاتف ولي الأمر مطلوب للتسجيل (Parent Phone is required).');
+        setApiError('يرجى إدخال رقم هاتف ولي الأمر.');
         return;
       }
       if (!validateEgyptianPhone(cleanParentPhone)) {
@@ -85,11 +87,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
       // 5. Password: Required, 8–40 characters
       if (!formData.password) {
-        setApiError('كلمة المرور مطلوبة (Password is required).');
+        setApiError('يرجى إدخال كلمة المرور.');
         return;
       }
       if (formData.password.length < 8 || formData.password.length > 40) {
-        setApiError('يجب أن تتراوح كلمة المرور بين 8 إلى 40 حرفاً/رقماً.');
+        setApiError('يجب أن تتراوح كلمة المرور بين 8 إلى 40 حرفاً أو رقماً.');
         return;
       }
 
@@ -109,13 +111,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         const rawStr = JSON.stringify(err?.raw || '').toLowerCase();
         const errMsg = (err?.message || '').toLowerCase();
         if (errMsg.includes('nationalid') || rawStr.includes('nationalid')) {
-          setApiError(
-            'تنبيه تعارض العقد (Contract Mismatch): خادم الـ Backend رفض حقل NationalId. تم إرساله كنص مطلوب وفق متطلبات التسجيل المحدثة.'
-          );
+          setApiError('يرجى التأكد من صحة الرقم القومي (14 رقماً) والمحاولة مرة أخرى.');
         } else if (errMsg.includes('phone') && (errMsg.includes('exist') || errMsg.includes('duplicate') || err?.status === 409)) {
           setApiError('رقم الهاتف مسجل مسبقاً. يرجى تسجيل الدخول أو استخدام رقم آخر.');
         } else {
-          setApiError(err?.message || 'فشل في إنشاء الحساب. يرجى التحقق من صحة البيانات.');
+          setApiError(getFriendlyErrorMessage(err, 'تعذر إنشاء الحساب، يرجى مراجعة البيانات والمحاولة مرة أخرى.'));
         }
       } finally {
         setIsSubmitting(false);
@@ -147,11 +147,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
       if (onLoginSuccess) onLoginSuccess(userRole);
     } catch (err: any) {
       if (err?.isForbidden || err?.status === 403) {
-        setApiError('تم قفل الحساب أو تم تسجيل الدخول من جهاز آخر (Device Lock). تواصل مع الدعم الفني.');
+        setApiError('تم تسجيل الدخول من جهاز آخر أو الحساب غير متاح حالياً. يرجى التواصل مع إدارة المنصة.');
       } else if (err?.isAuthError || err?.status === 401) {
         setApiError('بيانات الدخول غير صحيحة. تأكد من رقم الهاتف وكلمة المرور.');
       } else {
-        setApiError(err?.message || 'فشل الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+        setApiError(getFriendlyErrorMessage(err, 'تعذر تسجيل الدخول، يرجى التحقق من صحة البيانات والمحاولة مرة أخرى.'));
       }
     } finally {
       setIsSubmitting(false);

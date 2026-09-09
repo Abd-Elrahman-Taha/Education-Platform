@@ -17,6 +17,7 @@ import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { paymentApi } from '../../api/payment.api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface SubscriptionPlansModalProps {
   isOpen: boolean;
@@ -84,7 +85,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
       }
       onClose();
     } catch (err: any) {
-      showToast(err?.message || 'كود الكارت غير صالح أو تم استخدامه مسبقاً', 'error');
+      showToast(getFriendlyErrorMessage(err, 'كود كارت الشحن غير صالح أو تم استخدامه مسبقاً'), 'error');
     } finally {
       setIsRedeeming(false);
     }

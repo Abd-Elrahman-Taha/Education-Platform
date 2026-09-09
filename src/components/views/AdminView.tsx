@@ -16,6 +16,7 @@ import { coursesApi } from '../../api/courses.api';
 import { lessonsApi } from '../../api/lessons.api';
 import { paymentApi } from '../../api/payment.api';
 import { AdminStudent, Course, Lesson } from '../../types/api.types';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 export const AdminView: React.FC = () => {
   const { showToast } = useToast();
@@ -94,6 +95,9 @@ export const AdminView: React.FC = () => {
         Status: studentStatusFilter !== 'all' ? studentStatusFilter : undefined,
       });
       setRealStudents(res.students);
+      try {
+        localStorage.setItem('admin_students_cache', JSON.stringify(res.students));
+      } catch {}
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch students:', err);
     } finally {
@@ -169,7 +173,7 @@ export const AdminView: React.FC = () => {
       showToast(newStatus === 'Blocked' ? `تم حظر حساب ${student.FullName}` : `تم تفعيل حساب ${student.FullName}`, 'success');
       loadStudents();
     } catch (err: any) {
-      showToast(err?.message || 'فشل في تحديث حالة الطالب', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر تحديث حالة حساب الطالب، يرجى المحاولة لاحقاً'), 'error');
     }
   };
 
@@ -180,7 +184,7 @@ export const AdminView: React.FC = () => {
       showToast(`تم حذف الطالب (${student.FullName}) بنجاح`, 'success');
       loadStudents();
     } catch (err: any) {
-      showToast(err?.message || 'لا يمكن حذف الطالب لوجود سجلات مالية أو دراسية مرتبطة به.', 'error');
+      showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الطالب لوجود سجلات مالية أو دراسية مرتبطة به.'), 'error');
     }
   };
 
@@ -198,7 +202,7 @@ export const AdminView: React.FC = () => {
       setNewStudentForm({ name: '', phone: '', parentPhone: '', password: 'Password123' });
       loadStudents();
     } catch (err: any) {
-      showToast(err?.message || 'فشل في إنشاء الطالب', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء حساب الطالب، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
   };
 
@@ -329,7 +333,7 @@ export const AdminView: React.FC = () => {
       setIsEditStudentOpen(false);
       setEditingStudent(null);
     } catch (err: any) {
-      showToast(err?.message || 'فشل في حفظ تعديل بيانات الطالب', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الطالب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
     }
   };
 
@@ -347,7 +351,7 @@ export const AdminView: React.FC = () => {
       setNewCourseForm({ title: '', price: 100, isPublished: true });
       loadCourses();
     } catch (err: any) {
-      showToast(err?.message || 'فشل في إنشاء الكورس', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الكورس، يرجى المحاولة مرة أخرى'), 'error');
     }
   };
 
@@ -358,7 +362,7 @@ export const AdminView: React.FC = () => {
       showToast(`تم حذف الكورس (${title}) بنجاح`, 'success');
       loadCourses();
     } catch (err: any) {
-      showToast(err?.message || 'فشل في حذف الكورس', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر حذف الكورس في الوقت الحالي'), 'error');
     }
   };
 
@@ -382,7 +386,7 @@ export const AdminView: React.FC = () => {
       setNewLessonForm({ title: '', videoStoragePath: 'videos/lesson-1.mp4', durationSeconds: 1800, orderIndex: realLessons.length + 1, maxAllowedViews: 3 });
       loadLessons(selectedCourseForLessons);
     } catch (err: any) {
-      showToast(err?.message || 'فشل في إضافة المحاضرة', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر إضافة المحاضرة، يرجى التأكد من البيانات والمحاولة مجدداً'), 'error');
     }
   };
 
@@ -393,7 +397,7 @@ export const AdminView: React.FC = () => {
       showToast(`تم حذف المحاضرة (${title}) بنجاح`, 'success');
       loadLessons(selectedCourseForLessons);
     } catch (err: any) {
-      showToast(err?.message || 'فشل في حذف المحاضرة', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر حذف المحاضرة حالياً'), 'error');
     }
   };
 
@@ -413,7 +417,7 @@ export const AdminView: React.FC = () => {
       const yearLabel = scratchYear !== 'all' ? `لـ ${ACADEMIC_YEAR_LABELS[scratchYear]}` : 'لكافة المراحل';
       showToast(`تم توليد ${res.insertedCount} كارت شحن بنجاح ${yearLabel}!`, 'success');
     } catch (err: any) {
-      showToast(err?.message || 'فشل في توليد كروت الشحن', 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر توليد كروت الشحن، يرجى التأكد من البيانات والمحاولة مجدداً'), 'error');
     } finally {
       setIsGeneratingCards(false);
     }
@@ -551,11 +555,11 @@ export const AdminView: React.FC = () => {
             </div>
 
             <div className="glass-card" style={{ padding: '1.5rem' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>حالة خادم الـ API</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>حالة المنصة والنظام</span>
               <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--success)', margin: '0.5rem 0' }}>
                 متصل وجاهز ⚡
               </h3>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>edc-platform.vercel.app</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>المنظومة تعمل بكفاءة</span>
             </div>
           </div>
         </div>
@@ -613,7 +617,7 @@ export const AdminView: React.FC = () => {
 
           {/* Students Table */}
           {isStudentsLoading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري جلب بيانات الطلاب من الخادم...</div>
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل بيانات الطلاب...</div>
           ) : realStudents.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا يوجد طلاب مطابقين للبحث.</div>
           ) : (
@@ -987,7 +991,7 @@ export const AdminView: React.FC = () => {
               disabled={isGeneratingCards}
               style={{ width: '100%', padding: '0.75rem', fontSize: '0.92rem' }}
             >
-              {isGeneratingCards ? 'جاري توليد الكروت وحفظها في السيرفر...' : '⚡ توليد دفعة الكروت الآن'}
+              {isGeneratingCards ? 'جاري إنشاء وتفعيل الكروت...' : '⚡ توليد دفعة الكروت الآن'}
             </button>
           </form>
 

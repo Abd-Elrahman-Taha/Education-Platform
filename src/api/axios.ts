@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ApiErrorResponse } from '../types/api.types';
+import { getFriendlyErrorMessage } from '../utils/errors';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://edc-platform.vercel.app/api/v1';
 export const AUTH_TOKEN_KEY = 'auth_token';
@@ -50,11 +51,17 @@ apiClient.interceptors.response.use(
   (error: AxiosError<ApiErrorResponse>) => {
     const status = error.response?.status;
     const backendData = error.response?.data;
-    const errorMessage =
+    const rawErrorMessage =
       backendData?.message ||
       (typeof backendData === 'string' ? backendData : undefined) ||
-      error.message ||
-      'حدث خطأ غير متوقع';
+      error.message;
+
+    // Convert raw technical or backend errors into simple, friendly user messages
+    const friendlyMessage = getFriendlyErrorMessage({
+      status,
+      message: rawErrorMessage,
+      raw: backendData,
+    });
 
     // 401 Unauthorized: Invalidate session and redirect to signin
     if (status === 401) {
@@ -71,7 +78,7 @@ apiClient.interceptors.response.use(
     // Standardized error object preserving backend status & message
     const formattedError = {
       status,
-      message: errorMessage,
+      message: friendlyMessage,
       isValidationError: status === 400,
       isAuthError: status === 401,
       isForbidden: status === 403,

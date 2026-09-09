@@ -108,7 +108,7 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
 
         {isEnrollmentsLoading ? (
           <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            جاري استرجاع الكورسات المشترك بها من الخادم...
+            جاري تحميل الكورسات المشترك بها...
           </div>
         ) : enrolledList.length === 0 ? (
           <div className="glass-card" style={{ padding: '2.5rem', textAlign: 'center' }}>

@@ -6,6 +6,7 @@ import { SecureVideoPlayer } from '../../components/video/SecureVideoPlayer';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/common/ErrorState';
 import { useAuth } from '../../context/AuthContext';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface LessonViewPageProps {
   courseId: string;
@@ -28,14 +29,14 @@ export const LessonViewPage: React.FC<LessonViewPageProps> = ({
   });
 
   if (isLoading) {
-    return <LoadingSpinner message="جاري تجهيز مشغل المحاضرة المشفرة..." size="lg" />;
+    return <LoadingSpinner message="جاري تجهيز مشغل المحاضرة..." size="lg" />;
   }
 
   if (isError || !lesson) {
     return (
       <ErrorState
         title="تعذر تشغيل المحاضرة"
-        message={(error as any)?.message || 'المحاضرة غير متاحة أو ليس لديك اشتراك نشط في هذا الكورس.'}
+        message={getFriendlyErrorMessage(error, 'المحاضرة غير متاحة أو يلزم الاشتراك أولاً لمشاهدتها.')}
         onRetry={refetch}
       />
     );
