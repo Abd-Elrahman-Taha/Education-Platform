@@ -9,6 +9,7 @@ import { AppView, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { NotificationBell } from '../../features/notifications/components/NotificationBell';
+import { isPlaceholderName } from '../../utils/user';
 
 interface NavbarProps {
   currentView: AppView;
@@ -73,8 +74,8 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
 const ROLE_LABELS: Record<UserRole, string> = {
   student: 'طالب',
   parent:  'ولي أمر',
-  admin:   'معلم / مدير',
-  teacher: 'معلم / مدير',
+  admin:   'مدير المنصة',
+  teacher: 'معلم',
 };
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -92,19 +93,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   const cleanDisplayName = (() => {
     if (!currentUser) return '';
     const raw = (currentUser.name || '').trim();
-    if (raw && raw !== 'المشرف العام') {
+    if (!isPlaceholderName(raw)) {
       return raw;
     }
-    const cachedName = currentUser.phone ? localStorage.getItem(`user_fullname_${currentUser.phone.trim()}`) : null;
-    if (cachedName && cachedName !== 'المشرف العام') {
-      return cachedName;
+    const cachedByPhone = currentUser.phone ? localStorage.getItem(`user_fullname_${currentUser.phone.trim()}`) : null;
+    if (cachedByPhone && !isPlaceholderName(cachedByPhone)) {
+      return cachedByPhone.trim();
+    }
+    const cachedById = currentUser.id ? localStorage.getItem(`user_fullname_${currentUser.id}`) : null;
+    if (cachedById && !isPlaceholderName(cachedById)) {
+      return cachedById.trim();
+    }
+    const activeCached = localStorage.getItem('user_fullname_active');
+    if (activeCached && !isPlaceholderName(activeCached)) {
+      return activeCached.trim();
     }
     if (currentUser.phone) {
-      return currentUser.phone;
+      return currentUser.phone.trim();
     }
-    if (currentUser.role === 'admin') return 'مدير';
-    if (currentUser.role === 'teacher') return 'معلم';
-    return 'طالب';
+    return currentUser.role === 'admin' ? 'حساب الإدارة' : 'حساب الطالب';
   })();
 
   const navItems = isAuthenticated && currentUser
@@ -174,11 +181,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             <>
               <div
                 className="nav-user-badge desktop-only-user"
-                onClick={() => { setTempName(cleanDisplayName); setIsEditingName(true); }}
+                onClick={() => { setTempName(isPlaceholderName(cleanDisplayName) ? '' : cleanDisplayName); setIsEditingName(true); }}
                 title="اضغط لتعديل الاسم الظاهر"
               >
                 <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
-                <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700, color: 'var(--text-bright)' }}>
                   {cleanDisplayName.split(' ').slice(0, 3).join(' ')}
                 </span>
                 <Edit3 size={12} color="var(--primary-light)" style={{ opacity: 0.7 }} />
@@ -231,12 +238,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           {isAuthenticated && currentUser && (
             <div
               className="mobile-user-info"
-              onClick={() => { setTempName(cleanDisplayName); setIsEditingName(true); setMobileMenuOpen(false); }}
+              onClick={() => { setTempName(isPlaceholderName(cleanDisplayName) ? '' : cleanDisplayName); setIsEditingName(true); setMobileMenuOpen(false); }}
               style={{ cursor: 'pointer' }}
             >
               <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
               <div>
-                <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-bright)' }}>
+                <strong style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-bright)', fontWeight: 800 }}>
                   {cleanDisplayName}
                   <Edit3 size={13} color="var(--primary-light)" />
                 </strong>

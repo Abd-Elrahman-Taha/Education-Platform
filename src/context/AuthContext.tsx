@@ -3,6 +3,7 @@ import { UserRole, User } from '../types';
 import { authApi } from '../api/auth.api';
 import { apiClient, AUTH_TOKEN_KEY } from '../api/axios';
 import { getDeviceUuid } from '../utils/device';
+import { isPlaceholderName } from '../utils/user';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -23,32 +24,73 @@ const STORAGE_KEY = 'syntax_current_user_v2';
 /**
  * Query the live backend API to retrieve the exact FullName stored in the database.
  */
-export async function fetchBackendUserName(userId: string, authToken: string, phone?: string): Promise<string | null> {
-  if (!userId || !authToken) return null;
+export async function fetchBackendUserName(userId?: string, authToken?: string, phone?: string): Promise<string | null> {
+  if (!authToken) return null;
 
-  // 1. Direct query: GET /users/students/:userId
+  // 1. Query by phone search: GET /users/students?search=:phone
+  if (phone && phone.trim()) {
+    try {
+      const listRes = await apiClient.get<any>('/users/students', {
+        headers: { Authorization: `Bearer ${authToken}` },
+        params: { search: phone.trim() },
+      });
+      const students: any[] = listRes.data?.data?.students || listRes.data?.students || [];
+      const match = students.find((s) => 
+        (s.Phone && s.Phone.trim() === phone.trim()) ||
+        (userId && s._id === userId)
+      );
+      const cand = match?.FullName || match?.fullName || match?.name;
+      if (cand && !isPlaceholderName(cand)) {
+        return cand.trim();
+      }
+    } catch {}
+  }
+
+  // 2. Direct query: GET /users/students/:userId
+  if (userId) {
+    try {
+      const res = await apiClient.get<any>(`/users/students/${userId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const cand = res.data?.data?.student?.FullName || res.data?.student?.FullName || res.data?.FullName || res.data?.data?.student?.name;
+      if (cand && !isPlaceholderName(cand)) {
+        return cand.trim();
+      }
+    } catch {}
+  }
+
+  // 3. Query all students list: GET /users/students
   try {
-    const res = await apiClient.get<any>(`/users/students/${userId}`, {
+    const allRes = await apiClient.get<any>('/users/students', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
-    const fullName = res.data?.data?.student?.FullName || res.data?.student?.FullName || res.data?.FullName;
-    if (fullName && /[^\d\s\+\-]/.test(fullName)) {
-      return fullName.trim();
+    const allStudents: any[] = allRes.data?.data?.students || allRes.data?.students || [];
+    const found = allStudents.find((s) =>
+      (userId && s._id === userId) ||
+      (phone && s.Phone && s.Phone.trim() === phone.trim()) ||
+      (phone && s.Phone && s.Phone.endsWith(phone.trim().slice(-8)))
+    );
+    const cand = found?.FullName || found?.fullName || found?.name;
+    if (cand && !isPlaceholderName(cand)) {
+      return cand.trim();
     }
   } catch {}
 
-  // 2. Query: GET /users/students?search=:phone
-  try {
-    const listRes = await apiClient.get<any>('/users/students', {
-      headers: { Authorization: `Bearer ${authToken}` },
-      params: phone ? { search: phone.trim() } : undefined,
-    });
-    const students: any[] = listRes.data?.data?.students || listRes.data?.students || [];
-    const match = students.find((s) => s._id === userId || (phone && s.Phone === phone.trim()));
-    if (match?.FullName && /[^\d\s\+\-]/.test(match.FullName)) {
-      return match.FullName.trim();
-    }
-  } catch {}
+  // 4. Try current user profile / me endpoints
+  const profileEndpoints = ['/users/me', '/auth/me', '/users/profile'];
+  if (userId) profileEndpoints.push(`/users/${userId}`);
+
+  for (const ep of profileEndpoints) {
+    try {
+      const r = await apiClient.get<any>(ep, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const cand = r.data?.data?.FullName || r.data?.user?.FullName || r.data?.FullName || r.data?.data?.name || r.data?.name;
+      if (cand && !isPlaceholderName(cand)) {
+        return cand.trim();
+      }
+    } catch {}
+  }
 
   return null;
 }
@@ -86,11 +128,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!saved) return null;
       const parsed = JSON.parse(saved);
       if (parsed) {
-        // If name is phone, المشرف العام, or empty, check if we have the real FullName cached from signup/backend
-        if (!parsed.name || parsed.name === 'المشرف العام' || /^\+?[0-9\s\-]+$/.test(parsed.name)) {
-          const cachedName = parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null;
-          if (cachedName && cachedName !== 'المشرف العام') {
-            parsed.name = cachedName;
+        // If name is placeholder / role / phone, check if we have the real FullName cached from signup/backend
+        if (isPlaceholderName(parsed.name)) {
+          const cachedName = (parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null)
+            || (parsed.id ? localStorage.getItem(`user_fullname_${parsed.id}`) : null)
+            || localStorage.getItem('user_fullname_active');
+          if (cachedName && !isPlaceholderName(cachedName)) {
+            parsed.name = cachedName.trim();
+          } else if (parsed.phone) {
+            parsed.name = parsed.phone.trim();
+          } else {
+            parsed.name = parsed.role === 'admin' ? 'حساب الإدارة' : 'حساب الطالب';
           }
         }
         // Check for live admin override
@@ -175,26 +223,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Automatically fetch real student / user name from live backend API
-        if (userId) {
+        if (userId || phone) {
           fetchBackendUserName(userId, token, phone).then((nameFromApi) => {
-            const cachedName = phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null;
+            const cachedName = (phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null)
+              || (userId ? localStorage.getItem(`user_fullname_${userId}`) : null)
+              || localStorage.getItem('user_fullname_active');
+
             const resolvedName =
-              nameFromApi ||
-              (cachedName && cachedName !== 'المشرف العام' ? cachedName : null) ||
-              payload.FullName ||
-              payload.name ||
-              (phone ? phone : (normalizedRole === 'admin' ? 'مدير المنصة' : 'طالب'));
+              (nameFromApi && !isPlaceholderName(nameFromApi) ? nameFromApi.trim() : null) ||
+              (cachedName && !isPlaceholderName(cachedName) ? cachedName.trim() : null) ||
+              (!isPlaceholderName(payload.FullName) ? payload.FullName.trim() : null) ||
+              (!isPlaceholderName(payload.fullName) ? payload.fullName.trim() : null) ||
+              (!isPlaceholderName(payload.name) ? payload.name.trim() : null) ||
+              (phone ? phone.trim() : null);
 
             if (resolvedName) {
-              if (phone && resolvedName !== 'المشرف العام') {
+              if (phone && !isPlaceholderName(resolvedName)) {
                 try {
                   localStorage.setItem(`user_fullname_${phone.trim()}`, resolvedName);
+                  localStorage.setItem('user_fullname_active', resolvedName);
+                } catch {}
+              }
+              if (userId && !isPlaceholderName(resolvedName)) {
+                try {
+                  localStorage.setItem(`user_fullname_${userId}`, resolvedName);
                 } catch {}
               }
               setCurrentUser((prev) => {
                 if (!prev) {
                   return {
-                    id: userId,
+                    id: userId || `usr-${Date.now()}`,
                     name: resolvedName,
                     email: payload.email || `${phone || 'user'}@lms.edu`,
                     phone: phone,
@@ -299,24 +357,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     }
 
-    // Get the name directly from the backend API
-    let backendName = res.user?.FullName || payload.FullName || payload.name;
-    if (!backendName || backendName === 'المشرف العام' || /^\+?[0-9\s\-]+$/.test(backendName)) {
+    // Get the name directly from the backend API or token payload
+    const resUserAny = res.user as any;
+    let backendName =
+      (!isPlaceholderName(res.user?.FullName) ? res.user?.FullName : null) ||
+      (!isPlaceholderName(resUserAny?.fullName) ? resUserAny?.fullName : null) ||
+      (!isPlaceholderName(resUserAny?.name) ? resUserAny?.name : null) ||
+      (!isPlaceholderName((res as any).student?.FullName) ? (res as any).student?.FullName : null) ||
+      (!isPlaceholderName((res as any).data?.user?.FullName) ? (res as any).data?.user?.FullName : null) ||
+      (!isPlaceholderName((res as any).data?.student?.FullName) ? (res as any).data?.student?.FullName : null) ||
+      (!isPlaceholderName(payload.FullName) ? payload.FullName : null) ||
+      (!isPlaceholderName(payload.fullName) ? payload.fullName : null) ||
+      (!isPlaceholderName(payload.name) ? payload.name : null);
+
+    if (!backendName) {
       backendName = await fetchBackendUserName(userId, jwtToken, phone.trim());
     }
-    if (!backendName || backendName === 'المشرف العام' || /^\+?[0-9\s\-]+$/.test(backendName)) {
+    if (!backendName && phone) {
       const cached = localStorage.getItem(`user_fullname_${phone.trim()}`);
-      if (cached && cached !== 'المشرف العام') backendName = cached;
+      if (cached && !isPlaceholderName(cached)) backendName = cached.trim();
     }
-    if (backendName && backendName !== 'المشرف العام' && !/^\+?[0-9\s\-]+$/.test(backendName)) {
+    if (!backendName) {
+      const activeCached = localStorage.getItem('user_fullname_active');
+      if (activeCached && !isPlaceholderName(activeCached)) backendName = activeCached.trim();
+    }
+
+    if (backendName && !isPlaceholderName(backendName)) {
       try {
         localStorage.setItem(`user_fullname_${phone.trim()}`, backendName.trim());
+        localStorage.setItem('user_fullname_active', backendName.trim());
+        if (userId) localStorage.setItem(`user_fullname_${userId}`, backendName.trim());
       } catch {}
     }
 
-    const finalName = (backendName && backendName !== 'المشرف العام')
-      ? backendName
-      : (phone || (normalizedRole === 'admin' ? 'مدير المنصة' : 'طالب المنصة'));
+    const finalName = (backendName && !isPlaceholderName(backendName))
+      ? backendName.trim()
+      : (phone || (normalizedRole === 'admin' ? 'حساب الإدارة' : 'حساب الطالب'));
 
     const userObj: User = {
       id: userId,
@@ -354,6 +430,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Immediately persist registered FullName associated with this phone
     try {
       localStorage.setItem(`user_fullname_${phone.trim()}`, fullName.trim());
+      localStorage.setItem('user_fullname_active', fullName.trim());
+      if (nationalId) localStorage.setItem(`user_fullname_${nationalId.trim()}`, fullName.trim());
     } catch {}
     return res;
   };
@@ -371,6 +449,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem(`user_fullname_${prev.phone.trim()}`, clean);
         } catch {}
       }
+      try {
+        localStorage.setItem(`user_fullname_${prev.id}`, clean);
+        localStorage.setItem('user_fullname_active', clean);
+      } catch {}
       return { ...prev, name: clean };
     });
   };
