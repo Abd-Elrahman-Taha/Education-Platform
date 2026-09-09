@@ -278,6 +278,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       res.user?.role ||
       'Student'
     ).toString();
+    const roleLower = roleRaw.toLowerCase();
+    const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
+    const userId = payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`;
+
     // Check if role was upgraded by admin in dashboard
     const cachedRole = phone
       ? localStorage.getItem(`account_role_${phone.trim()}`) || (userId ? localStorage.getItem(`account_role_${userId}`) : null)
