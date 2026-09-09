@@ -128,17 +128,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!saved) return null;
       const parsed = JSON.parse(saved);
       if (parsed) {
+        const isAdmin = parsed.role === 'admin' || parsed.role === 'teacher';
         // If name is placeholder / role / phone, check if we have the real FullName cached from signup/backend
-        if (isPlaceholderName(parsed.name)) {
+        if (isPlaceholderName(parsed.name, parsed.role)) {
           const cachedName = (parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null)
             || (parsed.id ? localStorage.getItem(`user_fullname_${parsed.id}`) : null)
+            || (isAdmin ? localStorage.getItem('admin_username') : null)
             || localStorage.getItem('user_fullname_active');
-          if (cachedName && !isPlaceholderName(cachedName)) {
+
+          if (cachedName && !isPlaceholderName(cachedName, parsed.role)) {
             parsed.name = cachedName.trim();
+          } else if (isAdmin) {
+            // NEVER use phone number for admin!
+            parsed.name = 'مدير المنصة';
           } else if (parsed.phone) {
             parsed.name = parsed.phone.trim();
           } else {
-            parsed.name = parsed.role === 'admin' ? 'حساب الإدارة' : 'حساب الطالب';
+            parsed.name = 'حساب الطالب';
           }
         }
         // Check for live admin override
@@ -225,28 +231,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Automatically fetch real student / user name from live backend API
         if (userId || phone) {
           fetchBackendUserName(userId, token, phone).then((nameFromApi) => {
+            const isAdminRole = normalizedRole === 'admin';
+            const adminLocalUser = isAdminRole
+              ? (payload.username || payload.userName || (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) || localStorage.getItem('admin_username'))
+              : null;
+
             const cachedName = (phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null)
               || (userId ? localStorage.getItem(`user_fullname_${userId}`) : null)
+              || (isAdminRole ? localStorage.getItem('admin_username') : null)
               || localStorage.getItem('user_fullname_active');
 
             const resolvedName =
-              (nameFromApi && !isPlaceholderName(nameFromApi) ? nameFromApi.trim() : null) ||
-              (cachedName && !isPlaceholderName(cachedName) ? cachedName.trim() : null) ||
-              (!isPlaceholderName(payload.FullName) ? payload.FullName.trim() : null) ||
-              (!isPlaceholderName(payload.fullName) ? payload.fullName.trim() : null) ||
-              (!isPlaceholderName(payload.name) ? payload.name.trim() : null) ||
-              (phone ? phone.trim() : null);
+              (nameFromApi && !isPlaceholderName(nameFromApi, normalizedRole) ? nameFromApi.trim() : null) ||
+              (adminLocalUser && !isPlaceholderName(adminLocalUser, normalizedRole) ? adminLocalUser.trim() : null) ||
+              (cachedName && !isPlaceholderName(cachedName, normalizedRole) ? cachedName.trim() : null) ||
+              (!isPlaceholderName(payload.FullName, normalizedRole) ? payload.FullName.trim() : null) ||
+              (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName.trim() : null) ||
+              (!isPlaceholderName(payload.username, normalizedRole) ? payload.username.trim() : null) ||
+              (!isPlaceholderName(payload.name, normalizedRole) ? payload.name.trim() : null) ||
+              (isAdminRole ? 'مدير المنصة' : (phone ? phone.trim() : null));
 
             if (resolvedName) {
-              if (phone && !isPlaceholderName(resolvedName)) {
+              if (phone && !isPlaceholderName(resolvedName, normalizedRole)) {
                 try {
                   localStorage.setItem(`user_fullname_${phone.trim()}`, resolvedName);
                   localStorage.setItem('user_fullname_active', resolvedName);
                 } catch {}
               }
-              if (userId && !isPlaceholderName(resolvedName)) {
+              if (userId && !isPlaceholderName(resolvedName, normalizedRole)) {
                 try {
                   localStorage.setItem(`user_fullname_${userId}`, resolvedName);
+                } catch {}
+              }
+              if (isAdminRole && !isPlaceholderName(resolvedName, normalizedRole)) {
+                try {
+                  localStorage.setItem('admin_username', resolvedName);
                 } catch {}
               }
               setCurrentUser((prev) => {
@@ -358,41 +377,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Get the name directly from the backend API or token payload
+    const isAdminUser = normalizedRole === 'admin';
     const resUserAny = res.user as any;
+    const candidateAdmin = isAdminUser
+      ? (
+          (!isPlaceholderName(resUserAny?.username, 'admin') ? resUserAny?.username : null) ||
+          (!isPlaceholderName(payload.username, 'admin') ? payload.username : null) ||
+          (!isPlaceholderName(payload.userName, 'admin') ? payload.userName : null) ||
+          (!isPlaceholderName((res as any).username, 'admin') ? (res as any).username : null) ||
+          (!isPlaceholderName((res as any).data?.username, 'admin') ? (res as any).data?.username : null) ||
+          (!isPlaceholderName(res.user?.FullName, 'admin') ? res.user?.FullName : null) ||
+          (!isPlaceholderName(payload.FullName, 'admin') ? payload.FullName : null) ||
+          (!isPlaceholderName(resUserAny?.name, 'admin') ? resUserAny?.name : null) ||
+          (!isPlaceholderName(payload.name, 'admin') ? payload.name : null) ||
+          (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) ||
+          localStorage.getItem('admin_username')
+        )
+      : null;
     let backendName =
-      (!isPlaceholderName(res.user?.FullName) ? res.user?.FullName : null) ||
-      (!isPlaceholderName(resUserAny?.fullName) ? resUserAny?.fullName : null) ||
-      (!isPlaceholderName(resUserAny?.name) ? resUserAny?.name : null) ||
-      (!isPlaceholderName((res as any).student?.FullName) ? (res as any).student?.FullName : null) ||
-      (!isPlaceholderName((res as any).data?.user?.FullName) ? (res as any).data?.user?.FullName : null) ||
-      (!isPlaceholderName((res as any).data?.student?.FullName) ? (res as any).data?.student?.FullName : null) ||
-      (!isPlaceholderName(payload.FullName) ? payload.FullName : null) ||
-      (!isPlaceholderName(payload.fullName) ? payload.fullName : null) ||
-      (!isPlaceholderName(payload.name) ? payload.name : null);
+      candidateAdmin ||
+      (!isPlaceholderName(res.user?.FullName, normalizedRole) ? res.user?.FullName : null) ||
+      (!isPlaceholderName(resUserAny?.fullName, normalizedRole) ? resUserAny?.fullName : null) ||
+      (!isPlaceholderName(resUserAny?.username, normalizedRole) ? resUserAny?.username : null) ||
+      (!isPlaceholderName(resUserAny?.name, normalizedRole) ? resUserAny?.name : null) ||
+      (!isPlaceholderName((res as any).student?.FullName, normalizedRole) ? (res as any).student?.FullName : null) ||
+      (!isPlaceholderName((res as any).data?.user?.FullName, normalizedRole) ? (res as any).data?.user?.FullName : null) ||
+      (!isPlaceholderName((res as any).data?.student?.FullName, normalizedRole) ? (res as any).data?.student?.FullName : null) ||
+      (!isPlaceholderName(payload.FullName, normalizedRole) ? payload.FullName : null) ||
+      (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName : null) ||
+      (!isPlaceholderName(payload.username, normalizedRole) ? payload.username : null) ||
+      (!isPlaceholderName(payload.name, normalizedRole) ? payload.name : null);
 
     if (!backendName) {
       backendName = await fetchBackendUserName(userId, jwtToken, phone.trim());
     }
     if (!backendName && phone) {
       const cached = localStorage.getItem(`user_fullname_${phone.trim()}`);
-      if (cached && !isPlaceholderName(cached)) backendName = cached.trim();
+      if (cached && !isPlaceholderName(cached, normalizedRole)) backendName = cached.trim();
+    }
+    if (!backendName && isAdminUser) {
+      const storedAdmin = localStorage.getItem('admin_username');
+      if (storedAdmin && !isPlaceholderName(storedAdmin, 'admin')) backendName = storedAdmin.trim();
     }
     if (!backendName) {
       const activeCached = localStorage.getItem('user_fullname_active');
-      if (activeCached && !isPlaceholderName(activeCached)) backendName = activeCached.trim();
+      if (activeCached && !isPlaceholderName(activeCached, normalizedRole)) backendName = activeCached.trim();
     }
 
-    if (backendName && !isPlaceholderName(backendName)) {
+    if (backendName && !isPlaceholderName(backendName, normalizedRole)) {
       try {
         localStorage.setItem(`user_fullname_${phone.trim()}`, backendName.trim());
         localStorage.setItem('user_fullname_active', backendName.trim());
         if (userId) localStorage.setItem(`user_fullname_${userId}`, backendName.trim());
+        if (isAdminUser) localStorage.setItem('admin_username', backendName.trim());
       } catch {}
     }
 
-    const finalName = (backendName && !isPlaceholderName(backendName))
+    // FOR ADMIN: NEVER FALL BACK TO PHONE NUMBER!
+    const finalName = (backendName && !isPlaceholderName(backendName, normalizedRole))
       ? backendName.trim()
-      : (phone || (normalizedRole === 'admin' ? 'حساب الإدارة' : 'حساب الطالب'));
+      : (isAdminUser ? (candidateAdmin || 'مدير المنصة') : (phone || 'حساب الطالب'));
 
     const userObj: User = {
       id: userId,
@@ -444,6 +488,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!clean) return;
     setCurrentUser((prev) => {
       if (!prev) return null;
+      if (prev.role === 'admin') {
+        try {
+          localStorage.setItem('admin_username', clean);
+        } catch {}
+      }
       if (prev.phone) {
         try {
           localStorage.setItem(`user_fullname_${prev.phone.trim()}`, clean);

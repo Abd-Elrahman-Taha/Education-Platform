@@ -92,26 +92,57 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const cleanDisplayName = (() => {
     if (!currentUser) return '';
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'teacher';
+
+    // 1. Check current user's name
     const raw = (currentUser.name || '').trim();
-    if (!isPlaceholderName(raw)) {
+    if (!isPlaceholderName(raw, currentUser.role)) {
       return raw;
     }
+
+    // 2. For Admin, check admin_username
+    if (isAdmin) {
+      const adminStored = localStorage.getItem('admin_username');
+      if (adminStored && !isPlaceholderName(adminStored, 'admin')) {
+        return adminStored.trim();
+      }
+    }
+
+    // 3. Check cached by phone
     const cachedByPhone = currentUser.phone ? localStorage.getItem(`user_fullname_${currentUser.phone.trim()}`) : null;
-    if (cachedByPhone && !isPlaceholderName(cachedByPhone)) {
+    if (cachedByPhone && !isPlaceholderName(cachedByPhone, currentUser.role)) {
       return cachedByPhone.trim();
     }
+
+    // 4. Check cached by ID
     const cachedById = currentUser.id ? localStorage.getItem(`user_fullname_${currentUser.id}`) : null;
-    if (cachedById && !isPlaceholderName(cachedById)) {
+    if (cachedById && !isPlaceholderName(cachedById, currentUser.role)) {
       return cachedById.trim();
     }
+
+    // 5. Check active cached
     const activeCached = localStorage.getItem('user_fullname_active');
-    if (activeCached && !isPlaceholderName(activeCached)) {
+    if (activeCached && !isPlaceholderName(activeCached, currentUser.role)) {
       return activeCached.trim();
     }
+
+    // 6. IF ADMIN: NEVER show phone number! Extract username from email or default to 'مدير المنصة'
+    if (isAdmin) {
+      if (currentUser.email && currentUser.email.includes('@')) {
+        const emailPrefix = currentUser.email.split('@')[0].trim();
+        if (emailPrefix && emailPrefix !== 'user' && !/^\+?[0-9\s\-]+$/.test(emailPrefix)) {
+          return emailPrefix;
+        }
+      }
+      return 'مدير المنصة';
+    }
+
+    // 7. For Student: phone number if no name is available
     if (currentUser.phone) {
       return currentUser.phone.trim();
     }
-    return currentUser.role === 'admin' ? 'حساب الإدارة' : 'حساب الطالب';
+
+    return 'طالب';
   })();
 
   const navItems = isAuthenticated && currentUser
