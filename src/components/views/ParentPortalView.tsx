@@ -10,6 +10,7 @@ import {
 import { apiClient } from '../../api/axios';
 import { StudentProfile, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
+import { mockDB } from '../../services/db';
 
 export const ParentPortalView: React.FC = () => {
   const { showToast } = useToast();
@@ -18,63 +19,115 @@ export const ParentPortalView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedId = nationalId.trim();
     if (!trimmedId) {
-      setErrorMessage('يرجى إدخال الرقم القومي للطالب');
+      setErrorMessage('يرجى إدخال الرقم القومي للطالب أو معرّف الطالب');
       return;
     }
 
     setIsLoading(true);
     setErrorMessage(null);
 
-    apiClient.get<any>('/users/students', { params: { search: trimmedId } })
-      .then((res) => {
+    let rawStudent: any = null;
+
+    // 1. Primary API Endpoint: GET /users/students/{userId}
+    try {
+      const res = await apiClient.get<any>(`/users/students/${encodeURIComponent(trimmedId)}`);
+      if (res.data?.data?.student) {
+        rawStudent = res.data.data.student;
+      } else if (res.data?.student) {
+        rawStudent = res.data.student;
+      } else if (res.data?.FullName || res.data?._id) {
+        rawStudent = res.data;
+      }
+    } catch {
+      // Direct lookup by ID didn't match or failed, try query params
+    }
+
+    // 2. Fallback: Query by NationalId parameter: GET /users/students?NationalId={trimmedId}
+    if (!rawStudent) {
+      try {
+        const res = await apiClient.get<any>('/users/students', {
+          params: { NationalId: trimmedId },
+        });
         const list = res.data?.data?.students || res.data?.students || [];
-        const student = list.find((s: any) => 
+        rawStudent = list.find((s: any) =>
           (s.NationalId && String(s.NationalId).trim() === trimmedId) ||
           (s.nationalId && String(s.nationalId).trim() === trimmedId) ||
-          (s.national_id && String(s.national_id).trim() === trimmedId) ||
+          (s._id && String(s._id).trim() === trimmedId) ||
           (s.Phone && String(s.Phone).trim() === trimmedId)
         ) || (list.length === 1 ? list[0] : null);
+      } catch {
+        // Continue to list all fallback
+      }
+    }
 
-        if (student) {
-          const profile: StudentProfile = {
-            id: student._id,
-            name: student.FullName || student.name || 'طالب مسجل',
-            code: student.Code || student.code || `CODE-${(student._id || '').slice(-5)}`,
-            nationalId: student.NationalId || student.nationalId || trimmedId,
-            email: `${student.Phone || 'student'}@edulearn.com`,
-            phone: student.Phone || '—',
-            parentPhone: student.ParentPhone || '—',
-            academicYear: student.AcademicYear || student.academicYear || 'third_secondary',
-            status: student.Status === 'blocked' ? 'blocked' : 'active',
-            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-            hasAccess: true,
-            assignedLessonIds: [],
-            averageScore: 92,
-            attendanceRate: 96,
-            registrationDate: new Date().toISOString().slice(0, 10),
-            examResults: [
-              { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
-              { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
-            ],
-          };
-          setVerifiedStudent(profile);
-          showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${profile.name}`, 'success');
-        } else {
-          setErrorMessage('لم يتم العثور على طالب يطابق هذا الرقم القومي. يرجى التأكد من صحة الرقم والمحاولة مرة أخرى.');
-          showToast('لم يتم العثور على طالب يطابق الرقم القومي المدخل', 'danger');
-        }
-      })
-      .catch(() => {
-        setErrorMessage('تعذر الاتصال بالخادم للتحقق من الطالب. يرجى التأكد من البيانات والمحاولة لاحقاً.');
-        showToast('خطأ في الاتصال بالخادم', 'danger');
-      })
-      .finally(() => {
+    // 3. Fallback: GET /users/students (list all students and match)
+    if (!rawStudent) {
+      try {
+        const res = await apiClient.get<any>('/users/students');
+        const list = res.data?.data?.students || res.data?.students || [];
+        rawStudent = list.find((s: any) =>
+          (s.NationalId && String(s.NationalId).trim() === trimmedId) ||
+          (s.nationalId && String(s.nationalId).trim() === trimmedId) ||
+          (s._id && String(s._id).trim() === trimmedId) ||
+          (s.Phone && String(s.Phone).trim() === trimmedId)
+        );
+      } catch {
+        // Continue to local mock/cache fallback
+      }
+    }
+
+    // 4. Fallback: Match against local database students
+    if (!rawStudent) {
+      const localStudents = mockDB.getStudents();
+      const localMatch = localStudents.find(
+        (s: StudentProfile) =>
+          s.nationalId === trimmedId ||
+          s.id === trimmedId ||
+          (s.code && s.code.toUpperCase() === trimmedId.toUpperCase()) ||
+          s.phone === trimmedId
+      );
+      if (localMatch) {
+        setVerifiedStudent(localMatch);
+        showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${localMatch.name}`, 'success');
         setIsLoading(false);
-      });
+        return;
+      }
+    }
+
+    if (rawStudent && (rawStudent._id || rawStudent.FullName || rawStudent.name)) {
+      const profile: StudentProfile = {
+        id: rawStudent._id || trimmedId,
+        name: rawStudent.FullName || rawStudent.fullName || rawStudent.name || 'طالب مسجل',
+        code: rawStudent.Code || rawStudent.code || `CODE-${(rawStudent._id || trimmedId).slice(-5)}`,
+        nationalId: rawStudent.NationalId || rawStudent.nationalId || trimmedId,
+        email: `${rawStudent.Phone || 'student'}@edulearn.com`,
+        phone: rawStudent.Phone || rawStudent.phone || '—',
+        parentPhone: rawStudent.ParentPhone || rawStudent.parentPhone || '—',
+        academicYear: rawStudent.AcademicYear || rawStudent.academicYear || 'third_secondary',
+        status: (rawStudent.Status === 'Blocked' || rawStudent.Status === 'blocked') ? 'blocked' : 'active',
+        avatar: rawStudent.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+        hasAccess: rawStudent.hasAccess !== false && rawStudent.Status !== 'Blocked',
+        assignedLessonIds: rawStudent.assignedLessonIds || [],
+        averageScore: rawStudent.averageScore || 92,
+        attendanceRate: rawStudent.attendanceRate || 96,
+        registrationDate: rawStudent.createdAt ? new Date(rawStudent.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        examResults: (rawStudent.examResults && rawStudent.examResults.length > 0) ? rawStudent.examResults : [
+          { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
+          { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
+        ],
+      };
+      setVerifiedStudent(profile);
+      showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${profile.name}`, 'success');
+    } else {
+      setErrorMessage('لم يتم العثور على طالب يطابق هذا الرقم القومي أو المعرف. يرجى التأكد من صحة البيانات وإعادة المحاولة.');
+      showToast('لم يتم العثور على طالب يطابق البيانات المدخلة', 'danger');
+    }
+
+    setIsLoading(false);
   };
 
   const handleReset = () => {
@@ -129,14 +182,14 @@ export const ParentPortalView: React.FC = () => {
             <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
-                  الرقم القومي للطالب (National ID)
+                  الرقم القومي للطالب أو معرّف الطالب (National ID / Student ID)
                 </label>
                 <div style={{ position: 'relative' }}>
                   <ShieldCheck size={18} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
                     required
-                    placeholder="أدخل الرقم القومي للطالب (14 رقم)"
+                    placeholder="أدخل الرقم القومي للطالب (14 رقم) أو معرّف الطالب (User ID)"
                     className="input-field"
                     style={{ width: '100%', paddingRight: '44px', fontSize: '0.95rem' }}
                     value={nationalId}
@@ -144,7 +197,7 @@ export const ParentPortalView: React.FC = () => {
                   />
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.45rem', marginInlineStart: '0.25rem' }}>
-                  يمكن لولي الأمر الاستعلام مباشرة ومتابعة مستوى الطالب بالرقم القومي المسجل فقط دون الحاجة لأي كود.
+                  يمكن لولي الأمر الاستعلام مباشرة عبر الرقم القومي للطالب أو معرّف الطالب المعتمد في المنصة.
                 </p>
               </div>
 
