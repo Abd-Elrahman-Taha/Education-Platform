@@ -134,4 +134,30 @@ export const studentsApi = {
   deleteStudent: async (userId: string): Promise<void> => {
     await apiClient.delete(`/users/students/${userId}`);
   },
+
+  /**
+   * Get all admin users (Admin-only).
+   * Backend endpoint: GET /users/admins
+   * Returns all users with Role === 'Admin'.
+   */
+  getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
+    const response = await apiClient.get<any>('/users/admins');
+    const raw = response.data;
+    // Handle multiple possible response shapes
+    const adminsList: AdminStudent[] = Array.isArray(raw?.data?.admins)
+      ? raw.data.admins
+      : Array.isArray(raw?.data?.users)
+      ? raw.data.users
+      : Array.isArray(raw?.admins)
+      ? raw.admins
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw)
+      ? raw
+      : [];
+    return {
+      admins: adminsList,
+      total: raw?.pagination?.total ?? raw?.results ?? adminsList.length,
+    };
+  },
 };

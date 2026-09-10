@@ -109,6 +109,10 @@ export const AdminView: React.FC = () => {
   const [examCourseFilter, setExamCourseFilter] = useState<string>('all');
   const [examStatusFilter, setExamStatusFilter] = useState<string>('all');
 
+  // ── ADMINS STATE ─────────────────────────────────────────────
+  const [realAdmins, setRealAdmins] = useState<AdminStudent[]>([]);
+  const [isAdminsLoading, setIsAdminsLoading] = useState(false);
+
   // ── QUESTIONS STATE ──────────────────────────────────────────
   const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
   const [selectedExamForQuestions, setSelectedExamForQuestions] = useState<Exam | null>(null);
@@ -324,6 +328,7 @@ export const AdminView: React.FC = () => {
         CourseId: examCourseFilter !== 'all' ? examCourseFilter : undefined,
         Status: examStatusFilter !== 'all' ? examStatusFilter : undefined,
         search: searchExam.trim() || undefined,
+        limit: 100,
       });
       let exams = res.exams || [];
       // Client-side filtering safeguard to ensure consistency across any backend implementation
@@ -374,11 +379,32 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  const loadAdmins = async () => {
+    setIsAdminsLoading(true);
+    try {
+      const res = await studentsApi.getAdmins();
+      setRealAdmins(res.admins);
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch admins:', err);
+      setRealAdmins([]);
+    } finally {
+      setIsAdminsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadStudents();
     loadCourses();
     loadExams();
+    loadAdmins();
   }, []);
+
+  // Reload data when switching tabs to ensure fresh data from API
+  useEffect(() => {
+    if (activeTab === 'exams') loadExams();
+    if (activeTab === 'admins') loadAdmins();
+    if (activeTab === 'students') loadStudents();
+  }, [activeTab]);
 
   useEffect(() => {
     if (selectedCourseForLessons) {
@@ -1200,7 +1226,7 @@ export const AdminView: React.FC = () => {
             <Shield size={16} />
             <span>إدارة المشرفين والمديرين</span>
             <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' }}>
-              {realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin').length}
+              {realAdmins.length}
             </span>
           </button>
         </div>
@@ -2105,12 +2131,12 @@ export const AdminView: React.FC = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                 <span className="gradient-badge">
-                  <Shield size={14} /> Admins & Roles Control
+                  <Shield size={14} /> Admins &amp; Roles Control
                 </span>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>إدارة صلاحيات المديرين والمشرفين</span>
               </div>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                لوحة التحكم في المديرين وتحويل الحسابات ({realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin').length})
+                لوحة التحكم في المديرين وتحويل الحسابات ({realAdmins.length})
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
                 استعراض حسابات الإدارة وسحب صلاحيات المدير وتحويل أي حساب إلى حساب طالب عادي فورياً.
@@ -2120,21 +2146,24 @@ export const AdminView: React.FC = () => {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={loadStudents}
+              onClick={loadAdmins}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
             >
-              <RefreshCw size={14} className={isStudentsLoading ? 'spin' : ''} /> تحديث القائمة
+              <RefreshCw size={14} className={isAdminsLoading ? 'spin' : ''} /> تحديث القائمة
             </button>
           </div>
 
-          {realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin').length === 0 ? (
+          {isAdminsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              جاري تحميل المديرين...
+            </div>
+          ) : realAdmins.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
               لا يوجد مديرون إضافيون مسجلون في المنصة حالياً.
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-              {realStudents
-                .filter(s => (s.Role || '').toLowerCase() === 'admin')
+              {realAdmins
                 .map(adminUser => (
                   <div
                     key={adminUser._id}
@@ -2225,7 +2254,7 @@ export const AdminView: React.FC = () => {
                             try {
                               await studentsApi.demoteAdminToStudent(adminUser._id);
                               showToast(`تم تحويل حساب (${adminUser.FullName}) إلى حساب طالب عادي بنجاح!`, 'success');
-                              await loadStudents();
+                              await loadAdmins();
                             } catch (err: any) {
                               showToast(getFriendlyErrorMessage(err, 'تعذر تحويل الحساب إلى طالب عادي'), 'error');
                             }
