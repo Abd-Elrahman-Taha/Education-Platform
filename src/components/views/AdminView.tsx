@@ -103,15 +103,30 @@ export const AdminView: React.FC = () => {
   const [isLessonsLoading, setIsLessonsLoading] = useState(false);
 
   // ── EXAMS STATE ──────────────────────────────────────────────
-  const [realExams, setRealExams] = useState<Exam[]>([]);
+  const [realExams, setRealExams] = useState<Exam[]>(() => {
+    try {
+      const stored = localStorage.getItem('platform_exams_registry');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isExamsLoading, setIsExamsLoading] = useState(false);
   const [searchExam, setSearchExam] = useState('');
   const [examCourseFilter, setExamCourseFilter] = useState<string>('all');
   const [examStatusFilter, setExamStatusFilter] = useState<string>('all');
 
   // ── ADMINS STATE ─────────────────────────────────────────────
-  const [realAdmins, setRealAdmins] = useState<AdminStudent[]>([]);
+  const [realAdmins, setRealAdmins] = useState<AdminStudent[]>(() => {
+    try {
+      const stored = localStorage.getItem('platform_admins_registry');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isAdminsLoading, setIsAdminsLoading] = useState(false);
+  const [isQuickPromoteOpen, setIsQuickPromoteOpen] = useState(false);
 
   // ── QUESTIONS STATE ──────────────────────────────────────────
   const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
@@ -281,6 +296,7 @@ export const AdminView: React.FC = () => {
         Status: studentStatusFilter !== 'all' ? studentStatusFilter : undefined,
       });
       setRealStudents(res.students);
+      loadAdmins(res.students);
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch students:', err);
     } finally {
@@ -325,10 +341,20 @@ export const AdminView: React.FC = () => {
     setIsExamsLoading(true);
     try {
       const res = await examsApi.getExams();
-      setRealExams(res.exams || []);
+      if (res.exams && res.exams.length > 0) {
+        setRealExams(res.exams);
+      } else {
+        try {
+          const stored = localStorage.getItem('platform_exams_registry');
+          if (stored) setRealExams(JSON.parse(stored));
+        } catch {}
+      }
     } catch (err: any) {
       console.warn('[API INFO] Exams list status:', err?.message || err);
-      setRealExams([]);
+      try {
+        const stored = localStorage.getItem('platform_exams_registry');
+        if (stored) setRealExams(JSON.parse(stored));
+      } catch {}
     } finally {
       setIsExamsLoading(false);
     }
@@ -379,18 +405,19 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  const loadAdmins = async () => {
+  const loadAdmins = async (studentsList?: AdminStudent[]) => {
     setIsAdminsLoading(true);
     try {
       const res = await studentsApi.getAdmins();
-      let admins = res.admins || [];
+      let admins = [...(res.admins || [])];
 
       // Also merge any users from realStudents whose Role is Admin or not Student
-      if (realStudents && realStudents.length > 0) {
-        for (const s of realStudents) {
+      const sourceStudents = (studentsList && studentsList.length > 0) ? studentsList : realStudents;
+      if (sourceStudents && sourceStudents.length > 0) {
+        for (const s of sourceStudents) {
           const r = (s.Role || (s as any).role || '').toLowerCase();
           if (r === 'admin' && !admins.some(a => a._id === s._id)) {
-            admins.push(s);
+            admins.push({ ...s, Role: 'Admin' });
           }
         }
       }
@@ -402,7 +429,7 @@ export const AdminView: React.FC = () => {
         if (!exists && currId) {
           const currentAdminObj: AdminStudent = {
             _id: currId,
-            FullName: currentUser.name || 'مدير المنصة الحالي (أنت)',
+            FullName: currentUser.name || 'مدير المنصة الرئيسي (أنت)',
             Phone: currentUser.phone || '',
             NationalId: currentUser.nationalId || '—',
             ParentPhone: '—',
@@ -412,9 +439,32 @@ export const AdminView: React.FC = () => {
           admins = [currentAdminObj, ...admins];
         }
       }
+
+      // Merge from persistent registry
+      try {
+        const stored = localStorage.getItem('platform_admins_registry');
+        if (stored) {
+          const parsed: AdminStudent[] = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            for (const a of parsed) {
+              if (!admins.some(x => x._id === a._id || (a.Phone && x.Phone === a.Phone))) {
+                admins.push(a);
+              }
+            }
+          }
+        }
+      } catch {}
+
       setRealAdmins(admins);
+      try {
+        localStorage.setItem('platform_admins_registry', JSON.stringify(admins));
+      } catch {}
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch admins:', err);
+      try {
+        const stored = localStorage.getItem('platform_admins_registry');
+        if (stored) setRealAdmins(JSON.parse(stored));
+      } catch {}
     } finally {
       setIsAdminsLoading(false);
     }
@@ -873,7 +923,6 @@ export const AdminView: React.FC = () => {
         isRandomized: true,
         isGated: true,
       });
-      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الاختبار، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
@@ -915,9 +964,8 @@ export const AdminView: React.FC = () => {
       setIsEditExamOpen(false);
       setEditingExam(null);
       if (updatedExam && updatedExam._id) {
-        setRealExams(prev => prev.map(e => e._id === updatedExam._id ? { ...e, ...updatedExam } : e));
+        setRealExams(prev => prev.map(e => e._id === updatedExam._id ? { ...e, ...editExamForm, ...updatedExam } : e));
       }
-      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
     }
@@ -929,7 +977,6 @@ export const AdminView: React.FC = () => {
       await examsApi.deleteExam(exam._id);
       showToast(`تم حذف الاختبار (${exam.Title}) بنجاح`, 'success');
       setRealExams(prev => prev.filter(e => e._id !== exam._id));
-      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الاختبار لوجود محاولات طلاب مسجلة عليه أو لارتباطه بمتطلب درس.'), 'error');
     }
@@ -941,7 +988,6 @@ export const AdminView: React.FC = () => {
       await examsApi.updateExam(exam._id, { Status: nextStatus });
       showToast(nextStatus === 'Published' ? 'تم نشر الاختبار بنجاح وبات متاحاً للطلاب!' : 'تم تحويل الاختبار إلى مسودة', 'success');
       setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: nextStatus } : e));
-      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تغيير حالة الاختبار. تأكد من إضافة أسئلة كافية وأن مجموع درجاتها يعادل أو يتجاوز درجة النجاح'), 'error');
     }
@@ -2202,14 +2248,24 @@ export const AdminView: React.FC = () => {
               </p>
             </div>
 
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={loadAdmins}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
-            >
-              <RefreshCw size={14} className={isAdminsLoading ? 'spin' : ''} /> تحديث القائمة
-            </button>
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsQuickPromoteOpen(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
+              >
+                <UserPlus size={14} /> ترقية طالب إلى مسؤول (Admin)
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => loadAdmins()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
+              >
+                <RefreshCw size={14} className={isAdminsLoading ? 'spin' : ''} /> تحديث القائمة
+              </button>
+            </div>
           </div>
 
           {isAdminsLoading ? (
@@ -2218,7 +2274,16 @@ export const AdminView: React.FC = () => {
             </div>
           ) : realAdmins.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              لا يوجد مديرون إضافيون مسجلون في المنصة حالياً.
+              <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🛡️</div>
+              <p style={{ marginBottom: '1rem' }}>لا يوجد مديرون مسجلون في القائمة حالياً.</p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsQuickPromoteOpen(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
+              >
+                <UserPlus size={14} /> ترقية حساب إلى مسؤول الآن
+              </button>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
@@ -2987,6 +3052,68 @@ export const AdminView: React.FC = () => {
                 }}
               >
                 {isPromoting ? 'جاري الترقية...' : 'تأكيد الترقية لمدير 👑'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: QUICK PROMOTE ADMIN ─────────────────────── */}
+      {isQuickPromoteOpen && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsQuickPromoteOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsQuickPromoteOpen(false)}><X size={18} /></button>
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '50px', height: '50px', borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 0.5rem'
+              }}>
+                <Shield size={24} />
+              </div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                ترقية مستخدم إلى مسؤول المنصة (Admin)
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                اختر الحساب المراد منحه كافة صلاحيات الإدارة
+              </span>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                اختر من قائمة الطلاب المسجلين:
+              </label>
+              <select
+                className="input-field"
+                style={{ width: '100%' }}
+                onChange={e => {
+                  const student = realStudents.find(s => s._id === e.target.value);
+                  if (student) {
+                    setIsQuickPromoteOpen(false);
+                    handleOpenPromoteModal(student);
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>-- اختر الحساب المطلوب ترقيته --</option>
+                {realStudents.map(s => (
+                  <option key={s._id} value={s._id}>
+                    {s.FullName} ({s.Phone}) {s.Role === 'Admin' ? '👑 مسؤول' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsQuickPromoteOpen(false)}
+                style={{ width: '100%' }}
+              >
+                إلغاء
               </button>
             </div>
           </div>

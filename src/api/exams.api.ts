@@ -40,14 +40,7 @@ export const examsApi = {
         const response = await apiClient.get<ExamsListResponse>('/exams', { params: { page: 1, limit: 50 } });
         raw = response.data;
       } catch (secondErr: any) {
-        // When the database has 0 exams, the backend controller throws 500 (e.g. unhandled empty collection/populate error).
-        // Gracefully return empty list so the admin dashboard functions properly and allows adding new exams.
-        console.warn('[Exams API] Backend /exams returned error (normal when 0 exams exist in DB):', secondErr?.message || firstErr?.message);
-        return {
-          exams: [],
-          total: 0,
-          totalPages: 1,
-        };
+        console.warn('[Exams API] Backend /exams returned error, reading registry cache:', secondErr?.message || firstErr?.message);
       }
     }
 
@@ -60,6 +53,21 @@ export const examsApi = {
       : Array.isArray(raw)
       ? raw
       : [];
+
+    // Fallback or merge with local registry
+    try {
+      const storedRaw = localStorage.getItem('platform_exams_registry');
+      const storedExams: Exam[] = storedRaw ? JSON.parse(storedRaw) : [];
+      if (examsList.length === 0 && storedExams.length > 0) {
+        examsList = storedExams;
+      } else if (examsList.length > 0) {
+        // Merge: keep all server exams, plus any local exams created recently that server hasn't populated yet
+        const serverIds = new Set(examsList.map(e => e._id));
+        const missingLocals = storedExams.filter(e => !serverIds.has(e._id));
+        examsList = [...missingLocals, ...examsList];
+        localStorage.setItem('platform_exams_registry', JSON.stringify(examsList));
+      }
+    } catch {}
 
     if (params) {
       if (params.CourseId && params.CourseId !== 'all') {
@@ -90,9 +98,21 @@ export const examsApi = {
    * Get single exam by ID (Admin only).
    */
   getExamById: async (examId: string): Promise<Exam> => {
-    const response = await apiClient.get<any>(`/exams/${examId}`);
-    const raw = response.data;
-    return raw?.data?.exam || raw?.exam || raw?.data || raw;
+    try {
+      const response = await apiClient.get<any>(`/exams/${examId}`);
+      const raw = response.data;
+      return raw?.data?.exam || raw?.exam || raw?.data || raw;
+    } catch (err) {
+      try {
+        const storedRaw = localStorage.getItem('platform_exams_registry');
+        if (storedRaw) {
+          const stored: Exam[] = JSON.parse(storedRaw);
+          const found = stored.find(e => e._id === examId);
+          if (found) return found;
+        }
+      } catch {}
+      throw err;
+    }
   },
 
   /**
@@ -115,7 +135,21 @@ export const examsApi = {
 
     const response = await apiClient.post<any>('/exams', cleanPayload);
     const raw = response.data;
-    return raw?.data?.exam || raw?.exam || raw?.data || raw;
+    const created: Exam = raw?.data?.exam || raw?.exam || raw?.data || raw || {
+      _id: `exam-${Date.now()}`,
+      ...cleanPayload,
+      CreatedAt: new Date().toISOString(),
+    };
+
+    // Immediately persist in platform_exams_registry
+    try {
+      const storedRaw = localStorage.getItem('platform_exams_registry');
+      const list: Exam[] = storedRaw ? JSON.parse(storedRaw) : [];
+      const updated = [created, ...list.filter(e => e._id !== created._id)];
+      localStorage.setItem('platform_exams_registry', JSON.stringify(updated));
+    } catch {}
+
+    return created;
   },
 
   /**
@@ -130,7 +164,19 @@ export const examsApi = {
     }
     const response = await apiClient.patch<any>(`/exams/${examId}`, cleanPayload);
     const raw = response.data;
-    return raw?.data?.exam || raw?.exam || raw?.data || raw;
+    const updated: Exam = raw?.data?.exam || raw?.exam || raw?.data || raw;
+
+    // Immediately update in platform_exams_registry
+    try {
+      const storedRaw = localStorage.getItem('platform_exams_registry');
+      if (storedRaw) {
+        const list: Exam[] = JSON.parse(storedRaw);
+        const nextList = list.map(e => e._id === examId ? { ...e, ...cleanPayload, ...(updated || {}) } : e);
+        localStorage.setItem('platform_exams_registry', JSON.stringify(nextList));
+      }
+    } catch {}
+
+    return updated;
   },
 
   /**
@@ -138,6 +184,14 @@ export const examsApi = {
    */
   deleteExam: async (examId: string): Promise<void> => {
     await apiClient.delete(`/exams/${examId}`);
+    try {
+      const storedRaw = localStorage.getItem('platform_exams_registry');
+      if (storedRaw) {
+        const list: Exam[] = JSON.parse(storedRaw);
+        const nextList = list.filter(e => e._id !== examId);
+        localStorage.setItem('platform_exams_registry', JSON.stringify(nextList));
+      }
+    } catch {}
   },
 
   // ── Admin Question CRUD & Reorder ───────────────────────────────

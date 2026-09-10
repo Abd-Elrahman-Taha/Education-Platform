@@ -92,8 +92,29 @@ export const studentsApi = {
    * Backend endpoint: PATCH /users/:userId/role with { Role: "Admin" }.
    * Note: The target user's active session is invalidated by the backend.
    */
-  promoteStudentToAdmin: async (userId: string): Promise<any> => {
+  /**
+   * Promote Student to Admin (Admin-only).
+   * Backend endpoint: PATCH /users/:userId/role with { Role: "Admin" }.
+   * Note: The target user's active session is invalidated by the backend.
+   */
+  promoteStudentToAdmin: async (userId: string, studentData?: Partial<AdminStudent>): Promise<any> => {
     const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Admin' });
+    try {
+      const stored = localStorage.getItem('platform_admins_registry');
+      const list: AdminStudent[] = stored ? JSON.parse(stored) : [];
+      const newAdmin: AdminStudent = {
+        _id: userId,
+        FullName: studentData?.FullName || 'مسؤول المنصة',
+        Phone: studentData?.Phone || '',
+        NationalId: studentData?.NationalId || '—',
+        ParentPhone: studentData?.ParentPhone || '—',
+        Role: 'Admin',
+        Status: 'Active',
+        ...(studentData || {}),
+      };
+      const updated = [newAdmin, ...list.filter(a => a._id !== userId)];
+      localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
+    } catch {}
     return response.data;
   },
 
@@ -104,11 +125,27 @@ export const studentsApi = {
   demoteAdminToStudent: async (userId: string): Promise<any> => {
     try {
       const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Student' });
+      try {
+        const stored = localStorage.getItem('platform_admins_registry');
+        if (stored) {
+          const list: AdminStudent[] = JSON.parse(stored);
+          const updated = list.filter(a => a._id !== userId);
+          localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
+        }
+      } catch {}
       return response.data;
     } catch (err: any) {
       // Fallback: some backends allow updating role via students endpoint
       try {
         const fallback = await apiClient.patch(`/users/students/${userId}`, { Role: 'Student' } as any);
+        try {
+          const stored = localStorage.getItem('platform_admins_registry');
+          if (stored) {
+            const list: AdminStudent[] = JSON.parse(stored);
+            const updated = list.filter(a => a._id !== userId);
+            localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
+          }
+        } catch {}
         return fallback.data;
       } catch {
         throw err;
@@ -119,10 +156,10 @@ export const studentsApi = {
   /**
    * Update student / admin role (Admin-only).
    */
-  updateStudentRole: async (userId: string, role: 'Admin' | 'Student' | string): Promise<any> => {
+  updateStudentRole: async (userId: string, role: 'Admin' | 'Student' | string, studentData?: Partial<AdminStudent>): Promise<any> => {
     const targetRole = role.toLowerCase() === 'admin' ? 'Admin' : 'Student';
     if (targetRole === 'Admin') {
-      return studentsApi.promoteStudentToAdmin(userId);
+      return studentsApi.promoteStudentToAdmin(userId, studentData);
     } else {
       return studentsApi.demoteAdminToStudent(userId);
     }
@@ -151,11 +188,26 @@ export const studentsApi = {
 
   /**
    * Get all admin users (Admin-only).
-   * Queries /users/students across all pages directly from the live API.
+   * Queries /users/students across all pages directly from the live API,
+   * plus checks the persistent admins registry so promoted/existing admins are always preserved.
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
     const userMap = new Map<string, AdminStudent>();
 
+    // 1. Load registry first so known admins are never empty
+    try {
+      const stored = localStorage.getItem('platform_admins_registry');
+      if (stored) {
+        const parsed: AdminStudent[] = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          for (const a of parsed) {
+            if (a && a._id) userMap.set(a._id, a);
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Query API /users/students across pages
     try {
       // First page with default limit 50
       const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 50, page: 1 } });
@@ -173,7 +225,10 @@ export const studentsApi = {
         : [];
 
       for (const u of list) {
-        if (u && u._id) userMap.set(u._id, u);
+        const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
+        if (r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student')) {
+          if (u && u._id) userMap.set(u._id, { ...u, Role: 'Admin' });
+        }
       }
 
       const totalItems = raw?.pagination?.total || raw?.results || raw?.total || list.length;
@@ -195,7 +250,10 @@ export const studentsApi = {
         const pagesData = await Promise.all(fetchPromises);
         for (const pList of pagesData) {
           for (const u of pList) {
-            if (u && u._id) userMap.set(u._id, u);
+            const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
+            if (r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student')) {
+              if (u && u._id) userMap.set(u._id, { ...u, Role: 'Admin' });
+            }
           }
         }
       }
@@ -203,17 +261,14 @@ export const studentsApi = {
       console.warn('Failed to fetch students from API for admin detection:', err);
     }
 
-    const allUsers = Array.from(userMap.values());
-
-    // Filter for Admin users directly from API response
-    const backendAdmins = allUsers.filter(u => {
-      const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
-      return r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student');
-    });
+    const allAdmins = Array.from(userMap.values());
+    try {
+      localStorage.setItem('platform_admins_registry', JSON.stringify(allAdmins));
+    } catch {}
 
     return {
-      admins: backendAdmins,
-      total: backendAdmins.length,
+      admins: allAdmins,
+      total: allAdmins.length,
     };
   },
 };
