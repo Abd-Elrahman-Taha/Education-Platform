@@ -129,16 +129,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const parsed = JSON.parse(saved);
       if (parsed) {
         const isAdmin = parsed.role === 'admin' || parsed.role === 'teacher';
-        // If name is placeholder / role / phone, check if we have the real FullName cached from signup/backend
-        if (isPlaceholderName(parsed.name, parsed.role)) {
-          const cachedName = (parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null)
-            || (parsed.id ? localStorage.getItem(`user_fullname_${parsed.id}`) : null)
-            || (isAdmin ? localStorage.getItem('admin_username') : null)
-            || localStorage.getItem('user_fullname_active');
+        // Always check if there is an updated name cached from admin edit or backend
+        const cachedUpdated = (parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null)
+          || (parsed.id ? localStorage.getItem(`user_fullname_${parsed.id}`) : null)
+          || (isAdmin ? localStorage.getItem('admin_username') : null)
+          || localStorage.getItem('user_fullname_active');
 
-          if (cachedName && !isPlaceholderName(cachedName, parsed.role)) {
-            parsed.name = cachedName.trim();
-          } else if (isAdmin) {
+        if (cachedUpdated && cachedUpdated.trim() && !isPlaceholderName(cachedUpdated, parsed.role)) {
+          parsed.name = cachedUpdated.trim();
+        } else if (isPlaceholderName(parsed.name, parsed.role)) {
+          if (isAdmin) {
             // NEVER use phone number for admin!
             parsed.name = 'مدير المنصة';
           } else if (parsed.phone) {
@@ -163,6 +163,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener('auth:logout', handleAuthLogout);
     return () => window.removeEventListener('auth:logout', handleAuthLogout);
+  }, []);
+
+  // Listen to real-time profile updates (e.g. from Admin Dashboard or Profile Page)
+  useEffect(() => {
+    const handleProfileUpdated = (event: any) => {
+      const detail = event?.detail;
+      if (!detail) return;
+      setCurrentUser((prev) => {
+        if (!prev) return null;
+        if (
+          (detail.userId && prev.id === detail.userId) ||
+          (detail.phone && prev.phone === detail.phone) ||
+          (!detail.userId && !detail.phone)
+        ) {
+          const updatedName = detail.fullName ? detail.fullName.trim() : prev.name;
+          const updatedPhone = detail.phone ? detail.phone.trim() : prev.phone;
+          const updatedRole = detail.role ? (detail.role.toLowerCase() === 'admin' ? 'admin' : 'student') : prev.role;
+          const updated: User = {
+            ...prev,
+            name: updatedName,
+            phone: updatedPhone,
+            role: updatedRole as UserRole,
+          };
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            if (updated.phone) {
+              localStorage.setItem(`user_fullname_${updated.phone.trim()}`, updatedName);
+            }
+            if (updated.id) {
+              localStorage.setItem(`user_fullname_${updated.id}`, updatedName);
+            }
+            localStorage.setItem('user_fullname_active', updatedName);
+          } catch {}
+          return updated;
+        }
+        return prev;
+      });
+    };
+
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.name) {
+            setCurrentUser((prev) => (prev && prev.name !== parsed.name ? parsed : prev));
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('user:profile-updated', handleProfileUpdated);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('user:profile-updated', handleProfileUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Sync state to localStorage
@@ -209,8 +266,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             const resolvedName =
               (nameFromApi && !isPlaceholderName(nameFromApi, normalizedRole) ? nameFromApi.trim() : null) ||
-              (adminLocalUser && !isPlaceholderName(adminLocalUser, normalizedRole) ? adminLocalUser.trim() : null) ||
               (cachedName && !isPlaceholderName(cachedName, normalizedRole) ? cachedName.trim() : null) ||
+              (adminLocalUser && !isPlaceholderName(adminLocalUser, normalizedRole) ? adminLocalUser.trim() : null) ||
               (!isPlaceholderName(payload.FullName, normalizedRole) ? payload.FullName.trim() : null) ||
               (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName.trim() : null) ||
               (!isPlaceholderName(payload.username, normalizedRole) ? payload.username.trim() : null) ||

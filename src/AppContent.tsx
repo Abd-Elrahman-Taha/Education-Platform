@@ -341,6 +341,7 @@ export const AppContent: React.FC = () => {
             <StandaloneExamsView
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               onNavigateView={handleNavigateView}
+              onSelectExam={handleOpenExam}
             />
           </RoleGuard>
         )}

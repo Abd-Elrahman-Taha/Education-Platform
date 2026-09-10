@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { examsApi } from '../api/examsApi';
+import { examsApi as backendExamsApi } from '../../../api/exams.api';
 import { ExamRecord, ACADEMIC_YEAR_LABELS, AcademicYear } from '../../../types';
+import { Exam } from '../../../types/api.types';
 import { useAuth } from '../../../context/AuthContext';
 import { coursesApi } from '../../../api/courses.api';
 import { studentsApi } from '../../../api/students.api';
@@ -14,15 +16,29 @@ import {
 interface StandaloneExamsViewProps {
   onOpenAuthModal?: () => void;
   onNavigateView?: (view: any, lessonId?: string) => void;
+  onSelectExam?: (examId: string) => void;
 }
 
-export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpenAuthModal, onNavigateView }) => {
+export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpenAuthModal, onNavigateView, onSelectExam }) => {
   const { currentUser, isAuthenticated } = useAuth();
   const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'teacher';
 
   const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'failed' | 'completed'>('all');
   const [selectedExamDetail, setSelectedExamDetail] = useState<ExamRecord | null>(null);
   const [guestYear, setGuestYear] = useState<AcademicYear>('third_secondary');
+
+  const { data: publishedExamsRes, isLoading: isPublishedExamsLoading } = useQuery({
+    queryKey: ['availablePublishedExams'],
+    queryFn: () => backendExamsApi.getExams(),
+  });
+  const allRawExams: Exam[] = publishedExamsRes?.exams || [];
+  const availableExams = allRawExams.filter(e => e.Status === 'Published' || !e.Status);
+
+  const { data: allCoursesData } = useQuery({
+    queryKey: ['allCoursesForExamCards'],
+    queryFn: () => coursesApi.getCourses(),
+  });
+  const allCourses = allCoursesData?.courses || [];
 
   const { data: historyRes, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['examHistory'],
@@ -380,12 +396,110 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>أرشيف السجل والنتائج</span>
           </div>
           <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-            سجل وتاريخ الامتحانات (Exams History & Statistics)
+            الامتحانات والتقييمات التفاعلية (Interactive Exams)
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.35rem' }}>
-            تأدية الامتحانات التفاعلية تكون داخل صفحات الدروس المحددة. هذه الصفحة مخصصة لعرض التحليلات والتاريخ والنتائج السابقة.
+            استعرض كافة الاختبارات التفاعلية المتاحة لبدء التقييم الإلكتروني فوراً، أو تابع تحليلات وأرشيف محاولاتك السابقة.
           </p>
         </div>
+      </div>
+
+      {/* ── AVAILABLE INTERACTIVE EXAMS CATALOG ─────────────── */}
+      <div className="glass-card" style={{ padding: '2rem', marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+              <span className="gradient-badge">
+                <Sparkles size={13} /> امتحانات تفاعلية
+              </span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>نظام البابل شيت والتصحيح الفوري</span>
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+              الاختبارات التفاعلية المتاحة ({availableExams.length})
+            </h2>
+          </div>
+        </div>
+
+        {isPublishedExamsLoading ? (
+          <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            جاري تحميل الاختبارات المتاحة...
+          </div>
+        ) : availableExams.length === 0 ? (
+          <div style={{ padding: '2.5rem', textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            لا توجد اختبارات تفاعلية منشورة حالياً. يرجى متابعة التحديثات مع المعلم.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' }}>
+            {availableExams.map(exam => {
+              const examCourseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
+              const courseMatch = allCourses.find((c: any) => c._id === examCourseId);
+              const courseTitle = courseMatch?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : 'كورس تعليمي');
+
+              return (
+                <div
+                  key={exam._id}
+                  className="glass-card"
+                  style={{
+                    padding: '1.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    border: '1px solid var(--border-glass)',
+                    background: 'rgba(255, 255, 255, 0.02)'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <span style={{
+                        fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.6rem',
+                        borderRadius: '9999px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981'
+                      }}>
+                        متاح للتقديم الآن
+                      </span>
+                      {exam.IsGated && (
+                        <span style={{ fontSize: '0.72rem', color: '#F59E0B', fontWeight: 600 }}>
+                          مشروط 🔒
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
+                      {exam.Title}
+                    </h3>
+
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div>
+                        <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {courseTitle}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                        <span>⏱ المدة: {exam.DurationMinutes} دقيقة</span>
+                        <span>🎯 النجاح: {exam.PassingScore}</span>
+                        <span>🔄 المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '0.6rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', marginTop: '0.5rem' }}
+                    onClick={() => {
+                      if (onSelectExam) {
+                        onSelectExam(exam._id);
+                      } else if (onNavigateView) {
+                        onNavigateView('view-exam-session', exam._id);
+                      } else {
+                        window.location.href = `/exams/${exam._id}`;
+                      }
+                    }}
+                  >
+                    <Award size={16} /> بدء الاختبار الآن
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── EXAM STATISTICS SUMMARY ────────────────────────── */}

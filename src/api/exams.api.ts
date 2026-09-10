@@ -33,8 +33,16 @@ export const examsApi = {
       delete cleanParams.search;
     }
     const response = await apiClient.get<ExamsListResponse>('/exams', { params: cleanParams });
-    const raw = response.data;
-    const examsList: Exam[] = raw?.data?.exams || raw?.exams || (Array.isArray(raw) ? raw : []);
+    const raw = response.data as any;
+    const examsList: Exam[] = Array.isArray(raw?.data?.exams)
+      ? raw.data.exams
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw?.exams)
+      ? raw.exams
+      : Array.isArray(raw)
+      ? raw
+      : [];
     const pagination = raw?.pagination || { total: examsList.length, totalPages: 1, page: 1, limit: 50 };
     return {
       exams: examsList,
@@ -48,7 +56,8 @@ export const examsApi = {
    */
   getExamById: async (examId: string): Promise<Exam> => {
     const response = await apiClient.get<any>(`/exams/${examId}`);
-    return response.data?.data?.exam || response.data?.exam || response.data;
+    const raw = response.data;
+    return raw?.data?.exam || raw?.exam || raw?.data || raw;
   },
 
   /**
@@ -56,7 +65,8 @@ export const examsApi = {
    */
   createExam: async (data: CreateExamRequest): Promise<Exam> => {
     const response = await apiClient.post<any>('/exams', data);
-    return response.data?.data?.exam || response.data?.exam || response.data;
+    const raw = response.data;
+    return raw?.data?.exam || raw?.exam || raw?.data || raw;
   },
 
   /**
@@ -64,7 +74,8 @@ export const examsApi = {
    */
   updateExam: async (examId: string, data: UpdateExamRequest): Promise<Exam> => {
     const response = await apiClient.patch<any>(`/exams/${examId}`, data);
-    return response.data?.data?.exam || response.data?.exam || response.data;
+    const raw = response.data;
+    return raw?.data?.exam || raw?.exam || raw?.data || raw;
   },
 
   /**
@@ -80,8 +91,16 @@ export const examsApi = {
    */
   getQuestions: async (examId: string): Promise<Question[]> => {
     const response = await apiClient.get<any>(`/exams/${examId}/questions`);
-    const raw = response.data;
-    return raw?.data?.questions || raw?.questions || (Array.isArray(raw) ? raw : []);
+    const raw = response.data as any;
+    return Array.isArray(raw?.data?.questions)
+      ? raw.data.questions
+      : Array.isArray(raw?.questions)
+      ? raw.questions
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw)
+      ? raw
+      : [];
   },
 
   /**
@@ -94,7 +113,8 @@ export const examsApi = {
       delete payload.CorrectAnswer;
     }
     const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
-    return response.data?.data?.question || response.data?.question || response.data;
+    const raw = response.data;
+    return raw?.data?.question || raw?.question || raw?.data || raw;
   },
 
   /**
@@ -111,7 +131,8 @@ export const examsApi = {
       delete payload.CorrectAnswer;
     }
     const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
-    return response.data?.data?.question || response.data?.question || response.data;
+    const raw = response.data;
+    return raw?.data?.question || raw?.question || raw?.data || raw;
   },
 
   /**
@@ -134,8 +155,16 @@ export const examsApi = {
    */
   getExamAttempts: async (examId: string): Promise<ExamAttempt[]> => {
     const response = await apiClient.get<ExamAttemptsResponse>(`/exams/${examId}/attempts`);
-    const raw = response.data;
-    return raw?.data?.attempts || raw?.attempts || (Array.isArray(raw) ? raw : []);
+    const raw = response.data as any;
+    return Array.isArray(raw?.data?.attempts)
+      ? raw.data.attempts
+      : Array.isArray(raw?.attempts)
+      ? raw.attempts
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw)
+      ? raw
+      : [];
   },
 
   /**
@@ -143,8 +172,16 @@ export const examsApi = {
    */
   getMyExamAttempts: async (examId: string): Promise<ExamAttempt[]> => {
     const response = await apiClient.get<ExamAttemptsResponse>(`/exams/${examId}/attempts/my`);
-    const raw = response.data;
-    return raw?.data?.attempts || raw?.attempts || (Array.isArray(raw) ? raw : []);
+    const raw = response.data as any;
+    return Array.isArray(raw?.data?.attempts)
+      ? raw.data.attempts
+      : Array.isArray(raw?.attempts)
+      ? raw.attempts
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw)
+      ? raw
+      : [];
   },
 
   // ── Student Exam Execution (Existing) ────────────────────────────

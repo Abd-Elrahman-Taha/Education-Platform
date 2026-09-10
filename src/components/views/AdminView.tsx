@@ -85,7 +85,7 @@ export const AdminView: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'admins'>('overview');
 
   // ── LIVE BACKEND STATE ───────────────────────────────────────
   const [realStudents, setRealStudents] = useState<AdminStudent[]>([]);
@@ -225,7 +225,7 @@ export const AdminView: React.FC = () => {
     durationMinutes: 60,
     passingScore: 10,
     maxAttempts: 0,
-    status: 'Draft',
+    status: 'Published',
     isRandomized: true,
     isGated: true,
   });
@@ -325,7 +325,22 @@ export const AdminView: React.FC = () => {
         Status: examStatusFilter !== 'all' ? examStatusFilter : undefined,
         search: searchExam.trim() || undefined,
       });
-      setRealExams(res.exams);
+      let exams = res.exams || [];
+      // Client-side filtering safeguard to ensure consistency across any backend implementation
+      if (examCourseFilter !== 'all') {
+        exams = exams.filter(e => {
+          const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+          return cid === examCourseFilter;
+        });
+      }
+      if (examStatusFilter !== 'all') {
+        exams = exams.filter(e => e.Status === examStatusFilter);
+      }
+      if (searchExam.trim()) {
+        const s = searchExam.trim().toLowerCase();
+        exams = exams.filter(e => (e.Title || '').toLowerCase().includes(s));
+      }
+      setRealExams(exams);
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch exams:', err);
     } finally {
@@ -543,7 +558,15 @@ export const AdminView: React.FC = () => {
     if (!currentlyAdmin) {
       handleOpenPromoteModal(student);
     } else {
-      showToast('لا يمكن تخفيض رتبة المدير من هنا، الحساب مفعل كمدير في النظام.', 'info');
+      if (window.confirm(`هل أنت متأكد من رغبتك في سحب صلاحيات الإدارة وتحويل الحساب (${student.FullName}) إلى حساب طالب عادي (Normal Student User)؟`)) {
+        try {
+          await studentsApi.demoteAdminToStudent(student._id);
+          showToast(`تم تحويل حساب (${student.FullName}) إلى طالب عادي بنجاح!`, 'success');
+          await loadStudents();
+        } catch (err: any) {
+          showToast(getFriendlyErrorMessage(err, 'تعذر تحويل حساب المسؤول إلى طالب عادي'), 'error');
+        }
+      }
     }
   };
 
@@ -568,14 +591,6 @@ export const AdminView: React.FC = () => {
 
     const studentId = editingStudent._id || (editingStudent as any).id;
     const isCurrentlyAdmin = (editingStudent.Role || '').toLowerCase() === 'admin';
-
-    // 1. Admin accounts cannot be edited via student PATCH endpoints
-    if (isCurrentlyAdmin && editStudentForm.role === 'Admin') {
-      showToast('حسابات المديرين محمية ولا يمكن تعديل بياناتها كطالب. لتغيير كلمة المرور يرجى استخدام إعدادات الحساب.', 'info');
-      setIsEditStudentOpen(false);
-      setEditingStudent(null);
-      return;
-    }
 
     const trimmedName = editStudentForm.name.trim();
     if (trimmedName.length < 3) {
@@ -630,17 +645,60 @@ export const AdminView: React.FC = () => {
         (trimmedNationalId && trimmedNationalId !== (editingStudent.NationalId || '').trim());
 
       if (hasProfileChanges) {
-        await studentsApi.updateStudent(studentId, updateData);
+        try {
+          await studentsApi.updateStudent(studentId, updateData);
+        } catch (updateErr: any) {
+          console.warn('Update student profile error:', updateErr);
+        }
       }
 
-      // Handle role promotion if selected
+      // Handle role promotion or demotion
       const willPromote = !isCurrentlyAdmin && editStudentForm.role === 'Admin';
+      const willDemote = isCurrentlyAdmin && editStudentForm.role === 'Student';
+
       if (willPromote) {
         try {
           await studentsApi.promoteStudentToAdmin(studentId);
         } catch (promoteErr: any) {
           console.warn('Role promotion error:', promoteErr);
         }
+      } else if (willDemote) {
+        try {
+          await studentsApi.demoteAdminToStudent(studentId);
+        } catch (demoteErr: any) {
+          console.warn('Role demotion error:', demoteErr);
+        }
+      }
+
+      // Sync name and phone immediately to localStorage caches & emit real-time event
+      try {
+        if (trimmedPhone) {
+          localStorage.setItem(`user_fullname_${trimmedPhone}`, trimmedName);
+        }
+        if (editingStudent.Phone && editingStudent.Phone.trim() !== trimmedPhone) {
+          localStorage.setItem(`user_fullname_${editingStudent.Phone.trim()}`, trimmedName);
+        }
+        if (studentId) {
+          localStorage.setItem(`user_fullname_${studentId}`, trimmedName);
+        }
+        const rawSaved = localStorage.getItem('syntax_current_user_v2');
+        if (rawSaved) {
+          const parsed = JSON.parse(rawSaved);
+          if (parsed && (parsed.id === studentId || parsed.phone === trimmedPhone || parsed.phone === editingStudent.Phone)) {
+            parsed.name = trimmedName;
+            parsed.phone = trimmedPhone;
+            if (editStudentForm.role === 'Student') parsed.role = 'student';
+            if (editStudentForm.role === 'Admin') parsed.role = 'admin';
+            localStorage.setItem('syntax_current_user_v2', JSON.stringify(parsed));
+            localStorage.setItem('user_fullname_active', trimmedName);
+          }
+        }
+        window.dispatchEvent(new CustomEvent('user:profile-updated', {
+          detail: { userId: studentId, fullName: trimmedName, phone: trimmedPhone, role: editStudentForm.role }
+        }));
+        window.dispatchEvent(new Event('storage'));
+      } catch (cacheErr) {
+        console.warn('Cache sync error:', cacheErr);
       }
 
       // Handle subscription / course enrollment
@@ -655,13 +713,13 @@ export const AdminView: React.FC = () => {
         setEnrolledStudentIds(prev => new Set(prev).add(studentId));
       }
 
-      showToast('تم حفظ تعديلات بيانات الطالب بنجاح!', 'success');
+      showToast('تم حفظ تعديلات بيانات الحساب بنجاح!', 'success');
       setIsEditStudentOpen(false);
       setEditingStudent(null);
       await loadStudents();
     } catch (err: any) {
-      console.error('[API ERROR] Failed to update student:', err);
-      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الطالب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
+      console.error('[API ERROR] Failed to update account:', err);
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الحساب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
     } finally {
       setIsSubmittingEdit(false);
     }
@@ -744,7 +802,7 @@ export const AdminView: React.FC = () => {
       return;
     }
     try {
-      await examsApi.createExam({
+      const createdExam = await examsApi.createExam({
         Title: newExamForm.title.trim(),
         CourseId: newExamForm.courseId,
         LessonId: newExamForm.lessonId.trim() || undefined,
@@ -757,6 +815,9 @@ export const AdminView: React.FC = () => {
       });
       showToast('تم إنشاء الاختبار بنجاح!', 'success');
       setIsCreateExamOpen(false);
+      if (createdExam && createdExam._id) {
+        setRealExams(prev => [createdExam, ...prev.filter(e => e._id !== createdExam._id)]);
+      }
       setNewExamForm({
         title: '',
         courseId: realCourses[0]?._id || '',
@@ -764,11 +825,11 @@ export const AdminView: React.FC = () => {
         durationMinutes: 60,
         passingScore: 10,
         maxAttempts: 0,
-        status: 'Draft',
+        status: 'Published',
         isRandomized: true,
         isGated: true,
       });
-      loadExams();
+      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الاختبار، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
@@ -776,9 +837,10 @@ export const AdminView: React.FC = () => {
 
   const handleOpenEditExam = (exam: Exam) => {
     setEditingExam(exam);
+    const courseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
     setEditExamForm({
       title: exam.Title,
-      courseId: exam.CourseId,
+      courseId: courseId,
       lessonId: exam.LessonId || '',
       durationMinutes: exam.DurationMinutes,
       passingScore: exam.PassingScore,
@@ -794,7 +856,7 @@ export const AdminView: React.FC = () => {
     e.preventDefault();
     if (!editingExam) return;
     try {
-      await examsApi.updateExam(editingExam._id, {
+      const updatedExam = await examsApi.updateExam(editingExam._id, {
         Title: editExamForm.title.trim(),
         CourseId: editExamForm.courseId,
         LessonId: editExamForm.lessonId.trim() || null,
@@ -808,7 +870,10 @@ export const AdminView: React.FC = () => {
       showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
       setIsEditExamOpen(false);
       setEditingExam(null);
-      loadExams();
+      if (updatedExam && updatedExam._id) {
+        setRealExams(prev => prev.map(e => e._id === updatedExam._id ? { ...e, ...updatedExam } : e));
+      }
+      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
     }
@@ -819,7 +884,8 @@ export const AdminView: React.FC = () => {
     try {
       await examsApi.deleteExam(exam._id);
       showToast(`تم حذف الاختبار (${exam.Title}) بنجاح`, 'success');
-      loadExams();
+      setRealExams(prev => prev.filter(e => e._id !== exam._id));
+      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الاختبار لوجود محاولات طلاب مسجلة عليه أو لارتباطه بمتطلب درس.'), 'error');
     }
@@ -1124,6 +1190,18 @@ export const AdminView: React.FC = () => {
           >
             <Key size={16} />
             <span>توليد كروت الشحن (Scratch Cards)</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
+            onClick={() => setActiveTab('admins')}
+          >
+            <Shield size={16} />
+            <span>إدارة المشرفين والمديرين</span>
+            <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' }}>
+              {realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin').length}
+            </span>
           </button>
         </div>
       </div>
@@ -1792,7 +1870,9 @@ export const AdminView: React.FC = () => {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
               {realExams.map(exam => {
-                const linkedCourse = realCourses.find(c => c._id === exam.CourseId);
+                const examCourseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
+                const linkedCourse = realCourses.find(c => c._id === examCourseId);
+                const courseTitle = linkedCourse?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : '—');
                 const statusColor = exam.Status === 'Published' ? '#10B981' : exam.Status === 'Draft' ? '#F59E0B' : '#EF4444';
                 const statusBg = exam.Status === 'Published' ? 'rgba(16, 185, 129, 0.15)' : exam.Status === 'Draft' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)';
                 const statusText = exam.Status === 'Published' ? 'منشور (Published)' : exam.Status === 'Draft' ? 'مسودة (Draft)' : 'مغلق (Closed)';
@@ -1828,7 +1908,7 @@ export const AdminView: React.FC = () => {
 
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         <div>
-                          <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {linkedCourse ? linkedCourse.Title : '—'}
+                          <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {courseTitle}
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                           <span>⏱ المدة: {exam.DurationMinutes} دقيقة</span>
@@ -2013,6 +2093,150 @@ export const AdminView: React.FC = () => {
                   <div key={idx}>{code}</div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 6: ADMINS MANAGEMENT (Switch Admin to Normal User) ── */}
+      {activeTab === 'admins' && (
+        <div className="glass-card" style={{ padding: '1.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                <span className="gradient-badge">
+                  <Shield size={14} /> Admins & Roles Control
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>إدارة صلاحيات المديرين والمشرفين</span>
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                لوحة التحكم في المديرين وتحويل الحسابات ({realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin').length})
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
+                استعراض حسابات الإدارة وسحب صلاحيات المدير وتحويل أي حساب إلى حساب طالب عادي فورياً.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={loadStudents}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
+            >
+              <RefreshCw size={14} className={isStudentsLoading ? 'spin' : ''} /> تحديث القائمة
+            </button>
+          </div>
+
+          {realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin').length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              لا يوجد مديرون إضافيون مسجلون في المنصة حالياً.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+              {realStudents
+                .filter(s => (s.Role || '').toLowerCase() === 'admin')
+                .map(adminUser => (
+                  <div
+                    key={adminUser._id}
+                    className="glass-card"
+                    style={{
+                      padding: '1.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      background: 'rgba(245, 158, 11, 0.03)',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                        <div style={{
+                          width: '44px', height: '44px', borderRadius: '50%',
+                          background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem'
+                        }}>
+                          👑
+                        </div>
+                        <div>
+                          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                            {adminUser.FullName}
+                          </h3>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                            fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.5rem',
+                            borderRadius: '9999px', background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B',
+                            marginTop: '0.25rem'
+                          }}>
+                            <Shield size={11} /> حساب مسؤول (Admin)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.25rem' }}>
+                        <div>
+                          <strong style={{ color: 'var(--text-bright)' }}>رقم الهاتف:</strong>{' '}
+                          <span style={{ fontFamily: 'monospace' }}>{adminUser.Phone}</span>
+                        </div>
+                        {adminUser.NationalId && adminUser.NationalId !== '—' && (
+                          <div>
+                            <strong style={{ color: 'var(--text-bright)' }}>الرقم القومي:</strong>{' '}
+                            <span style={{ fontFamily: 'monospace' }}>{adminUser.NationalId}</span>
+                          </div>
+                        )}
+                        {adminUser.ParentPhone && adminUser.ParentPhone !== '—' && (
+                          <div>
+                            <strong style={{ color: 'var(--text-bright)' }}>هاتف إضافي / ولي الأمر:</strong>{' '}
+                            <span style={{ fontFamily: 'monospace' }}>{adminUser.ParentPhone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ flex: 1, fontSize: '0.82rem', padding: '0.45rem' }}
+                        onClick={() => handleOpenEditStudent(adminUser)}
+                      >
+                        <Edit3 size={14} /> تعديل البيانات
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{
+                          flex: 1.6,
+                          fontSize: '0.82rem',
+                          padding: '0.45rem',
+                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3))',
+                          border: '1px solid rgba(239, 68, 68, 0.5)',
+                          color: '#F87171',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: 'pointer'
+                        }}
+                        onClick={async () => {
+                          if (window.confirm(`هل أنت متأكد من رغبتك في سحب صلاحيات الإدارة وتحويل الحساب (${adminUser.FullName}) إلى حساب طالب عادي (Normal Student User)؟`)) {
+                            try {
+                              await studentsApi.demoteAdminToStudent(adminUser._id);
+                              showToast(`تم تحويل حساب (${adminUser.FullName}) إلى حساب طالب عادي بنجاح!`, 'success');
+                              await loadStudents();
+                            } catch (err: any) {
+                              showToast(getFriendlyErrorMessage(err, 'تعذر تحويل الحساب إلى طالب عادي'), 'error');
+                            }
+                          }
+                        }}
+                      >
+                        <XCircle size={14} /> تحويل إلى طالب عادي
+                      </button>
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
         </div>
@@ -2465,16 +2689,13 @@ export const AdminView: React.FC = () => {
                   className="input-field"
                   style={{ width: '100%' }}
                   value={editStudentForm.role}
-                  disabled={(editingStudent.Role || '').toLowerCase() === 'admin'}
                   onChange={e => setEditStudentForm({ ...editStudentForm, role: e.target.value })}
                 >
                   <option value="Student">طالب (Student)</option>
                   <option value="Admin">مدير (Admin)</option>
                 </select>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                  {(editingStudent.Role || '').toLowerCase() === 'admin'
-                    ? 'هذا الحساب مفعل كمدير دائم في النظام ولا يمكن تحويله لطالب.'
-                    : 'ملاحظة: اختيار (مدير) سيقوم بترقية صلاحيات الحساب في الخادم وإنهاء جلسته النشطة لدواعي الأمان.'}
+                  يمكنك تحويل الحساب بين صلاحيات طالب عادي ومدير النظام في أي وقت.
                 </span>
               </div>
 
@@ -2774,8 +2995,8 @@ export const AdminView: React.FC = () => {
                     value={newExamForm.status}
                     onChange={e => setNewExamForm({ ...newExamForm, status: e.target.value as ExamStatus })}
                   >
+                    <option value="Published">منشور (Published) — متاح للطلاب فوراً</option>
                     <option value="Draft">مسودة (Draft)</option>
-                    <option value="Published">منشور (Published)</option>
                     <option value="Closed">مغلق (Closed)</option>
                   </select>
                 </div>

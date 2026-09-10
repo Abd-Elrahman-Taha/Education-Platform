@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BookOpen, Lock, Play, ArrowRight, ShieldCheck, Award, Clock, AlertCircle } from 'lucide-react';
 import { useCourseDetails } from '../../hooks/useCourseDetails';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/common/ErrorState';
 import { CheckoutModal } from '../../components/payment/CheckoutModal';
-import { Lesson } from '../../types/api.types';
+import { Lesson, Exam } from '../../types/api.types';
+import { examsApi } from '../../api/exams.api';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface CourseDetailsPageProps {
@@ -32,6 +33,28 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
   } = useCourseDetails(courseId);
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [courseExams, setCourseExams] = useState<Exam[]>([]);
+  const [isExamsLoading, setIsExamsLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsExamsLoading(true);
+    examsApi.getExams({ CourseId: courseId })
+      .then(res => {
+        if (!isMounted) return;
+        const all = res.exams || [];
+        const matched = all.filter(e => {
+          const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+          return cid === courseId && (e.Status === 'Published' || !e.Status);
+        });
+        setCourseExams(matched);
+      })
+      .catch(err => console.error('Failed to load course exams:', err))
+      .finally(() => {
+        if (isMounted) setIsExamsLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, [courseId]);
 
   if (isLoading) {
     return <LoadingSpinner message="جاري تحميل بيانات الكورس والمحاضرات..." size="lg" />;
@@ -244,6 +267,82 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* ── COURSE EXAMS & ASSESSMENTS SECTION ─────────────── */}
+      <div className="glass-card" style={{ padding: '2rem', marginTop: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Award size={22} color="var(--primary-light)" /> امتحانات واختبارات الكورس ({courseExams.length})
+            </h2>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              اختبارات إلكترونية تفاعلية بنظام البابل شيت والتصحيح الفوري
+            </span>
+          </div>
+        </div>
+
+        {isExamsLoading ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+            جاري تحميل الاختبارات...
+          </div>
+        ) : courseExams.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--bg-subtle)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            لا توجد امتحانات منشورة لهذا الكورس حالياً.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+            {courseExams.map(exam => (
+              <div
+                key={exam._id}
+                className="glass-card"
+                style={{
+                  padding: '1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  border: '1px solid var(--border-glass)',
+                  background: 'rgba(255, 255, 255, 0.02)'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{
+                      fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.55rem',
+                      borderRadius: '9999px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981'
+                    }}>
+                      اختبار متاح
+                    </span>
+                    {exam.IsGated && (
+                      <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: 600 }}>
+                        مشروط 🔒
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
+                    {exam.Title}
+                  </h3>
+
+                  <div style={{ display: 'flex', gap: '0.85rem', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    <span>⏱ {exam.DurationMinutes} دقيقة</span>
+                    <span>🎯 درجة النجاح: {exam.PassingScore}</span>
+                    <span>🔄 المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                  onClick={() => onSelectExam(exam._id)}
+                >
+                  <Award size={15} /> بدء الامتحان الآن
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>

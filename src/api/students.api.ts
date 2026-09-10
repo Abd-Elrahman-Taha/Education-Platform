@@ -97,13 +97,21 @@ export const studentsApi = {
   },
 
   /**
-   * Update student role (promote to Admin).
+   * Demote Admin to normal Student user (Admin-only).
+   * Backend endpoint: PATCH /users/:userId/role with { Role: "Student" }.
    */
-  updateStudentRole: async (userId: string, role: string): Promise<any> => {
-    if (role === 'Admin') {
-      return studentsApi.promoteStudentToAdmin(userId);
-    }
-    return { status: 'success', role };
+  demoteAdminToStudent: async (userId: string): Promise<any> => {
+    const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Student' });
+    return response.data;
+  },
+
+  /**
+   * Update student / admin role (Admin-only).
+   */
+  updateStudentRole: async (userId: string, role: 'Admin' | 'Student' | string): Promise<any> => {
+    const targetRole = role.toLowerCase() === 'admin' ? 'Admin' : 'Student';
+    const response = await apiClient.patch(`/users/${userId}/role`, { Role: targetRole });
+    return response.data;
   },
 
   /**
