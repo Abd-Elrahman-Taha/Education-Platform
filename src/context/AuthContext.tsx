@@ -4,7 +4,6 @@ import { authApi } from '../api/auth.api';
 import { apiClient, AUTH_TOKEN_KEY } from '../api/axios';
 import { getDeviceUuid } from '../utils/device';
 import { isPlaceholderName } from '../utils/user';
-import { mockDB } from '../services/db';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -148,28 +147,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             parsed.name = 'حساب الطالب';
           }
         }
-        // Check for live admin override
-        if (parsed.phone) {
-          const cachedRole = localStorage.getItem(`account_role_${parsed.phone.trim()}`);
-          if (cachedRole) {
-            parsed.role = cachedRole as UserRole;
-          }
-          const subRaw = localStorage.getItem(`account_subscription_${parsed.phone.trim()}`);
-          if (subRaw) {
-            try {
-              const subObj = JSON.parse(subRaw);
-              parsed.isSubscribed = subObj.isSubscribed ?? false;
-              parsed.subscribedYear = subObj.subscribedYear || 'third_secondary';
-              parsed.subscription = {
-                isActive: !!subObj.isSubscribed,
-                year: subObj.subscribedYear || 'third_secondary',
-                plan: subObj.plan || 'باقة التفوق',
-              };
-            } catch {}
-          }
-        }
+        return parsed;
       }
-      return parsed;
+      return null;
     } catch {
       return null;
     }
@@ -212,22 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userId = payload.userId || payload.sub || payload._id;
         const phone = payload.Phone || payload.phone || '';
 
-        // Check if role was upgraded by admin in dashboard
-        const cachedRole = phone
-          ? localStorage.getItem(`account_role_${phone.trim()}`) || (userId ? localStorage.getItem(`account_role_${userId}`) : null)
-          : null;
-        const normalizedRole: UserRole = cachedRole === 'admin' ? 'admin' : (cachedRole === 'student' ? 'student' : (isAdmin ? 'admin' : 'student'));
-
-        // Check for subscription override
-        let studentSub: any = undefined;
-        if (phone || userId) {
-          try {
-            const subRaw = (phone && localStorage.getItem(`account_subscription_${phone.trim()}`)) || (userId && localStorage.getItem(`account_subscription_${userId}`));
-            if (subRaw) {
-              studentSub = JSON.parse(subRaw);
-            }
-          } catch {}
-        }
+        const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
 
         // Automatically fetch real student / user name from live backend API
         if (userId || phone) {
@@ -280,26 +245,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     status: 'active',
                     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
                     registrationDate: new Date().toISOString().slice(0, 10),
-                    isSubscribed: studentSub?.isSubscribed ?? false,
-                    subscribedYear: studentSub?.subscribedYear || 'third_secondary',
-                    subscription: studentSub ? {
-                      isActive: !!studentSub.isSubscribed,
-                      year: studentSub.subscribedYear || 'third_secondary',
-                      plan: studentSub.plan || 'باقة التفوق',
-                    } : undefined,
+                    isSubscribed: false,
+                    subscribedYear: 'third_secondary',
+                    subscription: undefined,
                   };
                 }
                 return {
                   ...prev,
                   name: resolvedName,
                   role: normalizedRole,
-                  isSubscribed: studentSub?.isSubscribed ?? prev.isSubscribed,
-                  subscribedYear: studentSub?.subscribedYear || prev.subscribedYear,
-                  subscription: studentSub ? {
-                    isActive: !!studentSub.isSubscribed,
-                    year: studentSub.subscribedYear || 'third_secondary',
-                    plan: studentSub.plan || 'باقة التفوق',
-                  } : prev.subscription,
                 };
               });
             }
@@ -360,22 +314,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
     const userId = payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`;
 
-    // Check if role was upgraded by admin in dashboard
-    const cachedRole = phone
-      ? localStorage.getItem(`account_role_${phone.trim()}`) || (userId ? localStorage.getItem(`account_role_${userId}`) : null)
-      : null;
-    const normalizedRole: UserRole = cachedRole === 'admin' ? 'admin' : (cachedRole === 'student' ? 'student' : (isAdmin ? 'admin' : 'student'));
-
-    // Check for subscription assigned by admin
-    let studentSub: any = undefined;
-    if (phone || userId) {
-      try {
-        const subRaw = (phone && localStorage.getItem(`account_subscription_${phone.trim()}`)) || (userId && localStorage.getItem(`account_subscription_${userId}`));
-        if (subRaw) {
-          studentSub = JSON.parse(subRaw);
-        }
-      } catch {}
-    }
+    const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
 
     // Get the name directly from the backend API or token payload
     const isAdminUser = normalizedRole === 'admin';
@@ -448,13 +387,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'active',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
       registrationDate: new Date().toISOString().slice(0, 10),
-      isSubscribed: studentSub?.isSubscribed ?? false,
-      subscribedYear: studentSub?.subscribedYear || 'third_secondary',
-      subscription: studentSub ? {
-        isActive: !!studentSub.isSubscribed,
-        year: studentSub.subscribedYear || 'third_secondary',
-        plan: studentSub.plan || 'باقة التفوق',
-      } : undefined,
+      isSubscribed: !!((payload as any).isSubscribed || (res.user as any)?.isSubscribed),
+      subscribedYear: (payload as any).subscribedYear || (res.user as any)?.subscribedYear || 'third_secondary',
+      subscription: {
+        isActive: !!((payload as any).isSubscribed || (res.user as any)?.isSubscribed),
+        year: (payload as any).subscribedYear || (res.user as any)?.subscribedYear || 'third_secondary',
+        plan: 'باقة التفوق',
+      },
     };
 
     login(userObj, jwtToken);
@@ -472,40 +411,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ParentPhone: parentPhone.trim(),
       password,
     });
-    // Immediately persist registered FullName and StudentProfile associated with this student
-    try {
-      localStorage.setItem(`user_fullname_${phone.trim()}`, fullName.trim());
-      localStorage.setItem('user_fullname_active', fullName.trim());
-      if (nationalId) localStorage.setItem(`user_fullname_${nationalId.trim()}`, fullName.trim());
-
-      const newStudentObj = {
-        id: (res?.user as any)?._id || (res?.user as any)?.id || `std-${Date.now()}`,
-        name: fullName.trim(),
-        code: `CODE-${nationalId.trim().slice(-5) || phone.trim().slice(-4)}`,
-        nationalId: nationalId.trim(),
-        email: `${phone.trim()}@edulearn.com`,
-        phone: phone.trim(),
-        parentPhone: parentPhone.trim(),
-        academicYear: 'third_secondary' as const,
-        status: 'active' as const,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-        hasAccess: true,
-        assignedLessonIds: [],
-        averageScore: 92,
-        attendanceRate: 96,
-        registrationDate: new Date().toISOString().slice(0, 10),
-        examResults: [
-          { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
-          { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
-        ],
-      };
-
-      if (nationalId) {
-        localStorage.setItem(`student_profile_${nationalId.trim()}`, JSON.stringify(newStudentObj));
-      }
-      localStorage.setItem(`student_profile_${phone.trim()}`, JSON.stringify(newStudentObj));
-      mockDB.addStudent(newStudentObj as any);
-    } catch {}
     return res;
   };
 

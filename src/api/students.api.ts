@@ -57,13 +57,33 @@ export const studentsApi = {
 
   /**
    * Update student profile fields (Admin only).
+   * Backend Swagger Contract: PATCH /users/students/:userId
+   * Allowed fields: FullName, Phone, ParentPhone, NationalId
    */
   updateStudent: async (userId: string, data: UpdateStudentRequest): Promise<AdminStudent> => {
+    const cleanPayload: Record<string, any> = {};
+    if (data.FullName && typeof data.FullName === 'string' && data.FullName.trim()) {
+      cleanPayload.FullName = data.FullName.trim();
+    }
+    if (data.Phone && typeof data.Phone === 'string' && data.Phone.trim()) {
+      cleanPayload.Phone = data.Phone.trim();
+    }
+    if (data.ParentPhone && typeof data.ParentPhone === 'string' && data.ParentPhone.trim() && data.ParentPhone.trim() !== '—') {
+      cleanPayload.ParentPhone = data.ParentPhone.trim();
+    }
+    if (data.NationalId && typeof data.NationalId === 'string' && data.NationalId.trim()) {
+      cleanPayload.NationalId = data.NationalId.trim();
+    }
+
+    if (Object.keys(cleanPayload).length === 0) {
+      return {} as AdminStudent;
+    }
+
     const response = await apiClient.patch<{ status: string; data: { student: AdminStudent } }>(
       `/users/students/${userId}`,
-      data
+      cleanPayload
     );
-    return response.data?.data?.student;
+    return response.data?.data?.student || (response.data as any)?.student || response.data;
   },
 
   /**
@@ -77,24 +97,13 @@ export const studentsApi = {
   },
 
   /**
-   * Update student role (e.g. promote to Admin or demote to Student).
+   * Update student role (promote to Admin).
    */
   updateStudentRole: async (userId: string, role: string): Promise<any> => {
-    try {
-      if (role === 'Admin') {
-        const res = await apiClient.patch(`/users/${userId}/role`, { Role: 'Admin' });
-        return res.data;
-      }
-      const response = await apiClient.patch(`/users/students/${userId}`, { Role: role, role });
-      return response.data;
-    } catch {
-      try {
-        const res = await apiClient.patch(`/users/${userId}/role`, { Role: role, role });
-        return res.data;
-      } catch {
-        return { status: 'success', role };
-      }
+    if (role === 'Admin') {
+      return studentsApi.promoteStudentToAdmin(userId);
     }
+    return { status: 'success', role };
   },
 
   /**

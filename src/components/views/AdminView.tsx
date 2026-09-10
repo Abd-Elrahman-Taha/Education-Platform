@@ -273,9 +273,6 @@ export const AdminView: React.FC = () => {
         Status: studentStatusFilter !== 'all' ? studentStatusFilter : undefined,
       });
       setRealStudents(res.students);
-      try {
-        localStorage.setItem('admin_students_cache', JSON.stringify(res.students));
-      } catch {}
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch students:', err);
     } finally {
@@ -467,36 +464,9 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  const handleToggleSubscription = async (student: AdminStudent) => {
-    const subRaw = localStorage.getItem(`account_subscription_${student.Phone}`) || localStorage.getItem(`account_subscription_${student._id}`);
-    const currentlySubscribed = student.isSubscribed ?? (subRaw ? JSON.parse(subRaw).isSubscribed : false);
-    const nextSubscribed = !currentlySubscribed;
-
-    const subData = {
-      isSubscribed: nextSubscribed,
-      subscribedYear: (selectedYear && selectedYear !== 'all' ? selectedYear : 'third_secondary') as AcademicYear,
-      plan: nextSubscribed ? 'باقة التفوق' : 'غير مشترك',
-      updatedAt: new Date().toISOString(),
-    };
-    if (student.Phone) {
-      localStorage.setItem(`account_subscription_${student.Phone.trim()}`, JSON.stringify(subData));
-    }
-    localStorage.setItem(`account_subscription_${student._id}`, JSON.stringify(subData));
-
-    try {
-      await studentsApi.updateStudent(student._id, { isSubscribed: nextSubscribed });
-    } catch {}
-
-    setRealStudents(prev =>
-      prev.map(s => (s._id === student._id ? { ...s, isSubscribed: nextSubscribed } : s))
-    );
-
-    showToast(
-      nextSubscribed
-        ? `تم تفعيل اشتراك الطالب (${student.FullName}) بنجاح!`
-        : `تم إلغاء اشتراك الطالب (${student.FullName}) بنجاح.`,
-      'success'
-    );
+  const handleToggleSubscription = (student: AdminStudent) => {
+    // Subscriptions in backend are course enrollments. Open manual enrollment modal.
+    handleOpenManualEnroll(student);
   };
 
   const handleOpenPromoteModal = (student: AdminStudent) => {
@@ -509,20 +479,13 @@ export const AdminView: React.FC = () => {
     setIsPromoting(true);
     try {
       await studentsApi.promoteStudentToAdmin(promoteTargetStudent._id);
-      if (promoteTargetStudent.Phone) {
-        localStorage.setItem(`account_role_${promoteTargetStudent.Phone.trim()}`, 'admin');
-      }
-      localStorage.setItem(`account_role_${promoteTargetStudent._id}`, 'admin');
-      setRealStudents(prev =>
-        prev.map(s => (s._id === promoteTargetStudent._id ? { ...s, Role: 'Admin' } : s))
-      );
       showToast(
         `تمت ترقية (${promoteTargetStudent.FullName}) إلى مدير بنجاح! تم إنهاء جلسته الحالية ويجب عليه تسجيل الدخول كمدير.`,
         'success'
       );
       setIsPromoteModalOpen(false);
       setPromoteTargetStudent(null);
-      loadStudents();
+      await loadStudents();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر ترقية حساب الطالب إلى مدير، يرجى المحاولة لاحقاً'), 'error');
     } finally {
@@ -559,43 +522,23 @@ export const AdminView: React.FC = () => {
   };
 
   const handleToggleRole = async (student: AdminStudent) => {
-    const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
-    const currentlyAdmin = (roleRaw || '').toLowerCase() === 'admin';
-    const newRole = currentlyAdmin ? 'Student' : 'Admin';
-
-    if (newRole === 'Admin') {
+    const currentlyAdmin = (student.Role || '').toLowerCase() === 'admin';
+    if (!currentlyAdmin) {
       handleOpenPromoteModal(student);
-      return;
+    } else {
+      showToast('لا يمكن تخفيض رتبة المدير من هنا، الحساب مفعل كمدير في النظام.', 'info');
     }
-
-    if (student.Phone) {
-      localStorage.setItem(`account_role_${student.Phone.trim()}`, newRole.toLowerCase());
-    }
-    localStorage.setItem(`account_role_${student._id}`, newRole.toLowerCase());
-
-    try {
-      await studentsApi.updateStudentRole(student._id, newRole);
-    } catch {}
-
-    setRealStudents(prev =>
-      prev.map(s => (s._id === student._id ? { ...s, Role: newRole } : s))
-    );
-
-    showToast(`تم تحويل (${student.FullName}) إلى حساب طالب بنجاح.`, 'success');
   };
 
   const handleOpenEditStudent = (student: AdminStudent) => {
-    const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
-    const subRaw = localStorage.getItem(`account_subscription_${student.Phone}`) || localStorage.getItem(`account_subscription_${student._id}`);
-    const isSubscribed = student.isSubscribed ?? (subRaw ? JSON.parse(subRaw).isSubscribed : false);
-
     setEditingStudent(student);
+    const cleanedParentPhone = (student.ParentPhone && student.ParentPhone !== '—') ? student.ParentPhone : '';
     setEditStudentForm({
-      name: student.FullName,
-      phone: student.Phone,
-      parentPhone: student.ParentPhone || '',
-      role: roleRaw.toLowerCase() === 'admin' ? 'Admin' : 'Student',
-      isSubscribed: !!isSubscribed,
+      name: student.FullName || '',
+      phone: student.Phone || '',
+      parentPhone: cleanedParentPhone,
+      role: (student.Role || '').toLowerCase() === 'admin' ? 'Admin' : 'Student',
+      isSubscribed: !!student.isSubscribed,
     });
     setIsEditStudentOpen(true);
   };
@@ -604,55 +547,83 @@ export const AdminView: React.FC = () => {
     e.preventDefault();
     if (!editingStudent) return;
 
-    try {
-      await studentsApi.updateStudent(editingStudent._id, {
-        FullName: editStudentForm.name.trim(),
-        Phone: editStudentForm.phone.trim(),
-        ParentPhone: editStudentForm.parentPhone.trim() || undefined,
-        Role: editStudentForm.role,
-        role: editStudentForm.role,
-        isSubscribed: editStudentForm.isSubscribed,
-      });
+    const studentId = editingStudent._id || (editingStudent as any).id;
+    const isCurrentlyAdmin = (editingStudent.Role || '').toLowerCase() === 'admin';
 
-      // Persist updated name
-      if (editStudentForm.name.trim()) {
-        localStorage.setItem(`user_fullname_${editStudentForm.phone.trim()}`, editStudentForm.name.trim());
-      }
-
-      // Persist updated role
-      localStorage.setItem(`account_role_${editStudentForm.phone.trim()}`, editStudentForm.role.toLowerCase());
-      localStorage.setItem(`account_role_${editingStudent._id}`, editStudentForm.role.toLowerCase());
-
-      // Persist updated subscription
-      const subData = {
-        isSubscribed: editStudentForm.isSubscribed,
-        subscribedYear: (selectedYear && selectedYear !== 'all' ? selectedYear : 'third_secondary') as AcademicYear,
-        plan: editStudentForm.isSubscribed ? 'باقة التفوق' : 'غير مشترك',
-        updatedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(`account_subscription_${editStudentForm.phone.trim()}`, JSON.stringify(subData));
-      localStorage.setItem(`account_subscription_${editingStudent._id}`, JSON.stringify(subData));
-
-      // Update local state live
-      setRealStudents(prev =>
-        prev.map(s =>
-          s._id === editingStudent._id
-            ? {
-                ...s,
-                FullName: editStudentForm.name.trim(),
-                Phone: editStudentForm.phone.trim(),
-                ParentPhone: editStudentForm.parentPhone.trim() || undefined,
-                Role: editStudentForm.role,
-                isSubscribed: editStudentForm.isSubscribed,
-              }
-            : s
-        )
-      );
-
-      showToast('تم حفظ تعديلات بيانات الطالب ورقم الهاتف بنجاح!', 'success');
+    // 1. Admin accounts cannot be edited via student PATCH endpoints
+    if (isCurrentlyAdmin && editStudentForm.role === 'Admin') {
+      showToast('حسابات المديرين محمية ولا يمكن تعديل بياناتها كطالب. لتغيير كلمة المرور يرجى استخدام إعدادات الحساب.', 'info');
       setIsEditStudentOpen(false);
       setEditingStudent(null);
+      return;
+    }
+
+    try {
+      // 2. Diff check: Only send fields that actually changed and match backend requirements
+      const updateData: { FullName?: string; Phone?: string; ParentPhone?: string } = {};
+
+      const trimmedName = editStudentForm.name.trim();
+      const currentName = (editingStudent.FullName || '').trim();
+      if (trimmedName && trimmedName !== currentName) {
+        if (trimmedName.length < 3) {
+          showToast('اسم الطالب يجب أن يتكون من 3 أحرف على الأقل', 'error');
+          return;
+        }
+        updateData.FullName = trimmedName;
+      }
+
+      const trimmedPhone = editStudentForm.phone.trim();
+      const currentPhone = (editingStudent.Phone || '').trim();
+      if (trimmedPhone && trimmedPhone !== currentPhone) {
+        if (!/^01[0125]\d{8}$/.test(trimmedPhone)) {
+          showToast('رقم هاتف الطالب يجب أن يكون 11 رقماً مصرياً يبدأ بـ 01 (مثال: 01012345678)', 'error');
+          return;
+        }
+        updateData.Phone = trimmedPhone;
+      }
+
+      const trimmedParentPhone = editStudentForm.parentPhone.trim();
+      const currentParentPhone = (editingStudent.ParentPhone || '').trim();
+      if (trimmedParentPhone && trimmedParentPhone !== '—' && trimmedParentPhone !== currentParentPhone) {
+        if (!/^01[0125]\d{8}$/.test(trimmedParentPhone)) {
+          showToast('رقم هاتف ولي الأمر يجب أن يكون 11 رقماً مصرياً يبدأ بـ 01 (مثال: 01198765432)', 'error');
+          return;
+        }
+        updateData.ParentPhone = trimmedParentPhone;
+      }
+
+      const willPromote = !isCurrentlyAdmin && editStudentForm.role === 'Admin';
+      const hasFieldsToUpdate = Object.keys(updateData).length > 0;
+
+      if (!hasFieldsToUpdate && !willPromote) {
+        showToast('لم يتم إجراء أي تغيير على البيانات الحالية', 'info');
+        setIsEditStudentOpen(false);
+        setEditingStudent(null);
+        return;
+      }
+
+      // 3. Send update to backend
+      if (hasFieldsToUpdate) {
+        await studentsApi.updateStudent(studentId, updateData);
+      }
+
+      // 4. Handle role promotion if selected
+      if (willPromote) {
+        try {
+          await studentsApi.promoteStudentToAdmin(studentId);
+          showToast(`تم حفظ تعديل البيانات وترقية الطالب إلى مدير بنجاح!`, 'success');
+        } catch (promoteErr: any) {
+          showToast(getFriendlyErrorMessage(promoteErr, 'تم تعديل البيانات ولكن تعذر ترقية الحساب إلى مدير'), 'error');
+        }
+      } else {
+        showToast('تم حفظ تعديلات بيانات الطالب بنجاح!', 'success');
+      }
+
+      setIsEditStudentOpen(false);
+      setEditingStudent(null);
+      await loadStudents();
     } catch (err: any) {
+      console.error('[API ERROR] Failed to update student:', err);
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الطالب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
     }
   };
@@ -1237,10 +1208,8 @@ export const AdminView: React.FC = () => {
                 <tbody>
                   {realStudents.map(student => {
                     const isActive = student.Status === 'Active';
-                    const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
-                    const isAdmin = (roleRaw || '').toLowerCase() === 'admin';
-                    const subRaw = localStorage.getItem(`account_subscription_${student.Phone}`) || localStorage.getItem(`account_subscription_${student._id}`);
-                    const isSub = student.isSubscribed ?? (subRaw ? JSON.parse(subRaw).isSubscribed : false);
+                    const isAdmin = (student.Role || '').toLowerCase() === 'admin';
+                    const isSub = !!student.isSubscribed;
 
                     return (
                       <tr key={student._id}>
@@ -2434,36 +2403,25 @@ export const AdminView: React.FC = () => {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
-                    الدور (Role)
-                  </label>
-                  <select
-                    className="input-field"
-                    style={{ width: '100%' }}
-                    value={editStudentForm.role}
-                    onChange={e => setEditStudentForm({ ...editStudentForm, role: e.target.value })}
-                  >
-                    <option value="Student">طالب (Student)</option>
-                    <option value="Admin">مدير (Admin)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
-                    حالة الاشتراك
-                  </label>
-                  <select
-                    className="input-field"
-                    style={{ width: '100%' }}
-                    value={editStudentForm.isSubscribed ? 'true' : 'false'}
-                    onChange={e => setEditStudentForm({ ...editStudentForm, isSubscribed: e.target.value === 'true' })}
-                  >
-                    <option value="true">اشتراك مفعل ✓</option>
-                    <option value="false">غير مشترك ✗</option>
-                  </select>
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  الدور (Role)
+                </label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editStudentForm.role}
+                  disabled={(editingStudent.Role || '').toLowerCase() === 'admin'}
+                  onChange={e => setEditStudentForm({ ...editStudentForm, role: e.target.value })}
+                >
+                  <option value="Student">طالب (Student)</option>
+                  <option value="Admin">مدير (Admin)</option>
+                </select>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  {(editingStudent.Role || '').toLowerCase() === 'admin'
+                    ? 'هذا الحساب مفعل كمدير دائم في النظام ولا يمكن تحويله لطالب.'
+                    : 'ملاحظة: اختيار (مدير) سيقوم بترقية صلاحيات الحساب في الخادم وإنهاء جلسته النشطة لدواعي الأمان.'}
+                </span>
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>

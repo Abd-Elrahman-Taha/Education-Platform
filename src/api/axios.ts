@@ -79,6 +79,8 @@ apiClient.interceptors.response.use(
     const formattedError = {
       status,
       message: friendlyMessage,
+      rawMessage: rawErrorMessage,
+      backendMessage: backendData?.message,
       isValidationError: status === 400,
       isAuthError: status === 401,
       isForbidden: status === 403,

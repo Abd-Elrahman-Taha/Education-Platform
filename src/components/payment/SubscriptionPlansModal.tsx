@@ -64,21 +64,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
     setIsRedeeming(true);
     try {
       const res = await paymentApi.redeemScratchCard({ code: cardCode.trim() });
-      showToast(`تم شحن ${res.creditedAmount} ج.م وتفعيل اشتراكك بنجاح! 🎉`, 'success');
-
-      // Update student subscription locally and dispatch event
-      if (currentUser?.phone) {
-        const subData = {
-          isSubscribed: true,
-          subscribedYear: academicYear,
-          plan: selectedPlan === 'comprehensive' ? 'الباقة الشاملة' : 'باقة المادة',
-          date: new Date().toISOString(),
-        };
-        localStorage.setItem(`account_subscription_${currentUser.phone.trim()}`, JSON.stringify(subData));
-        if (currentUser.id) {
-          localStorage.setItem(`account_subscription_${currentUser.id}`, JSON.stringify(subData));
-        }
-      }
+      showToast(`تم شحن ${res.creditedAmount} ج.م بنجاح! الرصيد الجديد: ${res.newWalletBalance || res.creditedAmount} ج.م 🎉`, 'success');
 
       if (onSubscribedSuccess) {
         onSubscribedSuccess();

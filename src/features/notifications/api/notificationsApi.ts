@@ -1,17 +1,28 @@
-import { fakeApiCall, ApiResponse } from '../../../api/client';
-import { mockDB } from '../../../services/db';
+import { ApiResponse } from '../../../api/client';
 import { SystemNotification } from '../../../types';
 
 export const notificationsApi = {
-  getNotifications: (userId: string): Promise<ApiResponse<SystemNotification[]>> => {
-    return fakeApiCall(() => mockDB.getNotifications(userId));
+  getNotifications: async (_userId: string): Promise<ApiResponse<SystemNotification[]>> => {
+    return {
+      data: [],
+      status: 200,
+      message: 'Success',
+    };
   },
 
-  markAsRead: (id: string): Promise<ApiResponse<void>> => {
-    return fakeApiCall(() => mockDB.markNotificationAsRead(id));
+  markAsRead: async (_id: string): Promise<ApiResponse<void>> => {
+    return {
+      data: undefined,
+      status: 200,
+      message: 'Success',
+    };
   },
 
-  markAllAsRead: (userId: string): Promise<ApiResponse<void>> => {
-    return fakeApiCall(() => mockDB.markAllNotificationsAsRead(userId));
+  markAllAsRead: async (_userId: string): Promise<ApiResponse<void>> => {
+    return {
+      data: undefined,
+      status: 200,
+      message: 'Success',
+    };
   },
 };

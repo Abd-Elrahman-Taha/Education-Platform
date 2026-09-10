@@ -10,8 +10,7 @@ import {
 import { apiClient } from '../../api/axios';
 import { StudentProfile, AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
-import { mockDB } from '../../services/db';
-import { isPlaceholderName } from '../../utils/user';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 export const ParentPortalView: React.FC = () => {
   const { showToast } = useToast();
@@ -22,14 +21,14 @@ export const ParentPortalView: React.FC = () => {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 1. Normalize digits: support Arabic numerals (٠-٩), remove non-alphanumeric chars
+    // 1. Normalize digits: support Arabic numerals (٠-٩), remove whitespace
     const cleanId = nationalId
       .trim()
       .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
       .replace(/\s+/g, '');
 
     if (!cleanId) {
-      setErrorMessage('يرجى إدخال الرقم القومي للطالب (14 رقماً)');
+      setErrorMessage('يرجى إدخال الرقم القومي أو رقم هاتف الطالب للبحث');
       return;
     }
 
@@ -38,176 +37,69 @@ export const ParentPortalView: React.FC = () => {
 
     let resolvedProfile: StudentProfile | null = null;
 
-    // ── STEP A: Direct LocalStorage Check (Fastest & guarantees newly registered students match)
     try {
-      const storedDirect =
-        localStorage.getItem(`student_profile_${cleanId}`) ||
-        localStorage.getItem(`student_profile_nid_${cleanId}`) ||
-        localStorage.getItem(`student_profile_phone_${cleanId}`);
-      if (storedDirect) {
-        resolvedProfile = JSON.parse(storedDirect);
-      }
-    } catch {}
-
-    // ── STEP B: Admin Students Cache Check
-    if (!resolvedProfile) {
-      try {
-        const cachedAdmin = localStorage.getItem('admin_students_cache');
-        if (cachedAdmin) {
-          const list: any[] = JSON.parse(cachedAdmin);
-          const found = list.find((s: any) =>
-            (s.NationalId && String(s.NationalId).trim() === cleanId) ||
-            (s.nationalId && String(s.nationalId).trim() === cleanId) ||
-            (s.Phone && String(s.Phone).trim() === cleanId) ||
-            (s.phone && String(s.phone).trim() === cleanId) ||
-            (s._id && String(s._id).trim() === cleanId) ||
-            (s.id && String(s.id).trim() === cleanId)
-          );
-          if (found) {
-            resolvedProfile = {
-              id: found._id || found.id || cleanId,
-              name: found.FullName || found.name || 'طالب مسجل',
-              code: found.Code || found.code || `CODE-${(found.NationalId || found._id || cleanId).slice(-5)}`,
-              nationalId: found.NationalId || found.nationalId || cleanId,
-              email: `${found.Phone || 'student'}@edulearn.com`,
-              phone: found.Phone || found.phone || '—',
-              parentPhone: found.ParentPhone || found.parentPhone || '—',
-              academicYear: found.academicYear || found.subscribedYear || 'third_secondary',
-              status: (found.Status === 'Blocked' || found.status === 'blocked') ? 'blocked' : 'active',
-              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-              hasAccess: found.Status !== 'Blocked' && found.status !== 'blocked',
-              assignedLessonIds: ['lesson-1', 'lesson-2', 'lesson-3'],
-              averageScore: 92,
-              attendanceRate: 96,
-              registrationDate: new Date().toISOString().slice(0, 10),
-              examResults: [
-                { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
-                { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
-              ],
-            };
-          }
-        }
-      } catch {}
-    }
-
-    // ── STEP C: MockDB Check (Default Demo Students & Local DB)
-    if (!resolvedProfile) {
-      const localStudents = mockDB.getStudents();
-      const localMatch = localStudents.find(
-        (s: StudentProfile) =>
-          s.nationalId === cleanId ||
-          s.id === cleanId ||
-          (s.code && s.code.toUpperCase() === cleanId.toUpperCase()) ||
-          s.phone === cleanId
-      );
-      if (localMatch) {
-        resolvedProfile = localMatch;
-      }
-    }
-
-    // ── STEP D: Live Backend API (If reachable / authenticated)
-    if (!resolvedProfile) {
-      try {
-        const res = await apiClient.get<any>('/users/students', {
-          params: { NationalId: cleanId },
-        });
-        const list = res.data?.data?.students || res.data?.students || [];
-        const raw = list.find((s: any) =>
-          (s.NationalId && String(s.NationalId).trim() === cleanId) ||
-          (s.Phone && String(s.Phone).trim() === cleanId) ||
-          (s._id && String(s._id).trim() === cleanId)
-        ) || (list.length === 1 ? list[0] : null);
-
-        if (raw && (raw._id || raw.FullName)) {
-          resolvedProfile = {
-            id: raw._id || cleanId,
-            name: raw.FullName || raw.name || 'طالب مسجل',
-            code: raw.Code || raw.code || `CODE-${(raw.NationalId || raw._id || cleanId).slice(-5)}`,
-            nationalId: raw.NationalId || raw.nationalId || cleanId,
-            email: `${raw.Phone || 'student'}@edulearn.com`,
-            phone: raw.Phone || raw.phone || '—',
-            parentPhone: raw.ParentPhone || raw.parentPhone || '—',
-            academicYear: raw.AcademicYear || raw.academicYear || 'third_secondary',
-            status: (raw.Status === 'Blocked' || raw.status === 'blocked') ? 'blocked' : 'active',
-            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-            hasAccess: raw.Status !== 'Blocked',
-            assignedLessonIds: raw.assignedLessonIds || ['lesson-1', 'lesson-2'],
-            averageScore: raw.averageScore || 92,
-            attendanceRate: raw.attendanceRate || 96,
-            registrationDate: raw.createdAt ? new Date(raw.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-            examResults: (raw.examResults && raw.examResults.length > 0) ? raw.examResults : [
-              { examId: 'ex-1', examTitle: 'امتحان تفاضل الدوال الحقيقية', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
-              { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية الأساسي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
-            ],
-          };
-        }
-      } catch {}
-    }
-
-    // ── STEP E: Universal National ID Resolver (Guarantees every valid ID opens student report)
-    if (!resolvedProfile) {
+      let rawStudent: any = null;
       const is14Digit = /^\d{14}$/.test(cleanId);
-      const isEgyptianPhone = /^01[0125]\d{8}$/.test(cleanId);
+      const isMongoId = /^[0-9a-fA-F]{24}$/.test(cleanId);
 
-      // If user provided a 14-digit Egyptian National ID, phone, or valid identifier
-      if (is14Digit || isEgyptianPhone || cleanId.length >= 6) {
-        // Name resolution: check if we stored any student's name in this session or device
-        const cachedName =
-          localStorage.getItem(`user_fullname_${cleanId}`) ||
-          localStorage.getItem('user_fullname_active') ||
-          '';
-
-        let studentDisplayName = 'طالب مسجل في المنظومة';
-        if (cachedName && !isPlaceholderName(cachedName)) {
-          studentDisplayName = cachedName.trim();
-        } else if (is14Digit) {
-          studentDisplayName = `طالب بالصف الثالث الثانوي (رقم قومي: ${cleanId.slice(-4)})`;
-        }
-
-        // Academic Year deduction from National ID or subscription
-        const subRaw = localStorage.getItem(`account_subscription_${cleanId}`);
-        let userYear: AcademicYear = 'third_secondary';
-        if (subRaw) {
-          try {
-            const parsedSub = JSON.parse(subRaw);
-            if (parsedSub.subscribedYear) userYear = parsedSub.subscribedYear;
-          } catch {}
-        } else if (is14Digit) {
-          const birthYear = parseInt(cleanId.substring(1, 3), 10);
-          if (birthYear >= 9 && birthYear <= 10) userYear = 'first_secondary';
-          else if (birthYear === 8) userYear = 'second_secondary';
-          else userYear = 'third_secondary';
-        }
-
-        resolvedProfile = {
-          id: `std-${cleanId}`,
-          name: studentDisplayName,
-          code: `CODE-${cleanId.slice(-5)}`,
-          nationalId: cleanId,
-          email: `${cleanId.slice(-8)}@edulearn.com`,
-          phone: isEgyptianPhone ? cleanId : `010${cleanId.slice(6, 14)}`,
-          parentPhone: '01198765432',
-          academicYear: userYear,
-          status: 'active',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-          hasAccess: true,
-          assignedLessonIds: ['lesson-1', 'lesson-2', 'lesson-3'],
-          averageScore: 94,
-          attendanceRate: 98,
-          registrationDate: new Date().toISOString().slice(0, 10),
-          examResults: [
-            { examId: 'ex-1', examTitle: 'امتحان التفاضل والتكامل الشامل', score: 19, total: 20, percentage: 95, date: '2026-03-01', isPassed: true },
-            { examId: 'ex-2', examTitle: 'امتحان الهندسة الفراغية التراكمي', score: 18, total: 20, percentage: 90, date: '2026-03-05', isPassed: true },
-            { examId: 'ex-3', examTitle: 'امتحان الجبر والمحددات التأسيسي', score: 20, total: 20, percentage: 100, date: '2026-03-08', isPassed: true },
-          ],
-        };
-
-        // Persist so future searches are instantaneous
+      // ── Step 1: Direct ID lookup if 24-char ObjectId
+      if (isMongoId) {
         try {
-          localStorage.setItem(`student_profile_${cleanId}`, JSON.stringify(resolvedProfile));
-          mockDB.addStudent(resolvedProfile);
+          const directRes = await apiClient.get<any>(`/users/students/${cleanId}`);
+          rawStudent = directRes.data?.data?.student || directRes.data?.student;
         } catch {}
       }
+
+      // ── Step 2: NationalId exact match (if 14 digits)
+      if (!rawStudent && is14Digit) {
+        try {
+          const nidRes = await apiClient.get<any>('/users/students', {
+            params: { NationalId: cleanId },
+          });
+          const list = nidRes.data?.data?.students || nidRes.data?.students || [];
+          rawStudent = list.find((s: any) =>
+            s.NationalId && String(s.NationalId).trim() === cleanId
+          ) || (list.length === 1 ? list[0] : null);
+        } catch {}
+      }
+
+      // ── Step 3: General keyword search (matches Phone, Name, or NationalId in backend)
+      if (!rawStudent) {
+        try {
+          const searchRes = await apiClient.get<any>('/users/students', {
+            params: { search: cleanId },
+          });
+          const list = searchRes.data?.data?.students || searchRes.data?.students || [];
+          rawStudent = list.find((s: any) =>
+            (s.NationalId && String(s.NationalId).trim() === cleanId) ||
+            (s.Phone && String(s.Phone).trim() === cleanId) ||
+            (s._id && String(s._id).trim() === cleanId)
+          ) || (list.length === 1 ? list[0] : null);
+        } catch {}
+      }
+
+      if (rawStudent && (rawStudent._id || rawStudent.FullName)) {
+        resolvedProfile = {
+          id: rawStudent._id || cleanId,
+          name: rawStudent.FullName || 'طالب مسجل',
+          code: rawStudent.Code || `CODE-${(rawStudent.NationalId || rawStudent._id || cleanId).slice(-5)}`,
+          nationalId: rawStudent.NationalId || cleanId,
+          email: `${rawStudent.Phone || 'student'}@edulearn.com`,
+          phone: rawStudent.Phone || '—',
+          parentPhone: rawStudent.ParentPhone || '—',
+          academicYear: (rawStudent.AcademicYear || rawStudent.academicYear || 'third_secondary') as AcademicYear,
+          status: (rawStudent.Status === 'Blocked' || rawStudent.status === 'blocked') ? 'blocked' : 'active',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+          hasAccess: rawStudent.Status !== 'Blocked',
+          assignedLessonIds: rawStudent.assignedLessonIds || [],
+          averageScore: rawStudent.averageScore || 88,
+          attendanceRate: rawStudent.attendanceRate || 95,
+          registrationDate: rawStudent.createdAt ? new Date(rawStudent.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          examResults: (rawStudent.examResults && rawStudent.examResults.length > 0) ? rawStudent.examResults : [],
+        };
+      }
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to query student:', err);
     }
 
     if (resolvedProfile) {
@@ -215,8 +107,9 @@ export const ParentPortalView: React.FC = () => {
       showToast(`تم التحقق بنجاح! جاري عرض التقرير الأكاديمي لـ ${resolvedProfile.name}`, 'success');
       setErrorMessage(null);
     } else {
-      setErrorMessage('يرجى كتابة الرقم القومي المكون من 14 رقماً بشكل صحيح والمحاولة مجدداً.');
-      showToast('يرجى التأكد من كتابة الرقم القومي (14 رقماً)', 'danger');
+      const msg = 'لم يتم العثور على طالب يطابق هذه البيانات في المنظومة. يرجى التأكد من صحة الرقم القومي أو رقم الهاتف والمحاولة مجدداً.';
+      setErrorMessage(msg);
+      showToast('لم يتم العثور على الطالب في قاعدة بيانات المنصة', 'error');
     }
 
     setIsLoading(false);

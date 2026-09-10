@@ -245,11 +245,7 @@ export interface UpdateStudentRequest {
   FullName?: string;
   Phone?: string;
   ParentPhone?: string;
-  Role?: string;
-  role?: string;
-  isSubscribed?: boolean;
-  subscribedYear?: string;
-  academicYear?: string;
+  NationalId?: string;
 }
 
 export interface UpdateStudentStatusRequest {
