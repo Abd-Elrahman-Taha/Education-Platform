@@ -31,6 +31,7 @@ import {
   ExamAttempt,
 } from '../../types/api.types';
 import { getFriendlyErrorMessage } from '../../utils/errors';
+import { matchesAcademicYear } from '../../utils/courseFilter';
 
 export const EDUCATION_STAGES: { key: EducationStage; label: string; grades: { value: string; label: string }[] }[] = [
   {
@@ -79,8 +80,8 @@ export const AdminView: React.FC = () => {
   const { showToast } = useToast();
   const { currentUser } = useAuth();
 
-  // Selected academic year
-  const [selectedYear, setSelectedYear] = useState<AcademicYear>('third_secondary');
+  // Selected academic year filter ('all' shows all courses, or specific secondary year)
+  const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards'>('overview');
@@ -473,7 +474,7 @@ export const AdminView: React.FC = () => {
 
     const subData = {
       isSubscribed: nextSubscribed,
-      subscribedYear: selectedYear || 'third_secondary',
+      subscribedYear: (selectedYear && selectedYear !== 'all' ? selectedYear : 'third_secondary') as AcademicYear,
       plan: nextSubscribed ? 'باقة التفوق' : 'غير مشترك',
       updatedAt: new Date().toISOString(),
     };
@@ -625,7 +626,7 @@ export const AdminView: React.FC = () => {
       // Persist updated subscription
       const subData = {
         isSubscribed: editStudentForm.isSubscribed,
-        subscribedYear: selectedYear || 'third_secondary',
+        subscribedYear: (selectedYear && selectedYear !== 'all' ? selectedYear : 'third_secondary') as AcademicYear,
         plan: editStudentForm.isSubscribed ? 'باقة التفوق' : 'غير مشترك',
         updatedAt: new Date().toISOString(),
       };
@@ -1019,12 +1020,34 @@ export const AdminView: React.FC = () => {
               <GraduationCap size={15} /> العام الدراسي:
             </span>
             <div className="year-pill-group">
+              <button
+                type="button"
+                className={`year-pill-btn ${selectedYear === 'all' ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedYear('all');
+                  setCourseStageFilter('all');
+                  setCourseGradeFilter('all');
+                }}
+              >
+                {selectedYear === 'all' && <Check size={13} />}
+                كافة السنوات
+              </button>
               {(['first_secondary', 'second_secondary', 'third_secondary'] as AcademicYear[]).map(yearKey => (
                 <button
                   key={yearKey}
                   type="button"
                   className={`year-pill-btn ${selectedYear === yearKey ? 'active' : ''}`}
-                  onClick={() => setSelectedYear(yearKey)}
+                  onClick={() => {
+                    const next = selectedYear === yearKey ? 'all' : yearKey;
+                    setSelectedYear(next);
+                    if (next === 'all') {
+                      setCourseStageFilter('all');
+                      setCourseGradeFilter('all');
+                    } else {
+                      setCourseStageFilter('Secondary');
+                      setCourseGradeFilter(next === 'first_secondary' ? '1' : next === 'second_secondary' ? '2' : '3');
+                    }
+                  }}
                 >
                   {selectedYear === yearKey && <Check size={13} />}
                   {ACADEMIC_YEAR_LABELS[yearKey]}
@@ -1353,6 +1376,7 @@ export const AdminView: React.FC = () => {
       {/* ── TAB 3: COURSES MANAGEMENT (POST, PUT, DELETE /courses) ── */}
       {activeTab === 'courses' && (() => {
         const filteredCourses = realCourses.filter(c => {
+          if (selectedYear !== 'all' && !matchesAcademicYear(c, selectedYear)) return false;
           if (courseStageFilter !== 'all' && c.EducationStage !== courseStageFilter) return false;
           if (courseGradeFilter !== 'all' && c.Grade !== courseGradeFilter) return false;
           return true;
@@ -1365,7 +1389,7 @@ export const AdminView: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                  إدارة الكورسات والمناهج ({realCourses.length})
+                  إدارة الكورسات والمناهج ({filteredCourses.length}{selectedYear !== 'all' || courseStageFilter !== 'all' ? ` من ${realCourses.length}` : ''})
                 </h2>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   إنشاء، تعديل، وحذف الكورسات مع تحديد المرحلة الدراسية والصف
@@ -1376,7 +1400,15 @@ export const AdminView: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => setIsCreateCourseOpen(true)}
+                  onClick={() => {
+                    const defaultGrade = selectedYear === 'first_secondary' ? '1' : selectedYear === 'second_secondary' ? '2' : '3';
+                    setNewCourseForm(prev => ({
+                      ...prev,
+                      educationStage: 'Secondary',
+                      grade: defaultGrade,
+                    }));
+                    setIsCreateCourseOpen(true);
+                  }}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                 >
                   <Plus size={16} /> إضافة كورس جديد
@@ -1386,6 +1418,50 @@ export const AdminView: React.FC = () => {
 
             {/* Stage & Grade Filter Toolbar */}
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+              {/* Quick Academic Year Filter Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <GraduationCap size={14} /> العام الدراسي:
+                </span>
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={`btn ${selectedYear === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.78rem' }}
+                    onClick={() => {
+                      setSelectedYear('all');
+                      setCourseStageFilter('all');
+                      setCourseGradeFilter('all');
+                    }}
+                  >
+                    كافة السنوات
+                  </button>
+                  {(['first_secondary', 'second_secondary', 'third_secondary'] as AcademicYear[]).map(yearKey => (
+                    <button
+                      key={yearKey}
+                      type="button"
+                      className={`btn ${selectedYear === yearKey ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '0.25rem 0.65rem', fontSize: '0.78rem' }}
+                      onClick={() => {
+                        const next = selectedYear === yearKey ? 'all' : yearKey;
+                        setSelectedYear(next);
+                        if (next === 'all') {
+                          setCourseStageFilter('all');
+                          setCourseGradeFilter('all');
+                        } else {
+                          setCourseStageFilter('Secondary');
+                          setCourseGradeFilter(next === 'first_secondary' ? '1' : next === 'second_secondary' ? '2' : '3');
+                        }
+                      }}
+                    >
+                      {ACADEMIC_YEAR_LABELS[yearKey]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ width: '1px', height: '24px', background: 'var(--border-glass)' }} />
+
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>المرحلة الدراسية:</label>
                 <select
@@ -1393,8 +1469,12 @@ export const AdminView: React.FC = () => {
                   style={{ fontSize: '0.85rem', padding: '0.35rem 0.65rem' }}
                   value={courseStageFilter}
                   onChange={e => {
-                    setCourseStageFilter(e.target.value);
+                    const newStage = e.target.value;
+                    setCourseStageFilter(newStage);
                     setCourseGradeFilter('all');
+                    if (newStage !== 'Secondary') {
+                      setSelectedYear('all');
+                    }
                   }}
                 >
                   <option value="all">كافة المراحل</option>
@@ -1411,7 +1491,16 @@ export const AdminView: React.FC = () => {
                     className="input-field"
                     style={{ fontSize: '0.85rem', padding: '0.35rem 0.65rem' }}
                     value={courseGradeFilter}
-                    onChange={e => setCourseGradeFilter(e.target.value)}
+                    onChange={e => {
+                      const newGrade = e.target.value;
+                      setCourseGradeFilter(newGrade);
+                      if (courseStageFilter === 'Secondary') {
+                        if (newGrade === '1') setSelectedYear('first_secondary');
+                        else if (newGrade === '2') setSelectedYear('second_secondary');
+                        else if (newGrade === '3') setSelectedYear('third_secondary');
+                        else setSelectedYear('all');
+                      }
+                    }}
                   >
                     <option value="all">كافة الصفوف</option>
                     {activeStageObj.grades.map(g => (
@@ -1425,7 +1514,26 @@ export const AdminView: React.FC = () => {
             {isCoursesLoading ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل الكورسات...</div>
             ) : filteredCourses.length === 0 ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا توجد كورسات مضافة تطابق التصفية الحالية.</div>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <BookOpen size={40} style={{ margin: '0 auto 1rem', opacity: 0.35 }} />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+                  لا توجد كورسات مضافة تطابق التصفية الحالية
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                  {selectedYear !== 'all' ? `لم يتم العثور على كورسات لـ "${ACADEMIC_YEAR_LABELS[selectedYear]}".` : 'يرجى تغيير خيارات التصفية أو إضافة كورس جديد.'}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setSelectedYear('all');
+                    setCourseStageFilter('all');
+                    setCourseGradeFilter('all');
+                  }}
+                >
+                  إعادة ضبط التصفية وعرض الكل
+                </button>
+              </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '1.25rem' }}>
                 {filteredCourses.map(course => {

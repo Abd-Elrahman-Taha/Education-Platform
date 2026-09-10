@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { coursesApi } from '../../api/courses.api';
 import { Course } from '../../types/api.types';
+import { matchesAcademicYear } from '../../utils/courseFilter';
 
 interface LandingViewProps {
   onNavigateView: (view: AppView) => void;
@@ -498,7 +499,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
 
       {/* ── 7. "WHAT WILL YOU STUDY?" — INTERACTIVE CURRICULUM & PACKAGE PREVIEW ── */}
       {(() => {
-        const studyCourses = courses;
+        const studyCourses = courses.filter(c => matchesAcademicYear(c, selectedStudyYear));
         const totalCourses = studyCourses.length;
 
         return (

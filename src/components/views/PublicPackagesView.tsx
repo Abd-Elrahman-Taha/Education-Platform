@@ -3,6 +3,7 @@ import { coursesApi } from '../../api/courses.api';
 import { Course } from '../../types/api.types';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { matchesAcademicYear } from '../../utils/courseFilter';
 import { CheckCircle2, BookOpen, ClipboardList, Video, Star, LogIn, UserPlus, Layers, Sigma, Box, Zap, ShieldCheck } from 'lucide-react';
 
 interface Props {
@@ -73,14 +74,19 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
           <div className="spinner" style={{ margin: '0 auto 1rem', width: '32px', height: '32px', border: '3px solid var(--border-glass)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
           <p>جاري تحميل الدورات والباقات المتاحة...</p>
         </div>
-      ) : courses.length === 0 ? (
-        <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <BookOpen size={36} style={{ marginBottom: '1rem', opacity: 0.4 }} />
-          <p>لا توجد كورسات معلنة حالياً. سجّل الدخول أو تابع المنصة لمعرفة أحدث المحاضرات!</p>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-          {courses.map((course, idx) => {
+      ) : (() => {
+        const filteredCourses = courses.filter(c => matchesAcademicYear(c, selectedYear));
+        if (filteredCourses.length === 0) {
+          return (
+            <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <BookOpen size={36} style={{ marginBottom: '1rem', opacity: 0.4 }} />
+              <p>لا توجد كورسات معلنة لـ "{ACADEMIC_YEAR_LABELS[selectedYear]}" حالياً. سجّل الدخول أو تابع المنصة لمعرفة أحدث المحاضرات!</p>
+            </div>
+          );
+        }
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+            {filteredCourses.map((course, idx) => {
             const isFeatured = idx === 0;
 
             return (
@@ -189,7 +195,8 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Trust badges */}
       {!isAuthenticated && (

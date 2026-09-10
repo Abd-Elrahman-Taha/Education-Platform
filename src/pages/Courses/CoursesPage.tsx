@@ -10,6 +10,7 @@ import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { SubscriptionPlansModal } from '../../components/payment/SubscriptionPlansModal';
 import { getFriendlyErrorMessage } from '../../utils/errors';
+import { matchesAcademicYear } from '../../utils/courseFilter';
 
 interface CoursesPageProps {
   onSelectCourse: (courseId: string) => void;
@@ -21,7 +22,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
   const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || 'third_secondary';
 
-  const [selectedYear, setSelectedYear] = useState<AcademicYear>(userSubscribedYear);
+  const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>(userSubscribedYear || 'all');
   const [modalYear, setModalYear] = useState<AcademicYear>('third_secondary');
   const [isPlansModalOpen, setIsPlansModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
@@ -46,21 +47,23 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   ];
 
   const handleYearClick = (yearKey: AcademicYear) => {
-    const isThisYearSubscribed = isStudentSubscribed && (userSubscribedYear === yearKey);
-    if (isAdminOrTeacher || isThisYearSubscribed) {
-      setSelectedYear(yearKey);
+    if (selectedYear === yearKey) {
+      setSelectedYear('all');
     } else {
-      setModalYear(yearKey);
-      setIsPlansModalOpen(true);
+      setSelectedYear(yearKey);
     }
   };
 
+  const filteredCourses = courses.filter((course: Course) => {
+    return matchesAcademicYear(course, selectedYear);
+  });
+
   const handleCourseClick = (course: Course) => {
-    const isThisYearSubscribed = isStudentSubscribed && (userSubscribedYear === selectedYear);
+    const isThisYearSubscribed = isStudentSubscribed && (userSubscribedYear === selectedYear || selectedYear === 'all');
     if (isAdminOrTeacher || isThisYearSubscribed) {
       onSelectCourse(course._id);
     } else {
-      setModalYear(selectedYear);
+      setModalYear(selectedYear === 'all' ? 'third_secondary' : selectedYear);
       setIsPlansModalOpen(true);
     }
   };
@@ -165,14 +168,19 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
                 </span>
                 <button
                   type="button"
-                  className={`btn ${hasFullAccess ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn ${hasFullAccess ? (isCurrentSelected ? 'btn-primary' : 'btn-secondary') : 'btn-secondary'}`}
                   style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', gap: '0.35rem' }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleYearClick(yr.key);
+                    if (hasFullAccess) {
+                      handleYearClick(yr.key);
+                    } else {
+                      setModalYear(yr.key);
+                      setIsPlansModalOpen(true);
+                    }
                   }}
                 >
-                  {hasFullAccess ? 'عرض الكورسات' : <><CreditCard size={13} /> اشترك الآن</>}
+                  {hasFullAccess ? (isCurrentSelected ? 'معروض حالياً' : 'عرض الكورسات') : <><CreditCard size={13} /> اشترك الآن</>}
                 </button>
               </div>
             </div>
@@ -226,6 +234,29 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
           />
         </div>
 
+        {/* Quick Academic Year Filter Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`btn ${selectedYear === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem' }}
+            onClick={() => setSelectedYear('all')}
+          >
+            كافة السنوات ({courses.length})
+          </button>
+          {yearsList.map(yr => (
+            <button
+              key={yr.key}
+              type="button"
+              className={`btn ${selectedYear === yr.key ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem' }}
+              onClick={() => handleYearClick(yr.key)}
+            >
+              {yr.title}
+            </button>
+          ))}
+        </div>
+
         {/* Sort */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Filter size={16} style={{ color: 'var(--text-muted)' }} />
@@ -256,17 +287,26 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
       )}
 
       {/* Empty state */}
-      {!isLoading && !isError && courses.length === 0 && (
+      {!isLoading && !isError && filteredCourses.length === 0 && (
         <EmptyState
           title="لم يتم العثور على أي كورسات"
-          message={params.search ? `لا توجد نتائج بحث مطابقة لـ "${params.search}".` : 'لا توجد كورسات منشورة متاحة حالياً.'}
-          actionText={params.search ? 'إلغاء البحث' : undefined}
-          onAction={() => handleSearchChange('')}
+          message={
+            params.search
+              ? `لا توجد نتائج بحث مطابقة لـ "${params.search}".`
+              : selectedYear !== 'all'
+              ? `لا توجد كورسات معلنة لـ "${ACADEMIC_YEAR_LABELS[selectedYear]}" حالياً.`
+              : 'لا توجد كورسات منشورة متاحة حالياً.'
+          }
+          actionText={selectedYear !== 'all' ? 'عرض كافة المراحل الدراسية' : (params.search ? 'إلغاء البحث' : undefined)}
+          onAction={() => {
+            if (selectedYear !== 'all') setSelectedYear('all');
+            else if (params.search) handleSearchChange('');
+          }}
         />
       )}
 
       {/* Courses Grid */}
-      {!isLoading && !isError && courses.length > 0 && (
+      {!isLoading && !isError && filteredCourses.length > 0 && (
         <>
           <div
             style={{
@@ -275,7 +315,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
               gap: '1.5rem',
             }}
           >
-            {courses.map((course: Course) => (
+            {filteredCourses.map((course: Course) => (
               <div
                 key={course._id}
                 className="glass-card"
