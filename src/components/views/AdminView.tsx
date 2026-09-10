@@ -400,28 +400,34 @@ export const AdminView: React.FC = () => {
     setIsAdminsLoading(true);
     try {
       const res = await studentsApi.getAdmins();
-      // If Role=Admin filter worked, res.admins only contains admins
-      // If backend ignores the filter and returns all users, filter locally as fallback
-      const admins = res.admins.length > 0
-        ? res.admins.filter(u => (u.Role || '').toLowerCase() === 'admin')
-        : [];
-
-      if (admins.length === 0) {
-        // Fallback: fetch all students and filter locally (in case backend ignores Role param)
-        const allRes = await studentsApi.getStudents({});
-        const allAdmins = allRes.students.filter(s => (s.Role || '').toLowerCase() === 'admin');
-        setRealAdmins(allAdmins);
-      } else {
-        setRealAdmins(admins);
+      let admins = res.admins || [];
+      // Also ensure current logged in admin is present if role is Admin
+      if (currentUser && ((currentUser.role || '').toLowerCase() === 'admin' || (currentUser as any).Role?.toLowerCase() === 'admin')) {
+        const currId = currentUser.id || (currentUser as any)._id;
+        const exists = admins.some(a => a._id === currId || (currentUser.phone && a.Phone === currentUser.phone));
+        if (!exists && currId) {
+          const currentAdminObj: AdminStudent = {
+            _id: currId,
+            FullName: currentUser.name || 'مدير المنصة الحالي (أنت)',
+            Phone: currentUser.phone || '',
+            NationalId: currentUser.nationalId || '—',
+            ParentPhone: '—',
+            Role: 'Admin',
+            Status: 'Active',
+          };
+          admins = [currentAdminObj, ...admins];
+        }
       }
+      setRealAdmins(admins);
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch admins:', err);
-      // Fallback: filter from already-loaded students list if available
-      if (realStudents.length > 0) {
-        setRealAdmins(realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin'));
-      } else {
-        setRealAdmins([]);
-      }
+      // Fallback: load from platform_admins_list if available
+      try {
+        const stored = localStorage.getItem('platform_admins_list');
+        if (stored) {
+          setRealAdmins(JSON.parse(stored));
+        }
+      } catch {}
     } finally {
       setIsAdminsLoading(false);
     }
@@ -559,12 +565,23 @@ export const AdminView: React.FC = () => {
     setIsPromoting(true);
     try {
       await studentsApi.promoteStudentToAdmin(promoteTargetStudent._id);
+      try {
+        const stored = localStorage.getItem('platform_admins_list');
+        const list: AdminStudent[] = stored ? JSON.parse(stored) : [];
+        const updatedAdmin: AdminStudent = {
+          ...promoteTargetStudent,
+          Role: 'Admin',
+        };
+        const nextList = [updatedAdmin, ...list.filter(a => a._id !== promoteTargetStudent._id)];
+        localStorage.setItem('platform_admins_list', JSON.stringify(nextList));
+      } catch {}
       showToast(
         `تمت ترقية (${promoteTargetStudent.FullName}) إلى مدير بنجاح! تم إنهاء جلسته الحالية ويجب عليه تسجيل الدخول كمدير.`,
         'success'
       );
       setIsPromoteModalOpen(false);
       setPromoteTargetStudent(null);
+      await loadAdmins();
       await loadStudents();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر ترقية حساب الطالب إلى مدير، يرجى المحاولة لاحقاً'), 'error');
@@ -720,12 +737,33 @@ export const AdminView: React.FC = () => {
       if (willPromote) {
         try {
           await studentsApi.promoteStudentToAdmin(studentId);
+          try {
+            const stored = localStorage.getItem('platform_admins_list');
+            const list: AdminStudent[] = stored ? JSON.parse(stored) : [];
+            const adminObj: AdminStudent = {
+              ...editingStudent,
+              _id: studentId,
+              FullName: trimmedName,
+              Phone: trimmedPhone,
+              ParentPhone: trimmedParentPhone || editingStudent.ParentPhone,
+              NationalId: trimmedNationalId || editingStudent.NationalId,
+              Role: 'Admin',
+            };
+            localStorage.setItem('platform_admins_list', JSON.stringify([adminObj, ...list.filter(a => a._id !== studentId)]));
+          } catch {}
         } catch (promoteErr: any) {
           console.warn('Role promotion error:', promoteErr);
         }
       } else if (willDemote) {
         try {
           await studentsApi.demoteAdminToStudent(studentId);
+          try {
+            const stored = localStorage.getItem('platform_admins_list');
+            if (stored) {
+              const list: AdminStudent[] = JSON.parse(stored);
+              localStorage.setItem('platform_admins_list', JSON.stringify(list.filter(a => a._id !== studentId)));
+            }
+          } catch {}
         } catch (demoteErr: any) {
           console.warn('Role demotion error:', demoteErr);
         }
@@ -778,6 +816,7 @@ export const AdminView: React.FC = () => {
       setIsEditStudentOpen(false);
       setEditingStudent(null);
       await loadStudents();
+      await loadAdmins();
     } catch (err: any) {
       console.error('[API ERROR] Failed to update account:', err);
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الحساب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
@@ -2300,8 +2339,16 @@ export const AdminView: React.FC = () => {
                           if (window.confirm(`هل أنت متأكد من رغبتك في سحب صلاحيات الإدارة وتحويل الحساب (${adminUser.FullName}) إلى حساب طالب عادي (Normal Student User)؟`)) {
                             try {
                               await studentsApi.demoteAdminToStudent(adminUser._id);
+                              try {
+                                const stored = localStorage.getItem('platform_admins_list');
+                                if (stored) {
+                                  const list = JSON.parse(stored);
+                                  localStorage.setItem('platform_admins_list', JSON.stringify(list.filter((a: any) => a._id !== adminUser._id)));
+                                }
+                              } catch {}
                               showToast(`تم تحويل حساب (${adminUser.FullName}) إلى حساب طالب عادي بنجاح!`, 'success');
                               await loadAdmins();
+                              await loadStudents();
                             } catch (err: any) {
                               showToast(getFriendlyErrorMessage(err, 'تعذر تحويل الحساب إلى طالب عادي'), 'error');
                             }

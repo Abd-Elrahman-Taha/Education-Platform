@@ -13,6 +13,7 @@ interface CourseDetailsPageProps {
   onSelectLesson: (lessonId: string) => void;
   onSelectExam: (examId: string) => void;
   onBackToCourses: () => void;
+  onNavigateToPackages?: () => void;
 }
 
 export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
@@ -20,6 +21,7 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
   onSelectLesson,
   onSelectExam,
   onBackToCourses,
+  onNavigateToPackages,
 }) => {
   const {
     course,
@@ -141,10 +143,16 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
           ) : (
             <button
               className="btn btn-primary"
-              onClick={() => setIsCheckoutOpen(true)}
+              onClick={() => {
+                if (onNavigateToPackages) {
+                  onNavigateToPackages();
+                } else {
+                  setIsCheckoutOpen(true);
+                }
+              }}
               style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}
             >
-              الاشتراك والالتحاق بالكورس
+              الاشتراك والالتحاق بالكورس (الباقات وطرق الدفع)
             </button>
           )}
         </div>

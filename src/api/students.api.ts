@@ -24,8 +24,9 @@ export const studentsApi = {
     if (cleanParams && typeof cleanParams.search === 'string' && !cleanParams.search.trim()) {
       delete cleanParams.search;
     }
-    const response = await apiClient.get<StudentsListResponse>('/users/students', { params: cleanParams });
-    const students = response.data?.data?.students || [];
+    const queryParams = { limit: 500, ...cleanParams };
+    const response = await apiClient.get<StudentsListResponse>('/users/students', { params: queryParams });
+    const students = response.data?.data?.students || (response.data as any)?.students || [];
     const pagination = response.data?.pagination || { total: students.length, totalPages: 1 };
     return {
       students,
@@ -137,27 +138,78 @@ export const studentsApi = {
 
   /**
    * Get all admin users (Admin-only).
-   * Uses GET /users/students?Role=Admin since there is no dedicated /users/admins route.
-   * Returns all users with Role === 'Admin'.
+   * Queries /users/students with high limit, scans all pages, and checks case-insensitive Role/role.
+   * Merges with persistent platform_admins_list.
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
-    const response = await apiClient.get<any>('/users/students', { params: { Role: 'Admin' } });
-    const raw = response.data;
-    // Handle multiple possible response shapes
-    const adminsList: AdminStudent[] = Array.isArray(raw?.data?.students)
-      ? raw.data.students
-      : Array.isArray(raw?.data?.users)
-      ? raw.data.users
-      : Array.isArray(raw?.students)
-      ? raw.students
-      : Array.isArray(raw?.data)
-      ? raw.data
-      : Array.isArray(raw)
-      ? raw
-      : [];
+    let allUsers: AdminStudent[] = [];
+    try {
+      const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 500 } });
+      const raw = response.data as any;
+      const list: AdminStudent[] = Array.isArray(raw?.data?.students)
+        ? raw.data.students
+        : Array.isArray(raw?.data?.users)
+        ? raw.data.users
+        : Array.isArray(raw?.students)
+        ? raw.students
+        : Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw)
+        ? raw
+        : [];
+      allUsers = list;
+
+      const totalPages = raw?.pagination?.totalPages || 1;
+      if (totalPages > 1) {
+        for (let p = 2; p <= Math.min(totalPages, 5); p++) {
+          try {
+            const pageRes = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 500, page: p } });
+            const pageRaw = pageRes.data as any;
+            const pageList: AdminStudent[] = pageRaw?.data?.students || pageRaw?.students || [];
+            allUsers = [...allUsers, ...pageList];
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch students list when looking for admins:', err);
+    }
+
+    // Filter for all Admin users
+    const backendAdmins = allUsers.filter(u => {
+      const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
+      return r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student');
+    });
+
+    // Merge with any known stored admins in platform_admins_list
+    let storedAdmins: AdminStudent[] = [];
+    try {
+      const storedAdminsStr = localStorage.getItem('platform_admins_list');
+      if (storedAdminsStr) {
+        storedAdmins = JSON.parse(storedAdminsStr);
+      }
+    } catch {}
+
+    // Deduplicate by _id and Phone
+    const adminMap = new Map<string, AdminStudent>();
+    for (const a of backendAdmins) {
+      if (a._id) adminMap.set(a._id, a);
+    }
+    for (const a of storedAdmins) {
+      if (a._id && !adminMap.has(a._id)) {
+        adminMap.set(a._id, a);
+      }
+    }
+
+    const mergedAdmins = Array.from(adminMap.values());
+    if (mergedAdmins.length > 0) {
+      try {
+        localStorage.setItem('platform_admins_list', JSON.stringify(mergedAdmins));
+      } catch {}
+    }
+
     return {
-      admins: adminsList,
-      total: raw?.pagination?.total ?? raw?.results ?? adminsList.length,
+      admins: mergedAdmins,
+      total: mergedAdmins.length,
     };
   },
 };

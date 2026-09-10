@@ -59,6 +59,7 @@ export type AppView =
   | 'view-lesson-detail'
   | 'view-exam-session'
   | 'view-profile'
+  | 'view-egyptian-gateway'
   | 'view-subject-calculus'
   | 'view-subject-geometry';
 

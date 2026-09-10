@@ -25,6 +25,8 @@ import { CourseDetailsPage } from './pages/CourseDetails/CourseDetailsPage';
 import { LessonViewPage } from './pages/Lesson/LessonViewPage';
 import { ExamPage } from './pages/Exam/ExamPage';
 import { ProfilePage } from './pages/Profile/ProfilePage';
+import { PackagesPricingPage, SelectedPackagePayment } from './pages/Packages/PackagesPricingPage';
+import { EgyptianGatewayPage } from './pages/Payment/EgyptianGatewayPage';
 
 const ROUTE_TO_VIEW: Record<string, AppView> = {
   '/': 'view-landing',
@@ -46,6 +48,10 @@ const ROUTE_TO_VIEW: Record<string, AppView> = {
   '/messages': 'view-teacher-inbox',
   '/inbox': 'view-teacher-inbox',
   '/packages': 'view-packages',
+  '/pricing': 'view-packages',
+  '/payment': 'view-packages',
+  '/payment/gateway-egyptian': 'view-egyptian-gateway',
+  '/gateway-egyptian': 'view-egyptian-gateway',
   '/faq': 'view-faq',
 };
 
@@ -65,6 +71,7 @@ const VIEW_TO_ROUTE: Record<AppView, string> = {
   'view-admin': '/admin',
   'view-teacher-inbox': '/messages',
   'view-packages': '/packages',
+  'view-egyptian-gateway': '/payment/gateway-egyptian',
   'view-faq': '/faq',
   'view-homework': '/lessons',
   'view-pdfs': '/lessons',
@@ -122,6 +129,19 @@ export const AppContent: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Egyptian Payment Gateway state
+  const [selectedPaymentPackage, setSelectedPaymentPackage] = useState<SelectedPackagePayment>({
+    id: 'pkg-semester',
+    title: 'باقة الترم الشاملة',
+    price: 450,
+    type: 'semester',
+  });
+
+  const handleProceedToPayment = (pkg: SelectedPackagePayment) => {
+    setSelectedPaymentPackage(pkg);
+    handleNavigateView('view-egyptian-gateway');
+  };
 
   // Sync URL on route state change
   useEffect(() => {
@@ -247,10 +267,40 @@ export const AppContent: React.FC = () => {
               onSelectLesson={handleSelectLessonInCourse}
               onSelectExam={handleOpenExam}
               onBackToCourses={() => handleNavigateView('view-courses')}
+              onNavigateToPackages={() => handleNavigateView('view-packages')}
             />
           ) : (
             <CoursesPage onSelectCourse={handleSelectCourse} />
           )
+        )}
+
+        {/* Packages & Pricing Page (/packages) */}
+        {currentView === 'view-packages' && (
+          <PackagesPricingPage
+            onProceedToPayment={handleProceedToPayment}
+            onBack={() => {
+              if (selectedCourseId) {
+                handleSelectCourse(selectedCourseId);
+              } else {
+                handleNavigateView('view-courses');
+              }
+            }}
+          />
+        )}
+
+        {/* Egyptian Payment Gateway Page (/payment/gateway-egyptian) */}
+        {currentView === 'view-egyptian-gateway' && (
+          <EgyptianGatewayPage
+            selectedPackage={selectedPaymentPackage}
+            onBackToPackages={() => handleNavigateView('view-packages')}
+            onPaymentSuccess={(courseId) => {
+              if (courseId) {
+                handleSelectCourse(courseId);
+              } else {
+                handleNavigateView('view-student-dashboard');
+              }
+            }}
+          />
         )}
 
         {/* Lesson View Page with Secure Video Player & Heartbeat */}
