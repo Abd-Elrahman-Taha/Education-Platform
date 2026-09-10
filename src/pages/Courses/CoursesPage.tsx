@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, BookOpen, ArrowLeft, Filter, Sparkles, GraduationCap, Lock, CheckCircle2, ShieldCheck, CreditCard } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useCourses } from '../../hooks/useCourses';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/common/ErrorState';
@@ -8,6 +9,7 @@ import { Pagination } from '../../components/common/Pagination';
 import { Course } from '../../types/api.types';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { enrollmentsApi } from '../../api/enrollments.api';
 import { SubscriptionPlansModal } from '../../components/payment/SubscriptionPlansModal';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 import { matchesAcademicYear } from '../../utils/courseFilter';
@@ -22,10 +24,26 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
   const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || 'third_secondary';
 
-  const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>(userSubscribedYear || 'all');
+  const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
   const [modalYear, setModalYear] = useState<AcademicYear>('third_secondary');
   const [isPlansModalOpen, setIsPlansModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
+
+  // Live query for current student's enrolled courses from backend
+  const { data: myEnrollments } = useQuery({
+    queryKey: ['my-enrollments'],
+    queryFn: () => enrollmentsApi.getMyCourses(),
+    enabled: !!currentUser && !isAdminOrTeacher,
+  });
+
+  const enrolledCourseIds = useMemo(() => {
+    if (!myEnrollments || !Array.isArray(myEnrollments)) return new Set<string>();
+    return new Set(
+      myEnrollments.map((e) =>
+        typeof e.CourseId === 'object' && e.CourseId ? e.CourseId._id : (e.CourseId as unknown as string)
+      )
+    );
+  }, [myEnrollments]);
 
   const {
     courses,
@@ -59,13 +77,9 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   });
 
   const handleCourseClick = (course: Course) => {
-    const isThisYearSubscribed = isStudentSubscribed && (userSubscribedYear === selectedYear || selectedYear === 'all');
-    if (isAdminOrTeacher || isThisYearSubscribed) {
-      onSelectCourse(course._id);
-    } else {
-      setModalYear(selectedYear === 'all' ? 'third_secondary' : selectedYear);
-      setIsPlansModalOpen(true);
-    }
+    // Open course details directly. CourseDetailsPage handles unlocking lessons if enrolled,
+    // or displays registration options if not enrolled.
+    onSelectCourse(course._id);
   };
 
   const onSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,111 +329,115 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
               gap: '1.5rem',
             }}
           >
-            {filteredCourses.map((course: Course) => (
-              <div
-                key={course._id}
-                className="glass-card"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  borderRadius: 'var(--radius-lg)',
-                  overflow: 'hidden',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  cursor: 'pointer',
-                }}
-                onClick={() => handleCourseClick(course)}
-              >
-                {/* Course Thumbnail */}
+            {filteredCourses.map((course: Course) => {
+              const isEnrolledInCourse = isAdminOrTeacher || enrolledCourseIds.has(course._id);
+              return (
                 <div
+                  key={course._id}
+                  className="glass-card"
                   style={{
-                    height: '160px',
-                    background: course.Thumbnail
-                      ? `url(${course.Thumbnail}) center/cover no-repeat`
-                      : 'linear-gradient(135deg, rgba(8,145,178,0.25), rgba(139,92,246,0.25))',
-                    position: 'relative',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    borderRadius: 'var(--radius-lg)',
+                    overflow: 'hidden',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    cursor: 'pointer',
+                    border: isEnrolledInCourse ? '1px solid rgba(16, 185, 129, 0.35)' : undefined,
                   }}
+                  onClick={() => handleCourseClick(course)}
                 >
-                  {!course.Thumbnail && <BookOpen size={48} style={{ opacity: 0.35, color: '#FFF' }} />}
-                  <span
-                    style={{
-                      position: 'absolute',
-                      bottom: '10px',
-                      left: '10px',
-                      background: 'rgba(0, 0, 0, 0.75)',
-                      backdropFilter: 'blur(6px)',
-                      color: '#FFF',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      padding: '0.25rem 0.65rem',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                  >
-                    {course.Price > 0 ? `${course.Price} ج.م` : 'مجاني'}
-                  </span>
-                </div>
-
-                {/* Course Info */}
-                <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <h3
-                    style={{
-                      fontSize: '1.1rem',
-                      fontWeight: 800,
-                      color: 'var(--text-bright)',
-                      margin: '0 0 0.5rem',
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {course.Title}
-                  </h3>
-
-                  {course.Description && (
-                    <p
-                      style={{
-                        color: 'var(--text-muted)',
-                        fontSize: '0.84rem',
-                        margin: '0 0 1rem',
-                        lineHeight: 1.5,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        flex: 1,
-                      }}
-                    >
-                      {course.Description}
-                    </p>
-                  )}
-
+                  {/* Course Thumbnail */}
                   <div
                     style={{
+                      height: '160px',
+                      background: course.Thumbnail
+                        ? `url(${course.Thumbnail}) center/cover no-repeat`
+                        : 'linear-gradient(135deg, rgba(8,145,178,0.25), rgba(139,92,246,0.25))',
+                      position: 'relative',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginTop: 'auto',
-                      paddingTop: '0.85rem',
-                      borderTop: '1px solid var(--border-glass)',
+                      justifyContent: 'center',
                     }}
                   >
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {course.LessonsCount ? `${course.LessonsCount} محاضرة` : 'عرض التفاصيل'}
-                    </span>
-                    <button
-                      className="btn btn-primary"
-                      style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCourseClick(course);
+                    {!course.Thumbnail && <BookOpen size={48} style={{ opacity: 0.35, color: '#FFF' }} />}
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        left: '10px',
+                        background: isEnrolledInCourse ? 'rgba(16, 185, 129, 0.85)' : 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(6px)',
+                        color: '#FFF',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: 'var(--radius-sm)',
                       }}
                     >
-                      دخول الكورس <ArrowLeft size={14} />
-                    </button>
+                      {isEnrolledInCourse ? '✓ مشترك' : (course.Price > 0 ? `${course.Price} ج.م` : 'مجاني')}
+                    </span>
+                  </div>
+
+                  {/* Course Info */}
+                  <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <h3
+                      style={{
+                        fontSize: '1.1rem',
+                        fontWeight: 800,
+                        color: 'var(--text-bright)',
+                        margin: '0 0 0.5rem',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {course.Title}
+                    </h3>
+
+                    {course.Description && (
+                      <p
+                        style={{
+                          color: 'var(--text-muted)',
+                          fontSize: '0.84rem',
+                          margin: '0 0 1rem',
+                          lineHeight: 1.5,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          flex: 1,
+                        }}
+                      >
+                        {course.Description}
+                      </p>
+                    )}
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: 'auto',
+                        paddingTop: '0.85rem',
+                        borderTop: '1px solid var(--border-glass)',
+                      }}
+                    >
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {course.LessonsCount ? `${course.LessonsCount} محاضرة` : 'عرض التفاصيل'}
+                      </span>
+                      <button
+                        className={`btn ${isEnrolledInCourse ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCourseClick(course);
+                        }}
+                      >
+                        {isEnrolledInCourse ? 'دخول المحاضرات' : 'عرض التفاصيل'} <ArrowLeft size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Backend-driven Pagination */}

@@ -21,6 +21,7 @@ import { examsApi } from '../../api/exams.api';
 import { enrollmentsApi } from '../../api/enrollments.api';
 import {
   AdminStudent,
+  UpdateStudentRequest,
   Course,
   Lesson,
   EducationStage,
@@ -164,9 +165,12 @@ export const AdminView: React.FC = () => {
     name: '',
     phone: '',
     parentPhone: '',
+    nationalId: '',
     role: 'Student',
-    isSubscribed: false,
+    subscriptionAction: 'none',
   });
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [enrolledStudentIds, setEnrolledStudentIds] = useState<Set<string>>(new Set());
 
   const [newCourseForm, setNewCourseForm] = useState<{
     title: string;
@@ -506,12 +510,25 @@ export const AdminView: React.FC = () => {
     if (!enrollTargetStudent || !selectedEnrollCourseId) return;
     setIsEnrolling(true);
     try {
-      const res = await enrollmentsApi.manualEnrollStudent(enrollTargetStudent._id, selectedEnrollCourseId);
-      const targetCourse = realCourses.find(c => c._id === selectedEnrollCourseId);
-      showToast(
-        res.message || `تم منح الطالب (${enrollTargetStudent.FullName}) كورس "${targetCourse?.Title || ''}" بنجاح (AdminGift)!`,
-        'success'
-      );
+      if (selectedEnrollCourseId === 'ALL_COURSES') {
+        const results = await Promise.allSettled(
+          realCourses.map(c => enrollmentsApi.manualEnrollStudent(enrollTargetStudent._id, c._id))
+        );
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        setEnrolledStudentIds(prev => new Set(prev).add(enrollTargetStudent._id));
+        showToast(
+          `تم منح الطالب (${enrollTargetStudent.FullName}) اشتراكاً شاملاً وتسجيله في (${successCount} كورس) بنجاح!`,
+          'success'
+        );
+      } else {
+        const res = await enrollmentsApi.manualEnrollStudent(enrollTargetStudent._id, selectedEnrollCourseId);
+        const targetCourse = realCourses.find(c => c._id === selectedEnrollCourseId);
+        setEnrolledStudentIds(prev => new Set(prev).add(enrollTargetStudent._id));
+        showToast(
+          res.message || `تم منح الطالب (${enrollTargetStudent.FullName}) كورس "${targetCourse?.Title || ''}" بنجاح (AdminGift)!`,
+          'success'
+        );
+      }
       setIsManualEnrollOpen(false);
       setEnrollTargetStudent(null);
     } catch (err: any) {
@@ -533,12 +550,14 @@ export const AdminView: React.FC = () => {
   const handleOpenEditStudent = (student: AdminStudent) => {
     setEditingStudent(student);
     const cleanedParentPhone = (student.ParentPhone && student.ParentPhone !== '—') ? student.ParentPhone : '';
+    const cleanedNationalId = (student.NationalId && student.NationalId !== '—') ? student.NationalId : '';
     setEditStudentForm({
       name: student.FullName || '',
       phone: student.Phone || '',
       parentPhone: cleanedParentPhone,
+      nationalId: cleanedNationalId,
       role: (student.Role || '').toLowerCase() === 'admin' ? 'Admin' : 'Student',
-      isSubscribed: !!student.isSubscribed,
+      subscriptionAction: 'none',
     });
     setIsEditStudentOpen(true);
   };
@@ -558,73 +577,93 @@ export const AdminView: React.FC = () => {
       return;
     }
 
+    const trimmedName = editStudentForm.name.trim();
+    if (trimmedName.length < 3) {
+      showToast('اسم الطالب يجب أن يتكون من 3 أحرف على الأقل', 'error');
+      return;
+    }
+
+    const trimmedPhone = editStudentForm.phone.trim();
+    if (!/^01[0125]\d{8}$/.test(trimmedPhone)) {
+      showToast('رقم هاتف الطالب يجب أن يكون 11 رقماً مصرياً يبدأ بـ 01 (مثال: 01012345678)', 'error');
+      return;
+    }
+
+    const trimmedParentPhone = editStudentForm.parentPhone.trim();
+    if (trimmedParentPhone && trimmedParentPhone !== '—' && !/^01[0125]\d{8}$/.test(trimmedParentPhone)) {
+      showToast('رقم هاتف ولي الأمر يجب أن يكون 11 رقماً مصرياً يبدأ بـ 01 (مثال: 01198765432)', 'error');
+      return;
+    }
+
+    const trimmedNationalId = editStudentForm.nationalId.trim();
+    if (trimmedNationalId && !/^\d{14}$/.test(trimmedNationalId)) {
+      showToast('الرقم القومي يجب أن يتكون من 14 رقماً', 'error');
+      return;
+    }
+
+    setIsSubmittingEdit(true);
+
     try {
-      // 2. Diff check: Only send fields that actually changed and match backend requirements
-      const updateData: { FullName?: string; Phone?: string; ParentPhone?: string } = {};
+      // Build full update payload to satisfy backend schema validation
+      const updateData: UpdateStudentRequest = {
+        FullName: trimmedName,
+        Phone: trimmedPhone,
+      };
 
-      const trimmedName = editStudentForm.name.trim();
-      const currentName = (editingStudent.FullName || '').trim();
-      if (trimmedName && trimmedName !== currentName) {
-        if (trimmedName.length < 3) {
-          showToast('اسم الطالب يجب أن يتكون من 3 أحرف على الأقل', 'error');
-          return;
-        }
-        updateData.FullName = trimmedName;
-      }
-
-      const trimmedPhone = editStudentForm.phone.trim();
-      const currentPhone = (editingStudent.Phone || '').trim();
-      if (trimmedPhone && trimmedPhone !== currentPhone) {
-        if (!/^01[0125]\d{8}$/.test(trimmedPhone)) {
-          showToast('رقم هاتف الطالب يجب أن يكون 11 رقماً مصرياً يبدأ بـ 01 (مثال: 01012345678)', 'error');
-          return;
-        }
-        updateData.Phone = trimmedPhone;
-      }
-
-      const trimmedParentPhone = editStudentForm.parentPhone.trim();
-      const currentParentPhone = (editingStudent.ParentPhone || '').trim();
-      if (trimmedParentPhone && trimmedParentPhone !== '—' && trimmedParentPhone !== currentParentPhone) {
-        if (!/^01[0125]\d{8}$/.test(trimmedParentPhone)) {
-          showToast('رقم هاتف ولي الأمر يجب أن يكون 11 رقماً مصرياً يبدأ بـ 01 (مثال: 01198765432)', 'error');
-          return;
-        }
+      if (trimmedParentPhone && trimmedParentPhone !== '—') {
         updateData.ParentPhone = trimmedParentPhone;
+      } else if (editingStudent.ParentPhone && editingStudent.ParentPhone !== '—') {
+        updateData.ParentPhone = editingStudent.ParentPhone;
       }
 
-      const willPromote = !isCurrentlyAdmin && editStudentForm.role === 'Admin';
-      const hasFieldsToUpdate = Object.keys(updateData).length > 0;
-
-      if (!hasFieldsToUpdate && !willPromote) {
-        showToast('لم يتم إجراء أي تغيير على البيانات الحالية', 'info');
-        setIsEditStudentOpen(false);
-        setEditingStudent(null);
-        return;
+      if (trimmedNationalId) {
+        updateData.NationalId = trimmedNationalId;
+      } else if (editingStudent.NationalId) {
+        updateData.NationalId = editingStudent.NationalId;
       }
 
-      // 3. Send update to backend
-      if (hasFieldsToUpdate) {
+      // Check if profile fields actually changed
+      const hasProfileChanges =
+        trimmedName !== (editingStudent.FullName || '').trim() ||
+        trimmedPhone !== (editingStudent.Phone || '').trim() ||
+        (trimmedParentPhone && trimmedParentPhone !== (editingStudent.ParentPhone || '').trim()) ||
+        (trimmedNationalId && trimmedNationalId !== (editingStudent.NationalId || '').trim());
+
+      if (hasProfileChanges) {
         await studentsApi.updateStudent(studentId, updateData);
       }
 
-      // 4. Handle role promotion if selected
+      // Handle role promotion if selected
+      const willPromote = !isCurrentlyAdmin && editStudentForm.role === 'Admin';
       if (willPromote) {
         try {
           await studentsApi.promoteStudentToAdmin(studentId);
-          showToast(`تم حفظ تعديل البيانات وترقية الطالب إلى مدير بنجاح!`, 'success');
         } catch (promoteErr: any) {
-          showToast(getFriendlyErrorMessage(promoteErr, 'تم تعديل البيانات ولكن تعذر ترقية الحساب إلى مدير'), 'error');
+          console.warn('Role promotion error:', promoteErr);
         }
-      } else {
-        showToast('تم حفظ تعديلات بيانات الطالب بنجاح!', 'success');
       }
 
+      // Handle subscription / course enrollment
+      const subAction = editStudentForm.subscriptionAction;
+      if (subAction === 'ALL') {
+        await Promise.allSettled(
+          realCourses.map(c => enrollmentsApi.manualEnrollStudent(studentId, c._id))
+        );
+        setEnrolledStudentIds(prev => new Set(prev).add(studentId));
+      } else if (subAction && subAction !== 'none') {
+        await enrollmentsApi.manualEnrollStudent(studentId, subAction);
+        setEnrolledStudentIds(prev => new Set(prev).add(studentId));
+      }
+
+      showToast('تم حفظ تعديلات بيانات الطالب بنجاح!', 'success');
       setIsEditStudentOpen(false);
       setEditingStudent(null);
       await loadStudents();
     } catch (err: any) {
       console.error('[API ERROR] Failed to update student:', err);
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الطالب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
+    } finally {
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -1209,7 +1248,7 @@ export const AdminView: React.FC = () => {
                   {realStudents.map(student => {
                     const isActive = student.Status === 'Active';
                     const isAdmin = (student.Role || '').toLowerCase() === 'admin';
-                    const isSub = !!student.isSubscribed;
+                    const isSub = !!student.isSubscribed || enrolledStudentIds.has(student._id);
 
                     return (
                       <tr key={student._id}>
@@ -2405,6 +2444,21 @@ export const AdminView: React.FC = () => {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  الرقم القومي (14 رقماً)
+                </label>
+                <input
+                  type="text"
+                  maxLength={14}
+                  placeholder="الرقم القومي (14 رقماً)"
+                  className="input-field"
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                  value={editStudentForm.nationalId}
+                  onChange={e => setEditStudentForm({ ...editStudentForm, nationalId: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
                   الدور (Role)
                 </label>
                 <select
@@ -2424,6 +2478,31 @@ export const AdminView: React.FC = () => {
                 </span>
               </div>
 
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  حالة الاشتراك وتفعيل الكورسات
+                </label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editStudentForm.subscriptionAction}
+                  onChange={e => setEditStudentForm({ ...editStudentForm, subscriptionAction: e.target.value })}
+                >
+                  <option value="none">بدون تعديل على اشتراكات الكورسات الحالية</option>
+                  <option value="ALL">⭐ تفعيل اشتراك شامل (منح كافة الكورسات المتاحة)</option>
+                  {realCourses.map(c => (
+                    <option key={c._id} value={c._id}>
+                      منح حق الوصول لكورس: {c.Title}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  {enrolledStudentIds.has(editingStudent._id)
+                    ? 'الحساب لديه اشتراك مفعل في الكورسات حالياً.'
+                    : 'يمكنك منح الطالب اشتراكاً شاملاً أو الوصول لكورس تعليمي محدد فورياً.'}
+                </span>
+              </div>
+
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
                 <button
                   type="button"
@@ -2436,9 +2515,10 @@ export const AdminView: React.FC = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
+                  disabled={isSubmittingEdit}
                   style={{ flex: 2 }}
                 >
-                  حفظ التعديلات
+                  {isSubmittingEdit ? 'جاري حفظ التعديلات...' : 'حفظ التعديلات'}
                 </button>
               </div>
             </form>
@@ -2492,6 +2572,7 @@ export const AdminView: React.FC = () => {
                   onChange={e => setSelectedEnrollCourseId(e.target.value)}
                   required
                 >
+                  <option value="ALL_COURSES">⭐ اشتراك شامل لكافة الكورسات ({realCourses.length} كورس)</option>
                   {realCourses.map(c => (
                     <option key={c._id} value={c._id}>
                       {c.Title} ({c.Price} ج.م)

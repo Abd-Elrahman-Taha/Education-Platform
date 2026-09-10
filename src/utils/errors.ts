@@ -110,8 +110,9 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
   if (
     rawMsg &&
     /[\u0600-\u06FF]/.test(rawMsg) &&
-    rawMsg !== 'حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.' &&
-    rawMsg !== 'حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى لاحقاً.'
+    !rawMsg.includes('حدث خطأ غير متوقع') &&
+    !rawMsg.includes('خطأ في السيرفر') &&
+    !rawMsg.includes('خطأ في الخادم')
   ) {
     let sanitized = rawMsg
       .replace(/الـ\s*backend/gi, 'النظام')

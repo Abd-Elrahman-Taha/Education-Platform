@@ -1,12 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
 import { coursesApi } from '../api/courses.api';
 import { lessonsApi } from '../api/lessons.api';
+import { enrollmentsApi } from '../api/enrollments.api';
+import { useAuth } from '../context/AuthContext';
 
 export function useCourseDetails(courseId?: string) {
+  const { currentUser } = useAuth();
+  const isAdminOrTeacher = currentUser?.role === 'admin' || currentUser?.role === 'teacher';
+
   const courseQuery = useQuery({
     queryKey: ['course', courseId],
     queryFn: () => coursesApi.getCourseById(courseId!),
     enabled: !!courseId,
+  });
+
+  const enrollmentsQuery = useQuery({
+    queryKey: ['my-enrollments'],
+    queryFn: () => enrollmentsApi.getMyCourses(),
+    enabled: !!currentUser && !isAdminOrTeacher,
+  });
+
+  const isEnrolledViaList = !!enrollmentsQuery.data?.some((e) => {
+    const id = typeof e.CourseId === 'object' && e.CourseId ? e.CourseId._id : (e.CourseId as unknown as string);
+    return id === courseId;
   });
 
   const lessonsQuery = useQuery({
@@ -26,7 +42,10 @@ export function useCourseDetails(courseId?: string) {
     retry: false,
   });
 
-  const isEnrolled = lessonsQuery.data !== null && lessonsQuery.data !== undefined;
+  const isEnrolled =
+    isAdminOrTeacher ||
+    isEnrolledViaList ||
+    (lessonsQuery.data !== null && lessonsQuery.data !== undefined && !lessonsQuery.isError);
 
   return {
     course: courseQuery.data,

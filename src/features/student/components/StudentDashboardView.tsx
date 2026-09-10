@@ -15,11 +15,12 @@ import {
 
 interface Props {
   onNavigateView: (view: AppView, lessonId?: string) => void;
+  onSelectCourse?: (courseId: string) => void;
 }
 
 const PIE_COLORS = ['#0891B2', ' #ffc800', '#E11D48'];
 
-export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
+export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelectCourse }) => {
   const { data: dashboardRes, isLoading: isDashLoading, isError: isDashError, refetch: refetchDash } = useQuery({
     queryKey: ['studentDashboard'],
     queryFn: studentApi.getDashboard,
@@ -159,7 +160,13 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView }) => {
                     <button
                       className="btn btn-primary"
                       style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
-                      onClick={() => onNavigateView('view-courses')}
+                      onClick={() => {
+                        if (onSelectCourse) {
+                          onSelectCourse(c._id);
+                        } else {
+                          onNavigateView('view-courses');
+                        }
+                      }}
                     >
                       دخول المحاضرات
                     </button>

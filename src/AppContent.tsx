@@ -311,7 +311,10 @@ export const AppContent: React.FC = () => {
             allowedRoles={['student', 'teacher', 'admin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
-            <StudentDashboardView onNavigateView={handleNavigateView} />
+            <StudentDashboardView
+              onNavigateView={handleNavigateView}
+              onSelectCourse={handleSelectCourse}
+            />
           </RoleGuard>
         )}
 

@@ -213,6 +213,7 @@ export interface PromoteUserRoleRequest {
 export interface AdminStudent {
   _id: string;
   FullName: string;
+  NationalId?: string;
   Phone: string;
   ParentPhone?: string;
   Role: 'Student' | 'Admin' | string;
