@@ -6,7 +6,9 @@ import {
   Plus, UserPlus, BookOpen, Award,
   Check, X, Sparkles, GraduationCap,
   BarChart2, Clock, Phone, Copy, Key, Layers,
-  Edit3, Zap
+  Edit3, Zap, ArrowUp, ArrowDown, ListOrdered,
+  FileText, CheckSquare, Eye, AlertTriangle, AlertCircle,
+  HelpCircle, RefreshCw
 } from 'lucide-react';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
@@ -15,8 +17,63 @@ import { studentsApi } from '../../api/students.api';
 import { coursesApi } from '../../api/courses.api';
 import { lessonsApi } from '../../api/lessons.api';
 import { paymentApi } from '../../api/payment.api';
-import { AdminStudent, Course, Lesson } from '../../types/api.types';
+import { examsApi } from '../../api/exams.api';
+import { enrollmentsApi } from '../../api/enrollments.api';
+import {
+  AdminStudent,
+  Course,
+  Lesson,
+  EducationStage,
+  Exam,
+  ExamStatus,
+  Question,
+  QuestionType,
+  ExamAttempt,
+} from '../../types/api.types';
 import { getFriendlyErrorMessage } from '../../utils/errors';
+
+export const EDUCATION_STAGES: { key: EducationStage; label: string; grades: { value: string; label: string }[] }[] = [
+  {
+    key: 'Primary',
+    label: 'المرحلة الابتدائية',
+    grades: [
+      { value: '1', label: 'الصف الأول الابتدائي' },
+      { value: '2', label: 'الصف الثاني الابتدائي' },
+      { value: '3', label: 'الصف الثالث الابتدائي' },
+      { value: '4', label: 'الصف الرابع الابتدائي' },
+      { value: '5', label: 'الصف الخامس الابتدائي' },
+      { value: '6', label: 'الصف السادس الابتدائي' },
+    ],
+  },
+  {
+    key: 'Preparatory',
+    label: 'المرحلة الإعدادية',
+    grades: [
+      { value: '1', label: 'الصف الأول الإعدادي' },
+      { value: '2', label: 'الصف الثاني الإعدادي' },
+      { value: '3', label: 'الصف الثالث الإعدادي' },
+    ],
+  },
+  {
+    key: 'Secondary',
+    label: 'المرحلة الثانوية',
+    grades: [
+      { value: '1', label: 'الصف الأول الثانوي' },
+      { value: '2', label: 'الصف الثاني الثانوي' },
+      { value: '3', label: 'الصف الثالث الثانوي' },
+    ],
+  },
+  {
+    key: 'University',
+    label: 'المرحلة الجامعية',
+    grades: [
+      { value: '1', label: 'الفرقة الأولى' },
+      { value: '2', label: 'الفرقة الثانية' },
+      { value: '3', label: 'الفرقة الثالثة' },
+      { value: '4', label: 'الفرقة الرابعة' },
+    ],
+  },
+];
 
 export const AdminView: React.FC = () => {
   const { showToast } = useToast();
@@ -26,7 +83,7 @@ export const AdminView: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<AcademicYear>('third_secondary');
 
   // Main active tab (strictly Admin domains, no Teacher role)
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'scratch-cards'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards'>('overview');
 
   // ── LIVE BACKEND STATE ───────────────────────────────────────
   const [realStudents, setRealStudents] = useState<AdminStudent[]>([]);
@@ -37,16 +94,54 @@ export const AdminView: React.FC = () => {
   const [realCourses, setRealCourses] = useState<Course[]>([]);
   const [isCoursesLoading, setIsCoursesLoading] = useState(false);
   const [selectedCourseForLessons, setSelectedCourseForLessons] = useState<string>('');
+  const [courseStageFilter, setCourseStageFilter] = useState<string>('all');
+  const [courseGradeFilter, setCourseGradeFilter] = useState<string>('all');
 
   const [realLessons, setRealLessons] = useState<Lesson[]>([]);
   const [isLessonsLoading, setIsLessonsLoading] = useState(false);
 
+  // ── EXAMS STATE ──────────────────────────────────────────────
+  const [realExams, setRealExams] = useState<Exam[]>([]);
+  const [isExamsLoading, setIsExamsLoading] = useState(false);
+  const [searchExam, setSearchExam] = useState('');
+  const [examCourseFilter, setExamCourseFilter] = useState<string>('all');
+  const [examStatusFilter, setExamStatusFilter] = useState<string>('all');
+
+  // ── QUESTIONS STATE ──────────────────────────────────────────
+  const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
+  const [selectedExamForQuestions, setSelectedExamForQuestions] = useState<Exam | null>(null);
+  const [examQuestions, setExamQuestions] = useState<Question[]>([]);
+  const [isQuestionsLoading, setIsQuestionsLoading] = useState(false);
+  const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+
+  // ── ATTEMPTS STATE ───────────────────────────────────────────
+  const [isAttemptsModalOpen, setIsAttemptsModalOpen] = useState(false);
+  const [selectedExamForAttempts, setSelectedExamForAttempts] = useState<Exam | null>(null);
+  const [examAttempts, setExamAttempts] = useState<ExamAttempt[]>([]);
+  const [isAttemptsLoading, setIsAttemptsLoading] = useState(false);
+
+  // ── ENROLLMENT & PROMOTION MODALS ─────────────────────────────
+  const [isManualEnrollOpen, setIsManualEnrollOpen] = useState(false);
+  const [enrollTargetStudent, setEnrollTargetStudent] = useState<AdminStudent | null>(null);
+  const [selectedEnrollCourseId, setSelectedEnrollCourseId] = useState<string>('');
+  const [isEnrolling, setIsEnrolling] = useState(false);
+
+  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+  const [promoteTargetStudent, setPromoteTargetStudent] = useState<AdminStudent | null>(null);
+  const [isPromoting, setIsPromoting] = useState(false);
+
   // Modals & Forms
   const [isRegisterStudentOpen, setIsRegisterStudentOpen] = useState(false);
   const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
+  const [isEditCourseOpen, setIsEditCourseOpen] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isCreateLessonOpen, setIsCreateLessonOpen] = useState(false);
   const [isEditStudentOpen, setIsEditStudentOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<AdminStudent | null>(null);
+  const [isCreateExamOpen, setIsCreateExamOpen] = useState(false);
+  const [isEditExamOpen, setIsEditExamOpen] = useState(false);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
 
   // Scratch Cards Generation State
   const [scratchAmount, setScratchAmount] = useState<number>(100);
@@ -72,9 +167,31 @@ export const AdminView: React.FC = () => {
     isSubscribed: false,
   });
 
-  const [newCourseForm, setNewCourseForm] = useState({
+  const [newCourseForm, setNewCourseForm] = useState<{
+    title: string;
+    price: number;
+    educationStage: EducationStage;
+    grade: string;
+    isPublished: boolean;
+  }>({
     title: '',
     price: 100,
+    educationStage: 'Secondary',
+    grade: '3',
+    isPublished: true,
+  });
+
+  const [editCourseForm, setEditCourseForm] = useState<{
+    title: string;
+    price: number;
+    educationStage: EducationStage;
+    grade: string;
+    isPublished: boolean;
+  }>({
+    title: '',
+    price: 100,
+    educationStage: 'Secondary',
+    grade: '3',
     isPublished: true,
   });
 
@@ -84,6 +201,66 @@ export const AdminView: React.FC = () => {
     durationSeconds: 1800,
     orderIndex: 1,
     maxAllowedViews: 3,
+  });
+
+  const [newExamForm, setNewExamForm] = useState<{
+    title: string;
+    courseId: string;
+    lessonId: string;
+    durationMinutes: number;
+    passingScore: number;
+    maxAttempts: number;
+    status: ExamStatus;
+    isRandomized: boolean;
+    isGated: boolean;
+  }>({
+    title: '',
+    courseId: '',
+    lessonId: '',
+    durationMinutes: 60,
+    passingScore: 10,
+    maxAttempts: 0,
+    status: 'Draft',
+    isRandomized: true,
+    isGated: true,
+  });
+
+  const [editExamForm, setEditExamForm] = useState<{
+    title: string;
+    courseId: string;
+    lessonId: string;
+    durationMinutes: number;
+    passingScore: number;
+    maxAttempts: number;
+    status: ExamStatus;
+    isRandomized: boolean;
+    isGated: boolean;
+  }>({
+    title: '',
+    courseId: '',
+    lessonId: '',
+    durationMinutes: 60,
+    passingScore: 10,
+    maxAttempts: 0,
+    status: 'Draft',
+    isRandomized: true,
+    isGated: true,
+  });
+
+  const [questionForm, setQuestionForm] = useState<{
+    questionType: QuestionType;
+    questionText: string;
+    points: number;
+    orderIndex: number;
+    options: string[];
+    correctAnswer: string;
+  }>({
+    questionType: 'MCQ',
+    questionText: '',
+    points: 5,
+    orderIndex: 1,
+    options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+    correctAnswer: 'الخيار الأول',
   });
 
   // ── FETCH LIVE DATA ─────────────────────────────────────────
@@ -114,6 +291,9 @@ export const AdminView: React.FC = () => {
       if (list.length > 0 && !selectedCourseForLessons) {
         setSelectedCourseForLessons(list[0]._id);
       }
+      if (list.length > 0 && !newExamForm.courseId) {
+        setNewExamForm(prev => ({ ...prev, courseId: list[0]._id }));
+      }
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch courses:', err);
     } finally {
@@ -135,9 +315,52 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  const loadExams = async () => {
+    setIsExamsLoading(true);
+    try {
+      const res = await examsApi.getExams({
+        CourseId: examCourseFilter !== 'all' ? examCourseFilter : undefined,
+        Status: examStatusFilter !== 'all' ? examStatusFilter : undefined,
+        search: searchExam.trim() || undefined,
+      });
+      setRealExams(res.exams);
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch exams:', err);
+    } finally {
+      setIsExamsLoading(false);
+    }
+  };
+
+  const loadQuestions = async (examId: string) => {
+    setIsQuestionsLoading(true);
+    try {
+      const qList = await examsApi.getQuestions(examId);
+      setExamQuestions(qList);
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch questions:', err);
+      setExamQuestions([]);
+    } finally {
+      setIsQuestionsLoading(false);
+    }
+  };
+
+  const loadExamAttempts = async (examId: string) => {
+    setIsAttemptsLoading(true);
+    try {
+      const attempts = await examsApi.getExamAttempts(examId);
+      setExamAttempts(attempts);
+    } catch (err: any) {
+      console.error('[API ERROR] Failed to fetch exam attempts:', err);
+      setExamAttempts([]);
+    } finally {
+      setIsAttemptsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadStudents();
     loadCourses();
+    loadExams();
   }, []);
 
   useEffect(() => {
@@ -146,7 +369,7 @@ export const AdminView: React.FC = () => {
     }
   }, [selectedCourseForLessons]);
 
-  // Handle Search Debounce
+  // Handle Search Debounce for students
   useEffect(() => {
     const timer = setTimeout(() => {
       loadStudents();
@@ -154,16 +377,53 @@ export const AdminView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchStudent, studentStatusFilter]);
 
+  // Handle Exam Filters change
+  useEffect(() => {
+    loadExams();
+  }, [examCourseFilter, examStatusFilter]);
+
+  // Handle Exam search debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadExams();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchExam]);
+
   // Body scroll lock on modal open
   useEffect(() => {
-    if (isRegisterStudentOpen || isCreateCourseOpen || isCreateLessonOpen || isEditStudentOpen) {
+    if (
+      isRegisterStudentOpen ||
+      isCreateCourseOpen ||
+      isEditCourseOpen ||
+      isCreateLessonOpen ||
+      isEditStudentOpen ||
+      isCreateExamOpen ||
+      isEditExamOpen ||
+      isQuestionsModalOpen ||
+      isAttemptsModalOpen ||
+      isManualEnrollOpen ||
+      isPromoteModalOpen
+    ) {
       const orig = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = orig;
       };
     }
-  }, [isRegisterStudentOpen, isCreateCourseOpen, isCreateLessonOpen, isEditStudentOpen]);
+  }, [
+    isRegisterStudentOpen,
+    isCreateCourseOpen,
+    isEditCourseOpen,
+    isCreateLessonOpen,
+    isEditStudentOpen,
+    isCreateExamOpen,
+    isEditExamOpen,
+    isQuestionsModalOpen,
+    isAttemptsModalOpen,
+    isManualEnrollOpen,
+    isPromoteModalOpen,
+  ]);
 
   // ── STUDENT ACTIONS ─────────────────────────────────────────
   const handleToggleStudentStatus = async (student: AdminStudent) => {
@@ -238,10 +498,74 @@ export const AdminView: React.FC = () => {
     );
   };
 
+  const handleOpenPromoteModal = (student: AdminStudent) => {
+    setPromoteTargetStudent(student);
+    setIsPromoteModalOpen(true);
+  };
+
+  const handleConfirmPromote = async () => {
+    if (!promoteTargetStudent) return;
+    setIsPromoting(true);
+    try {
+      await studentsApi.promoteStudentToAdmin(promoteTargetStudent._id);
+      if (promoteTargetStudent.Phone) {
+        localStorage.setItem(`account_role_${promoteTargetStudent.Phone.trim()}`, 'admin');
+      }
+      localStorage.setItem(`account_role_${promoteTargetStudent._id}`, 'admin');
+      setRealStudents(prev =>
+        prev.map(s => (s._id === promoteTargetStudent._id ? { ...s, Role: 'Admin' } : s))
+      );
+      showToast(
+        `تمت ترقية (${promoteTargetStudent.FullName}) إلى مدير بنجاح! تم إنهاء جلسته الحالية ويجب عليه تسجيل الدخول كمدير.`,
+        'success'
+      );
+      setIsPromoteModalOpen(false);
+      setPromoteTargetStudent(null);
+      loadStudents();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر ترقية حساب الطالب إلى مدير، يرجى المحاولة لاحقاً'), 'error');
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  const handleOpenManualEnroll = (student: AdminStudent) => {
+    setEnrollTargetStudent(student);
+    if (realCourses.length > 0) {
+      setSelectedEnrollCourseId(realCourses[0]._id);
+    }
+    setIsManualEnrollOpen(true);
+  };
+
+  const handleConfirmManualEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrollTargetStudent || !selectedEnrollCourseId) return;
+    setIsEnrolling(true);
+    try {
+      const res = await enrollmentsApi.manualEnrollStudent(enrollTargetStudent._id, selectedEnrollCourseId);
+      const targetCourse = realCourses.find(c => c._id === selectedEnrollCourseId);
+      showToast(
+        res.message || `تم منح الطالب (${enrollTargetStudent.FullName}) كورس "${targetCourse?.Title || ''}" بنجاح (AdminGift)!`,
+        'success'
+      );
+      setIsManualEnrollOpen(false);
+      setEnrollTargetStudent(null);
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر تسجيل الطالب في الكورس، قد يكون مسجلاً به بالفعل'), 'error');
+    } finally {
+      setIsEnrolling(false);
+    }
+  };
+
   const handleToggleRole = async (student: AdminStudent) => {
     const roleRaw = localStorage.getItem(`account_role_${student.Phone}`) || localStorage.getItem(`account_role_${student._id}`) || student.Role || 'Student';
     const currentlyAdmin = (roleRaw || '').toLowerCase() === 'admin';
     const newRole = currentlyAdmin ? 'Student' : 'Admin';
+
+    if (newRole === 'Admin') {
+      handleOpenPromoteModal(student);
+      return;
+    }
 
     if (student.Phone) {
       localStorage.setItem(`account_role_${student.Phone.trim()}`, newRole.toLowerCase());
@@ -256,12 +580,7 @@ export const AdminView: React.FC = () => {
       prev.map(s => (s._id === student._id ? { ...s, Role: newRole } : s))
     );
 
-    showToast(
-      newRole === 'Admin'
-        ? `تمت ترقية (${student.FullName}) إلى مدير بنجاح! التعديل نافذ وسيتفعل عند تسجيل دخوله.`
-        : `تم تحويل (${student.FullName}) إلى حساب طالب بنجاح.`,
-      'success'
-    );
+    showToast(`تم تحويل (${student.FullName}) إلى حساب طالب بنجاح.`, 'success');
   };
 
   const handleOpenEditStudent = (student: AdminStudent) => {
@@ -344,14 +663,54 @@ export const AdminView: React.FC = () => {
       await coursesApi.createCourse({
         Title: newCourseForm.title.trim(),
         Price: Number(newCourseForm.price),
+        EducationStage: newCourseForm.educationStage,
+        Grade: newCourseForm.grade,
         IsPublished: newCourseForm.isPublished,
       });
       showToast('تم إنشاء الكورس بنجاح!', 'success');
       setIsCreateCourseOpen(false);
-      setNewCourseForm({ title: '', price: 100, isPublished: true });
+      setNewCourseForm({
+        title: '',
+        price: 100,
+        educationStage: 'Secondary',
+        grade: '3',
+        isPublished: true,
+      });
       loadCourses();
     } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الكورس، يرجى المحاولة مرة أخرى'), 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الكورس، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
+    }
+  };
+
+  const handleOpenEditCourse = (course: Course) => {
+    setEditingCourse(course);
+    setEditCourseForm({
+      title: course.Title,
+      price: course.Price,
+      educationStage: course.EducationStage || 'Secondary',
+      grade: course.Grade || '3',
+      isPublished: course.IsPublished,
+    });
+    setIsEditCourseOpen(true);
+  };
+
+  const handleSaveEditCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCourse) return;
+    try {
+      await coursesApi.updateCourse(editingCourse._id, {
+        Title: editCourseForm.title.trim(),
+        Price: Number(editCourseForm.price),
+        EducationStage: editCourseForm.educationStage,
+        Grade: editCourseForm.grade,
+        IsPublished: editCourseForm.isPublished,
+      });
+      showToast('تم حفظ تعديلات الكورس بنجاح!', 'success');
+      setIsEditCourseOpen(false);
+      setEditingCourse(null);
+      loadCourses();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل الكورس، يرجى المحاولة لاحقاً'), 'error');
     }
   };
 
@@ -364,6 +723,206 @@ export const AdminView: React.FC = () => {
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر حذف الكورس في الوقت الحالي'), 'error');
     }
+  };
+
+  // ── EXAM ACTIONS ────────────────────────────────────────────
+  const handleCreateExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newExamForm.courseId) {
+      showToast('يرجى اختيار الكورس المرتبط بالاختبار', 'error');
+      return;
+    }
+    try {
+      await examsApi.createExam({
+        Title: newExamForm.title.trim(),
+        CourseId: newExamForm.courseId,
+        LessonId: newExamForm.lessonId.trim() || undefined,
+        DurationMinutes: Number(newExamForm.durationMinutes),
+        PassingScore: Number(newExamForm.passingScore),
+        MaxAttempts: Number(newExamForm.maxAttempts),
+        Status: newExamForm.status,
+        IsRandomized: newExamForm.isRandomized,
+        IsGated: newExamForm.isGated,
+      });
+      showToast('تم إنشاء الاختبار بنجاح!', 'success');
+      setIsCreateExamOpen(false);
+      setNewExamForm({
+        title: '',
+        courseId: realCourses[0]?._id || '',
+        lessonId: '',
+        durationMinutes: 60,
+        passingScore: 10,
+        maxAttempts: 0,
+        status: 'Draft',
+        isRandomized: true,
+        isGated: true,
+      });
+      loadExams();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الاختبار، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
+    }
+  };
+
+  const handleOpenEditExam = (exam: Exam) => {
+    setEditingExam(exam);
+    setEditExamForm({
+      title: exam.Title,
+      courseId: exam.CourseId,
+      lessonId: exam.LessonId || '',
+      durationMinutes: exam.DurationMinutes,
+      passingScore: exam.PassingScore,
+      maxAttempts: exam.MaxAttempts,
+      status: exam.Status,
+      isRandomized: exam.IsRandomized,
+      isGated: exam.IsGated,
+    });
+    setIsEditExamOpen(true);
+  };
+
+  const handleSaveEditExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExam) return;
+    try {
+      await examsApi.updateExam(editingExam._id, {
+        Title: editExamForm.title.trim(),
+        CourseId: editExamForm.courseId,
+        LessonId: editExamForm.lessonId.trim() || null,
+        DurationMinutes: Number(editExamForm.durationMinutes),
+        PassingScore: Number(editExamForm.passingScore),
+        MaxAttempts: Number(editExamForm.maxAttempts),
+        Status: editExamForm.status,
+        IsRandomized: editExamForm.isRandomized,
+        IsGated: editExamForm.isGated,
+      });
+      showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
+      setIsEditExamOpen(false);
+      setEditingExam(null);
+      loadExams();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
+    }
+  };
+
+  const handleDeleteExam = async (exam: Exam) => {
+    if (!window.confirm(`هل أنت متأكد من رغبتك في حذف الاختبار (${exam.Title})؟`)) return;
+    try {
+      await examsApi.deleteExam(exam._id);
+      showToast(`تم حذف الاختبار (${exam.Title}) بنجاح`, 'success');
+      loadExams();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الاختبار لوجود محاولات طلاب مسجلة عليه أو لارتباطه بمتطلب درس.'), 'error');
+    }
+  };
+
+  // ── QUESTION ACTIONS ────────────────────────────────────────
+  const handleOpenQuestionsModal = (exam: Exam) => {
+    setSelectedExamForQuestions(exam);
+    setIsQuestionsModalOpen(true);
+    loadQuestions(exam._id);
+  };
+
+  const handleOpenAddQuestion = () => {
+    setEditingQuestion(null);
+    setQuestionForm({
+      questionType: 'MCQ',
+      questionText: '',
+      points: 5,
+      orderIndex: examQuestions.length + 1,
+      options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+      correctAnswer: 'الخيار الأول',
+    });
+    setIsAddQuestionOpen(true);
+  };
+
+  const handleOpenEditQuestion = (q: Question) => {
+    setEditingQuestion(q);
+    setQuestionForm({
+      questionType: q.QuestionType,
+      questionText: q.QuestionText,
+      points: q.Points,
+      orderIndex: q.OrderIndex,
+      options: q.Options && q.Options.length > 0 ? q.Options : ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+      correctAnswer: q.CorrectAnswer ? String(q.CorrectAnswer) : (q.Options?.[0] || ''),
+    });
+    setIsAddQuestionOpen(true);
+  };
+
+  const handleSaveQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedExamForQuestions) return;
+    try {
+      const payload: any = {
+        QuestionType: questionForm.questionType,
+        QuestionText: questionForm.questionText.trim(),
+        Points: Number(questionForm.points),
+        OrderIndex: Number(questionForm.orderIndex),
+      };
+      if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
+        payload.Options = questionForm.options.map(o => o.trim()).filter(Boolean);
+      }
+      // Essay questions must NEVER include CorrectAnswer
+      if (questionForm.questionType !== 'Essay') {
+        payload.CorrectAnswer = questionForm.correctAnswer;
+      }
+
+      if (editingQuestion) {
+        await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
+        showToast('تم تحديث السؤال بنجاح!', 'success');
+      } else {
+        await examsApi.createQuestion(selectedExamForQuestions._id, payload);
+        showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
+      }
+      setIsAddQuestionOpen(false);
+      setEditingQuestion(null);
+      loadQuestions(selectedExamForQuestions._id);
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من أن الاختبار لم تبدأ عليه محاولات وأن رقم الترتيب فريد.'), 'error');
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId: string) => {
+    if (!selectedExamForQuestions) return;
+    if (!window.confirm('هل أنت متأكد من رغبتك في حذف هذا السؤال؟')) return;
+    try {
+      await examsApi.deleteQuestion(selectedExamForQuestions._id, questionId);
+      showToast('تم حذف السؤال بنجاح', 'success');
+      loadQuestions(selectedExamForQuestions._id);
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حذف السؤال'), 'error');
+    }
+  };
+
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= examQuestions.length) return;
+    const updated = [...examQuestions];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+    updated.forEach((q, idx) => {
+      q.OrderIndex = idx + 1;
+    });
+    setExamQuestions(updated);
+  };
+
+  const handleSaveReorder = async () => {
+    if (!selectedExamForQuestions) return;
+    try {
+      await examsApi.reorderQuestions(
+        selectedExamForQuestions._id,
+        examQuestions.map(q => q._id)
+      );
+      showToast('تم حفظ الترتيب الجديد للأسئلة بنجاح!', 'success');
+      loadQuestions(selectedExamForQuestions._id);
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ ترتيب الأسئلة'), 'error');
+    }
+  };
+
+  const handleOpenAttemptsModal = (exam: Exam) => {
+    setSelectedExamForAttempts(exam);
+    setIsAttemptsModalOpen(true);
+    loadExamAttempts(exam._id);
   };
 
   // ── LESSON ACTIONS ──────────────────────────────────────────
@@ -517,6 +1076,16 @@ export const AdminView: React.FC = () => {
 
           <button
             type="button"
+            className={`admin-tab-btn ${activeTab === 'exams' ? 'active' : ''}`}
+            onClick={() => setActiveTab('exams')}
+          >
+            <Award size={16} />
+            <span>إدارة الامتحانات (Exams & Questions)</span>
+            <span className="admin-tab-badge">{realExams.length}</span>
+          </button>
+
+          <button
+            type="button"
             className={`admin-tab-btn ${activeTab === 'scratch-cards' ? 'active' : ''}`}
             onClick={() => setActiveTab('scratch-cards')}
           >
@@ -529,7 +1098,7 @@ export const AdminView: React.FC = () => {
       {/* ── TAB 1: OVERVIEW ─────────────────────────────────── */}
       {activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
             <div className="glass-card" style={{ padding: '1.5rem' }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>إجمالي الطلاب المسجلين</span>
               <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary-light)', margin: '0.35rem 0' }}>
@@ -552,6 +1121,14 @@ export const AdminView: React.FC = () => {
                 {realLessons.length}
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>مزودة بالحماية وHeartbeat</span>
+            </div>
+
+            <div className="glass-card" style={{ padding: '1.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>الاختبارات والتقييمات</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#8B5CF6', margin: '0.35rem 0' }}>
+                {realExams.length}
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>إدارة الأسئلة والمحاولات</span>
             </div>
 
             <div className="glass-card" style={{ padding: '1.5rem' }}>
@@ -697,15 +1274,27 @@ export const AdminView: React.FC = () => {
                             >
                               {isAdmin ? 'مدير 👑' : 'طالب'}
                             </span>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-                              onClick={() => handleToggleRole(student)}
-                              title={isAdmin ? 'تحويل لحساب طالب' : 'ترقية لحساب مدير'}
-                            >
-                              {isAdmin ? 'تحويل لطالب' : 'ترقية لمدير'}
-                            </button>
+                            {!isAdmin ? (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+                                onClick={() => handleOpenPromoteModal(student)}
+                                title="ترقية الطالب إلى مدير (Admin-only)"
+                              >
+                                <Shield size={11} /> ترقية لمدير
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                                onClick={() => handleToggleRole(student)}
+                                title="تحويل لحساب طالب"
+                              >
+                                تحويل لطالب
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td>
@@ -714,7 +1303,16 @@ export const AdminView: React.FC = () => {
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#10B981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
+                              onClick={() => handleOpenManualEnroll(student)}
+                              title="منح حق الوصول لكورس (AdminGift)"
+                            >
+                              <BookOpen size={13} /> منح كورس
+                            </button>
                             <button
                               type="button"
                               className="btn btn-secondary"
@@ -753,75 +1351,154 @@ export const AdminView: React.FC = () => {
       )}
 
       {/* ── TAB 3: COURSES MANAGEMENT (POST, PUT, DELETE /courses) ── */}
-      {activeTab === 'courses' && (
-        <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                إدارة الكورسات والمناهج ({realCourses.length})
-              </h2>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                إنشاء، تعديل، وحذف الكورسات مباشرة عبر الـ REST API
-              </span>
+      {activeTab === 'courses' && (() => {
+        const filteredCourses = realCourses.filter(c => {
+          if (courseStageFilter !== 'all' && c.EducationStage !== courseStageFilter) return false;
+          if (courseGradeFilter !== 'all' && c.Grade !== courseGradeFilter) return false;
+          return true;
+        });
+
+        const activeStageObj = EDUCATION_STAGES.find(s => s.key === courseStageFilter);
+
+        return (
+          <div className="glass-card" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                  إدارة الكورسات والمناهج ({realCourses.length})
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  إنشاء، تعديل، وحذف الكورسات مع تحديد المرحلة الدراسية والصف
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setIsCreateCourseOpen(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <Plus size={16} /> إضافة كورس جديد
+                </button>
+              </div>
             </div>
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setIsCreateCourseOpen(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              <Plus size={16} /> إضافة كورس جديد
-            </button>
-          </div>
+            {/* Stage & Grade Filter Toolbar */}
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>المرحلة الدراسية:</label>
+                <select
+                  className="input-field"
+                  style={{ fontSize: '0.85rem', padding: '0.35rem 0.65rem' }}
+                  value={courseStageFilter}
+                  onChange={e => {
+                    setCourseStageFilter(e.target.value);
+                    setCourseGradeFilter('all');
+                  }}
+                >
+                  <option value="all">كافة المراحل</option>
+                  {EDUCATION_STAGES.map(st => (
+                    <option key={st.key} value={st.key}>{st.label}</option>
+                  ))}
+                </select>
+              </div>
 
-          {isCoursesLoading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل الكورسات...</div>
-          ) : realCourses.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا توجد كورسات مضافة حتى الآن.</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
-              {realCourses.map(course => (
-                <div key={course._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span className={`status-badge ${course.IsPublished ? 'status-badge--active' : 'status-badge--blocked'}`}>
-                        {course.IsPublished ? 'منشور' : 'مسودة'}
-                      </span>
-                      <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{course.Price} ج.م</strong>
-                    </div>
-                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.25rem 0 0.5rem' }}>
-                      {course.Title}
-                    </h3>
-                  </div>
-
-                  <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
-                      onClick={() => {
-                        setSelectedCourseForLessons(course._id);
-                        setActiveTab('lessons');
-                      }}
-                    >
-                      إدارة المحاضرات
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
-                      onClick={() => handleDeleteCourse(course._id, course.Title)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+              {activeStageObj && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>الصف الدراسي:</label>
+                  <select
+                    className="input-field"
+                    style={{ fontSize: '0.85rem', padding: '0.35rem 0.65rem' }}
+                    value={courseGradeFilter}
+                    onChange={e => setCourseGradeFilter(e.target.value)}
+                  >
+                    <option value="all">كافة الصفوف</option>
+                    {activeStageObj.grades.map(g => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            {isCoursesLoading ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل الكورسات...</div>
+            ) : filteredCourses.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا توجد كورسات مضافة تطابق التصفية الحالية.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '1.25rem' }}>
+                {filteredCourses.map(course => {
+                  const stageObj = EDUCATION_STAGES.find(s => s.key === course.EducationStage);
+                  const gradeLabel = stageObj?.grades.find(g => g.value === course.Grade)?.label || (course.Grade ? `الصف ${course.Grade}` : null);
+
+                  return (
+                    <div key={course._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid var(--border-glass)' }}>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span className={`status-badge ${course.IsPublished ? 'status-badge--active' : 'status-badge--blocked'}`}>
+                            {course.IsPublished ? 'منشور' : 'مسودة'}
+                          </span>
+                          <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{course.Price} ج.م</strong>
+                        </div>
+                        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.25rem 0 0.5rem' }}>
+                          {course.Title}
+                        </h3>
+                        {stageObj && (
+                          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.72rem', background: 'rgba(8,145,178,0.12)', color: 'var(--primary-light)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
+                              {stageObj.label}
+                            </span>
+                            {gradeLabel && (
+                              <span style={{ fontSize: '0.72rem', background: 'rgba(245,158,11,0.12)', color: '#F59E0B', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
+                                {gradeLabel}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                          onClick={() => {
+                            setSelectedCourseForLessons(course._id);
+                            setActiveTab('lessons');
+                          }}
+                        >
+                          إدارة المحاضرات
+                        </button>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem' }}
+                            onClick={() => handleOpenEditCourse(course)}
+                            title="تعديل بيانات الكورس"
+                          >
+                            <Edit3 size={14} color="var(--primary-light)" />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                            onClick={() => handleDeleteCourse(course._id, course.Title)}
+                            title="حذف الكورس"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── TAB 4: LESSONS MANAGEMENT (POST, DELETE /courses/{id}/lessons) ── */}
       {activeTab === 'lessons' && (
@@ -890,6 +1567,206 @@ export const AdminView: React.FC = () => {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 5: EXAMS MANAGEMENT (CRUD /exams) ─────────────── */}
+      {activeTab === 'exams' && (
+        <div className="glass-card" style={{ padding: '1.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                إدارة الاختبارات والتقييمات ({realExams.length})
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                إنشاء وتعديل الاختبارات، إدارة بنوك الأسئلة، ومتابعة محاولات الطلاب الحية
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={loadExams}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
+                title="تحديث قائمة الاختبارات"
+              >
+                <RefreshCw size={14} className={isExamsLoading ? 'spin' : ''} /> تحديث
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (realCourses.length > 0 && !newExamForm.courseId) {
+                    setNewExamForm(prev => ({ ...prev, courseId: realCourses[0]._id }));
+                  }
+                  setIsCreateExamOpen(true);
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Plus size={16} /> إضافة اختبار جديد
+              </button>
+            </div>
+          </div>
+
+          {/* Filters toolbar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--bg-subtle)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
+                البحث بالعنوان:
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  placeholder="ابحث عن اختبار..."
+                  className="input-field"
+                  style={{ width: '100%', fontSize: '0.85rem', paddingRight: '2rem' }}
+                  value={searchExam}
+                  onChange={e => setSearchExam(e.target.value)}
+                />
+                <Search size={14} style={{ position: 'absolute', right: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
+                تصفية حسب الكورس:
+              </label>
+              <select
+                className="input-field"
+                style={{ width: '100%', fontSize: '0.85rem' }}
+                value={examCourseFilter}
+                onChange={e => setExamCourseFilter(e.target.value)}
+              >
+                <option value="all">كافة الكورسات</option>
+                {realCourses.map(c => (
+                  <option key={c._id} value={c._id}>{c.Title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
+                حالة الاختبار:
+              </label>
+              <select
+                className="input-field"
+                style={{ width: '100%', fontSize: '0.85rem' }}
+                value={examStatusFilter}
+                onChange={e => setExamStatusFilter(e.target.value)}
+              >
+                <option value="all">كافة الحالات</option>
+                <option value="Draft">مسودة (Draft)</option>
+                <option value="Published">منشور (Published)</option>
+                <option value="Closed">مغلق (Closed)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Exams List */}
+          {isExamsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل الاختبارات...</div>
+          ) : realExams.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              لا توجد اختبارات تطابق معايير البحث. اضغط على "إضافة اختبار جديد" للبدء.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+              {realExams.map(exam => {
+                const linkedCourse = realCourses.find(c => c._id === exam.CourseId);
+                const statusColor = exam.Status === 'Published' ? '#10B981' : exam.Status === 'Draft' ? '#F59E0B' : '#EF4444';
+                const statusBg = exam.Status === 'Published' ? 'rgba(16, 185, 129, 0.15)' : exam.Status === 'Draft' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                const statusText = exam.Status === 'Published' ? 'منشور (Published)' : exam.Status === 'Draft' ? 'مسودة (Draft)' : 'مغلق (Closed)';
+
+                return (
+                  <div key={exam._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid var(--border-glass)' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                          padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700,
+                          background: statusBg, color: statusColor, border: `1px solid ${statusColor}40`
+                        }}>
+                          {statusText}
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          {exam.IsGated && (
+                            <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', fontWeight: 700 }}>
+                              مشروط 🔒
+                            </span>
+                          )}
+                          {exam.IsRandomized && (
+                            <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(139,92,246,0.15)', color: '#8B5CF6', fontWeight: 700 }}>
+                              عشوائي 🔀
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.4rem' }}>
+                        {exam.Title}
+                      </h3>
+
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div>
+                          <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {linkedCourse ? linkedCourse.Title : '—'}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                          <span>⏱ المدة: {exam.DurationMinutes} دقيقة</span>
+                          <span>🎯 درجة النجاح: {exam.PassingScore}</span>
+                          <span>🔄 المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                          onClick={() => handleOpenQuestionsModal(exam)}
+                        >
+                          <ListOrdered size={14} /> الأسئلة
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                          onClick={() => handleOpenAttemptsModal(exam)}
+                        >
+                          <Eye size={14} /> المحاولات
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ flex: 1, padding: '0.35rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                          onClick={() => handleOpenEditExam(exam)}
+                        >
+                          <Edit3 size={13} color="var(--primary-light)" /> تعديل
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                          onClick={() => handleDeleteExam(exam)}
+                          title="حذف الاختبار"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1088,7 +1965,7 @@ export const AdminView: React.FC = () => {
       {/* ── MODAL: CREATE COURSE ────────────────────────────── */}
       {isCreateCourseOpen && createPortal(
         <div className="modal-overlay active" onClick={() => setIsCreateCourseOpen(false)} style={{ zIndex: 99999 }}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px', padding: '1.75rem' }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsCreateCourseOpen(false)}><X size={18} /></button>
 
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
@@ -1097,11 +1974,13 @@ export const AdminView: React.FC = () => {
 
             <form onSubmit={handleCreateCourse} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>عنوان الكورس</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عنوان الكورس (3-100 حرف)</label>
                 <input
                   type="text"
                   required
-                  placeholder="مثال: كورس الرياضيات المتقدمة"
+                  minLength={3}
+                  maxLength={100}
+                  placeholder="مثال: كورس الجبر وحساب المثلثات المتقدم"
                   className="input-field"
                   style={{ width: '100%' }}
                   value={newCourseForm.title}
@@ -1109,22 +1988,189 @@ export const AdminView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>سعر الكورس (جنيه مصري)</label>
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  className="input-field"
-                  style={{ width: '100%' }}
-                  value={newCourseForm.price}
-                  onChange={e => setNewCourseForm({ ...newCourseForm, price: Number(e.target.value) })}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>سعر الكورس (ج.م)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newCourseForm.price}
+                    onChange={e => setNewCourseForm({ ...newCourseForm, price: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>حالة النشر</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newCourseForm.isPublished ? 'true' : 'false'}
+                    onChange={e => setNewCourseForm({ ...newCourseForm, isPublished: e.target.value === 'true' })}
+                  >
+                    <option value="true">منشور (Published)</option>
+                    <option value="false">مسودة (Draft)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Education Stage & Cascading Grade */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>المرحلة التعليمية</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newCourseForm.educationStage}
+                    onChange={e => {
+                      const newStage = e.target.value as EducationStage;
+                      const stageDef = EDUCATION_STAGES.find(s => s.key === newStage);
+                      const defaultGrade = stageDef?.grades[0]?.value || '1';
+                      setNewCourseForm({
+                        ...newCourseForm,
+                        educationStage: newStage,
+                        grade: defaultGrade,
+                      });
+                    }}
+                  >
+                    {EDUCATION_STAGES.map(s => (
+                      <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الصف الدراسي</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newCourseForm.grade}
+                    onChange={e => setNewCourseForm({ ...newCourseForm, grade: e.target.value })}
+                  >
+                    {EDUCATION_STAGES.find(s => s.key === newCourseForm.educationStage)?.grades.map(g => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
-                نشر الكورس
+                نشر وحفظ الكورس
               </button>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: EDIT COURSE ──────────────────────────────── */}
+      {isEditCourseOpen && editingCourse && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsEditCourseOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsEditCourseOpen(false)}><X size={18} /></button>
+
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              تعديل بيانات الكورس (Update Course)
+            </h2>
+
+            <form onSubmit={handleSaveEditCourse} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عنوان الكورس</label>
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  maxLength={100}
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editCourseForm.title}
+                  onChange={e => setEditCourseForm({ ...editCourseForm, title: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>سعر الكورس (ج.م)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editCourseForm.price}
+                    onChange={e => setEditCourseForm({ ...editCourseForm, price: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>حالة النشر</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editCourseForm.isPublished ? 'true' : 'false'}
+                    onChange={e => setEditCourseForm({ ...editCourseForm, isPublished: e.target.value === 'true' })}
+                  >
+                    <option value="true">منشور (Published)</option>
+                    <option value="false">مسودة (Draft)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Education Stage & Cascading Grade */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>المرحلة التعليمية</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editCourseForm.educationStage}
+                    onChange={e => {
+                      const newStage = e.target.value as EducationStage;
+                      const stageDef = EDUCATION_STAGES.find(s => s.key === newStage);
+                      const defaultGrade = stageDef?.grades[0]?.value || '1';
+                      setEditCourseForm({
+                        ...editCourseForm,
+                        educationStage: newStage,
+                        grade: defaultGrade,
+                      });
+                    }}
+                  >
+                    {EDUCATION_STAGES.map(s => (
+                      <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الصف الدراسي</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editCourseForm.grade}
+                    onChange={e => setEditCourseForm({ ...editCourseForm, grade: e.target.value })}
+                  >
+                    {EDUCATION_STAGES.find(s => s.key === editCourseForm.educationStage)?.grades.map(g => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsEditCourseOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
+                  حفظ التعديلات
+                </button>
+              </div>
             </form>
           </div>
         </div>,
@@ -1206,7 +2252,7 @@ export const AdminView: React.FC = () => {
         document.body
       )}
 
-      {/* ── MODAL: EDIT STUDENT (PHONE, ROLE, SUBSCRIPTION, NAME) ── */}
+      {/* ── MODAL: EDIT STUDENT ─────────────────────────────── */}
       {isEditStudentOpen && editingStudent && createPortal(
         <div className="modal-overlay active" onClick={() => setIsEditStudentOpen(false)} style={{ zIndex: 99999 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
@@ -1330,6 +2376,857 @@ export const AdminView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: MANUAL ENROLLMENT (POST /enrollments) ────── */}
+      {isManualEnrollOpen && enrollTargetStudent && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsManualEnrollOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsManualEnrollOpen(false)}><X size={18} /></button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '42px', height: '42px', borderRadius: '10px',
+                background: 'rgba(16, 185, 129, 0.15)', color: '#10B981',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <BookOpen size={22} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                  منح حق الوصول لكورس (Admin Gift)
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  تسجيل يدوي مباشر للطالب بدون عمليات دفع
+                </span>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)', marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-bright)', fontWeight: 700, marginBottom: '0.25rem' }}>
+                {enrollTargetStudent.FullName}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                رقم الهاتف: {enrollTargetStudent.Phone}
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmManualEnroll} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  اختر الكورس المراد منحه للطالب:
+                </label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%', fontSize: '0.9rem' }}
+                  value={selectedEnrollCourseId}
+                  onChange={e => setSelectedEnrollCourseId(e.target.value)}
+                  required
+                >
+                  {realCourses.map(c => (
+                    <option key={c._id} value={c._id}>
+                      {c.Title} ({c.Price} ج.م)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                💡 سيتم تسجيل الطالب فورياً في الكورس بصلاحية نشطة (Active) وطريقة استحواذ إدارية (AdminGift).
+              </p>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsManualEnrollOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isEnrolling || !selectedEnrollCourseId}
+                  style={{ flex: 2 }}
+                >
+                  {isEnrolling ? 'جاري المنح...' : 'تأكيد منح الكورس مجاناً'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: PROMOTE STUDENT TO ADMIN (PATCH /users/:id/role) ── */}
+      {isPromoteModalOpen && promoteTargetStudent && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsPromoteModalOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsPromoteModalOpen(false)}><X size={18} /></button>
+
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '54px', height: '54px', borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 0.75rem'
+              }}>
+                <Shield size={28} />
+              </div>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.4rem' }}>
+                تأكيد ترقية الطالب إلى مدير
+              </h2>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {promoteTargetStudent.FullName} ({promoteTargetStudent.Phone})
+              </span>
+            </div>
+
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: '8px',
+              padding: '1rem',
+              marginBottom: '1.25rem',
+              fontSize: '0.83rem',
+              color: 'var(--text-bright)',
+              lineHeight: 1.6
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--danger)', fontWeight: 700, marginBottom: '0.35rem' }}>
+                <AlertTriangle size={16} /> تنبيه أمني هام
+              </div>
+              ترقية هذا الحساب ستمنحه صلاحيات المدير الكاملة (Admin) لإدارة الطلاب، الكورسات، الاختبارات، وكروت الشحن.
+              <div style={{ marginTop: '0.5rem', fontWeight: 600, color: 'var(--danger)' }}>
+                • سيقوم الخادم تلقائياً بإلغاء جلسة الطالب الحالية فوراً، وسيتعين عليه تسجيل الدخول مجدداً كمدير.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ flex: 1 }}
+                onClick={() => setIsPromoteModalOpen(false)}
+              >
+                إلغاء التراجع
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={isPromoting}
+                onClick={handleConfirmPromote}
+                style={{
+                  flex: 1.5,
+                  background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                  color: '#FFF',
+                  border: 'none',
+                  fontWeight: 700,
+                  padding: '0.65rem',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer'
+                }}
+              >
+                {isPromoting ? 'جاري الترقية...' : 'تأكيد الترقية لمدير 👑'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: CREATE EXAM (POST /exams) ────────────────── */}
+      {isCreateExamOpen && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsCreateExamOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsCreateExamOpen(false)}><X size={18} /></button>
+
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              إنشاء اختبار جديد (Create Exam)
+            </h2>
+
+            <form onSubmit={handleCreateExam} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عنوان الاختبار</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: الاختبار الشامل على الوحدة الأولى"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newExamForm.title}
+                  onChange={e => setNewExamForm({ ...newExamForm, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الكورس التابع له الاختبار</label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newExamForm.courseId}
+                  onChange={e => setNewExamForm({ ...newExamForm, courseId: e.target.value })}
+                  required
+                >
+                  <option value="">اختر الكورس...</option>
+                  {realCourses.map(c => (
+                    <option key={c._id} value={c._id}>{c.Title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>مدة الاختبار (بالدقائق)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newExamForm.durationMinutes}
+                    onChange={e => setNewExamForm({ ...newExamForm, durationMinutes: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>درجة النجاح (Passing Score)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newExamForm.passingScore}
+                    onChange={e => setNewExamForm({ ...newExamForm, passingScore: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>أقصى عدد محاولات (0 = غير محدود)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newExamForm.maxAttempts}
+                    onChange={e => setNewExamForm({ ...newExamForm, maxAttempts: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>حالة الاختبار</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newExamForm.status}
+                    onChange={e => setNewExamForm({ ...newExamForm, status: e.target.value as ExamStatus })}
+                  >
+                    <option value="Draft">مسودة (Draft)</option>
+                    <option value="Published">منشور (Published)</option>
+                    <option value="Closed">مغلق (Closed)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={newExamForm.isRandomized}
+                    onChange={e => setNewExamForm({ ...newExamForm, isRandomized: e.target.checked })}
+                  />
+                  <span>ترتيب عشوائي للأسئلة (IsRandomized)</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={newExamForm.isGated}
+                    onChange={e => setNewExamForm({ ...newExamForm, isGated: e.target.checked })}
+                  />
+                  <span>اختبار شرطي للدروس (IsGated)</span>
+                </label>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
+                حفظ وإنشاء الاختبار
+              </button>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: EDIT EXAM (PATCH /exams/:id) ──────────────── */}
+      {isEditExamOpen && editingExam && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsEditExamOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsEditExamOpen(false)}><X size={18} /></button>
+
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              تعديل بيانات الاختبار (Edit Exam)
+            </h2>
+
+            <form onSubmit={handleSaveEditExam} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عنوان الاختبار</label>
+                <input
+                  type="text"
+                  required
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editExamForm.title}
+                  onChange={e => setEditExamForm({ ...editExamForm, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الكورس التابع له الاختبار</label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editExamForm.courseId}
+                  onChange={e => setEditExamForm({ ...editExamForm, courseId: e.target.value })}
+                  required
+                >
+                  {realCourses.map(c => (
+                    <option key={c._id} value={c._id}>{c.Title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>المدة (بالدقائق)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editExamForm.durationMinutes}
+                    onChange={e => setEditExamForm({ ...editExamForm, durationMinutes: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>درجة النجاح</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editExamForm.passingScore}
+                    onChange={e => setEditExamForm({ ...editExamForm, passingScore: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>أقصى عدد محاولات (0 = غير محدود)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editExamForm.maxAttempts}
+                    onChange={e => setEditExamForm({ ...editExamForm, maxAttempts: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>حالة الاختبار</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={editExamForm.status}
+                    onChange={e => setEditExamForm({ ...editExamForm, status: e.target.value as ExamStatus })}
+                  >
+                    <option value="Draft">مسودة (Draft)</option>
+                    <option value="Published">منشور (Published)</option>
+                    <option value="Closed">مغلق (Closed)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editExamForm.isRandomized}
+                    onChange={e => setEditExamForm({ ...editExamForm, isRandomized: e.target.checked })}
+                  />
+                  <span>ترتيب عشوائي للأسئلة</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editExamForm.isGated}
+                    onChange={e => setEditExamForm({ ...editExamForm, isGated: e.target.checked })}
+                  />
+                  <span>اختبار شرطي (Gated)</span>
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsEditExamOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
+                  حفظ تعديلات الاختبار
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: QUESTION MANAGEMENT (CRUD /exams/:id/questions) ── */}
+      {isQuestionsModalOpen && selectedExamForQuestions && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsQuestionsModalOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '820px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsQuestionsModalOpen(false)}><X size={18} /></button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                  إدارة أسئلة الاختبار: {selectedExamForQuestions.Title}
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  إجمالي الأسئلة: {examQuestions.length} سؤال • إجمالي النقاط: {examQuestions.reduce((acc, q) => acc + (q.Points || 0), 0)} نقطة
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {examQuestions.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleSaveReorder}
+                    style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                    title="حفظ ترتيب الأسئلة في الخادم"
+                  >
+                    <ListOrdered size={14} /> حفظ الترتيب
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleOpenAddQuestion}
+                  style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <Plus size={15} /> إضافة سؤال جديد
+                </button>
+              </div>
+            </div>
+
+            {/* Questions List */}
+            {isQuestionsLoading ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري جلب الأسئلة...</div>
+            ) : examQuestions.length === 0 ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: '8px' }}>
+                لا توجد أسئلة مضافة لهذا الاختبار بعد. اضغط على "إضافة سؤال جديد" للبدء.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {examQuestions.map((q, idx) => (
+                  <div key={q._id} className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', border: '1px solid var(--border-glass)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '6px',
+                        background: 'rgba(8,145,178,0.15)', color: 'var(--primary-light)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 800, fontSize: '0.85rem', flexShrink: 0
+                      }}>
+                        {q.OrderIndex || idx + 1}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                          <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(139,92,246,0.15)', color: '#8B5CF6', fontWeight: 700 }}>
+                            {q.QuestionType}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            {q.Points} نقاط
+                          </span>
+                          {q.QuestionType === 'Essay' && (
+                            <span style={{ fontSize: '0.7rem', color: '#F59E0B' }}>• مقالي (تصحيح يدوي)</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-bright)', fontWeight: 600 }}>
+                          {q.QuestionText}
+                        </div>
+                        {q.Options && q.Options.length > 0 && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                            الخيارات: {q.Options.join(' | ')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={idx === 0}
+                        onClick={() => handleMoveQuestion(idx, 'up')}
+                        style={{ padding: '0.25rem 0.45rem', fontSize: '0.75rem' }}
+                        title="تحريك لأعلى"
+                      >
+                        <ArrowUp size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={idx === examQuestions.length - 1}
+                        onClick={() => handleMoveQuestion(idx, 'down')}
+                        style={{ padding: '0.25rem 0.45rem', fontSize: '0.75rem' }}
+                        title="تحريك لأسفل"
+                      >
+                        <ArrowDown size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleOpenEditQuestion(q)}
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        title="تعديل السؤال"
+                      >
+                        <Edit3 size={13} color="var(--primary-light)" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleDeleteQuestion(q._id)}
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                        title="حذف السؤال"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: ADD / EDIT QUESTION SUB-MODAL ─────────────── */}
+      {isAddQuestionOpen && selectedExamForQuestions && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsAddQuestionOpen(false)} style={{ zIndex: 100000 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsAddQuestionOpen(false)}><X size={18} /></button>
+
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
+              {editingQuestion ? 'تعديل السؤال' : 'إضافة سؤال جديد'}
+            </h2>
+
+            <form onSubmit={handleSaveQuestion} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                    نوع السؤال (Question Type)
+                  </label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={questionForm.questionType}
+                    onChange={e => {
+                      const type = e.target.value as QuestionType;
+                      setQuestionForm(prev => ({
+                        ...prev,
+                        questionType: type,
+                        correctAnswer: type === 'TrueFalse' ? 'true' : prev.options[0] || '',
+                      }));
+                    }}
+                  >
+                    <option value="MCQ">اختيار من متعدد (MCQ)</option>
+                    <option value="TrueFalse">صح أو خطأ (True / False)</option>
+                    <option value="Essay">سؤال مقالي (Essay - بدون إجابة آلية)</option>
+                    <option value="FillInBlank">أكمل الفراغ (Fill In Blank)</option>
+                    <option value="DragDrop">مطابقة وسحب (Drag & Drop)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>النقاط</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={questionForm.points}
+                    onChange={e => setQuestionForm({ ...questionForm, points: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>نص السؤال</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="اكتب نص السؤال هنا..."
+                  className="input-field"
+                  style={{ width: '100%', resize: 'vertical' }}
+                  value={questionForm.questionText}
+                  onChange={e => setQuestionForm({ ...questionForm, questionText: e.target.value })}
+                />
+              </div>
+
+              {/* Dynamic form inputs based on QuestionType */}
+              {questionForm.questionType === 'MCQ' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-bright)' }}>خيارات الإجابة:</label>
+                  {questionForm.options.map((opt, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', width: '20px' }}>{i + 1}.</span>
+                      <input
+                        type="text"
+                        required
+                        placeholder={`الخيار ${i + 1}`}
+                        className="input-field"
+                        style={{ flex: 1, fontSize: '0.85rem' }}
+                        value={opt}
+                        onChange={e => {
+                          const updated = [...questionForm.options];
+                          updated[i] = e.target.value;
+                          setQuestionForm({ ...questionForm, options: updated });
+                        }}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <input
+                          type="radio"
+                          name="correctMcqAnswer"
+                          checked={questionForm.correctAnswer === opt}
+                          onChange={() => setQuestionForm({ ...questionForm, correctAnswer: opt })}
+                        />
+                        <span>الإجابة الصحيحة</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {questionForm.questionType === 'TrueFalse' && (
+                <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+                    الإجابة الصحيحة:
+                  </label>
+                  <div style={{ display: 'flex', gap: '1.5rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="tfAnswer"
+                        value="true"
+                        checked={questionForm.correctAnswer === 'true'}
+                        onChange={() => setQuestionForm({ ...questionForm, correctAnswer: 'true' })}
+                      />
+                      <span style={{ color: '#10B981', fontWeight: 700 }}>صحيح (True) ✓</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="tfAnswer"
+                        value="false"
+                        checked={questionForm.correctAnswer === 'false'}
+                        onChange={() => setQuestionForm({ ...questionForm, correctAnswer: 'false' })}
+                      />
+                      <span style={{ color: 'var(--danger)', fontWeight: 700 }}>خطأ (False) ✗</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {questionForm.questionType === 'Essay' && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '0.85rem', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-bright)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#F59E0B', fontWeight: 700, marginBottom: '0.2rem' }}>
+                    <AlertCircle size={15} /> تنبيه الأسئلة المقالية
+                  </div>
+                  الأسئلة المقالية تصحح يدوياً من قبل المعلم. لن يتم إرسال أي إجابة نموذجية آلية للباك إند التزاماً بالمعايير.
+                </div>
+              )}
+
+              {questionForm.questionType === 'FillInBlank' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                    الإجابة النموذجية الصحيحة
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="اكتب الكلمة أو العبارة الصحيحة..."
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={questionForm.correctAnswer}
+                    onChange={e => setQuestionForm({ ...questionForm, correctAnswer: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {questionForm.questionType === 'DragDrop' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-bright)' }}>العناصر:</label>
+                  {questionForm.options.map((opt, i) => (
+                    <input
+                      key={i}
+                      type="text"
+                      required
+                      placeholder={`عنصر ${i + 1}`}
+                      className="input-field"
+                      style={{ width: '100%', fontSize: '0.85rem' }}
+                      value={opt}
+                      onChange={e => {
+                        const updated = [...questionForm.options];
+                        updated[i] = e.target.value;
+                        setQuestionForm({ ...questionForm, options: updated });
+                      }}
+                    />
+                  ))}
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-bright)', marginTop: '0.25rem' }}>الإجابة المطابقة الصحيحة:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="الإجابة الصحيحة أو الترتيب..."
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={questionForm.correctAnswer}
+                    onChange={e => setQuestionForm({ ...questionForm, correctAnswer: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsAddQuestionOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
+                  {editingQuestion ? 'حفظ تعديل السؤال' : 'إضافة السؤال للاختبار'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: EXAM ATTEMPTS (GET /exams/:id/attempts) ───── */}
+      {isAttemptsModalOpen && selectedExamForAttempts && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsAttemptsModalOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '750px', maxHeight: '85vh', overflowY: 'auto', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsAttemptsModalOpen(false)}><X size={18} /></button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                  سجل محاولات الطلاب: {selectedExamForAttempts.Title}
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  درجة النجاح المعتمدة: {selectedExamForAttempts.PassingScore} • إجمالي المحاولات المسجلة: {examAttempts.length}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => loadExamAttempts(selectedExamForAttempts._id)}
+                style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <RefreshCw size={13} className={isAttemptsLoading ? 'spin' : ''} /> تحديث
+              </button>
+            </div>
+
+            {isAttemptsLoading ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري جلب سجل المحاولات...</div>
+            ) : examAttempts.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-subtle)', borderRadius: '8px' }}>
+                لم يسجل أي طالب محاولة في هذا الاختبار حتى الآن.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="admin-table" style={{ width: '100%', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr>
+                      <th>الطالب</th>
+                      <th>الدرجة المحققة</th>
+                      <th>الحالة</th>
+                      <th>تاريخ المحاولة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {examAttempts.map(attempt => {
+                      const studentInfo = typeof attempt.StudentId === 'object' ? attempt.StudentId : null;
+                      const isPassed = attempt.status === 'Passed' || (attempt.score >= selectedExamForAttempts.PassingScore);
+
+                      return (
+                        <tr key={attempt._id}>
+                          <td>
+                            <strong style={{ color: 'var(--text-bright)' }}>
+                              {studentInfo?.FullName || (typeof attempt.StudentId === 'string' ? `طالب #${attempt.StudentId.slice(-6)}` : 'طالب مسجل')}
+                            </strong>
+                            {studentInfo?.Phone && (
+                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                {studentInfo.Phone}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <strong style={{ fontSize: '1rem', color: isPassed ? '#10B981' : 'var(--danger)' }}>
+                              {attempt.score}
+                            </strong>
+                            {attempt.totalPoints ? ` / ${attempt.totalPoints}` : ''}
+                          </td>
+                          <td>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: isPassed ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                              color: isPassed ? '#10B981' : 'var(--danger)',
+                            }}>
+                              {attempt.status === 'Passed' ? 'ناجح ✓' : attempt.status === 'Failed' ? 'راسب ✗' : attempt.status || 'مكتمل'}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            {attempt.submittedAt || attempt.createdAt
+                              ? new Date(attempt.submittedAt || attempt.createdAt!).toLocaleDateString('ar-EG', {
+                                  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })
+                              : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>,
         document.body

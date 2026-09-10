@@ -1,5 +1,5 @@
 import { apiClient } from './axios';
-import { Enrollment, MyCoursesResponse } from '../types/api.types';
+import { Enrollment, MyCoursesResponse, ManualEnrollmentResponse } from '../types/api.types';
 
 export const enrollmentsApi = {
   /**
@@ -10,4 +10,19 @@ export const enrollmentsApi = {
     const response = await apiClient.get<MyCoursesResponse>('/enrollments/my-courses', { params });
     return response.data?.data?.enrollments || [];
   },
+
+  /**
+   * Admin-only: Manually enroll a student in a course (AdminGift).
+   */
+  manualEnrollStudent: async (
+    studentId: string,
+    courseId: string
+  ): Promise<ManualEnrollmentResponse> => {
+    const response = await apiClient.post<ManualEnrollmentResponse>('/enrollments', {
+      StudentId: studentId,
+      CourseId: courseId,
+    });
+    return response.data;
+  },
 };
+

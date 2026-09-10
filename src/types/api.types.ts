@@ -53,12 +53,16 @@ export interface ChangePasswordRequest {
 }
 
 // ── Courses ───────────────────────────────────────────────────────────────
+export type EducationStage = 'Primary' | 'Preparatory' | 'Secondary' | 'University';
+
 export interface Course {
   _id: string;
   Title: string;
   Description?: string;
   TeacherId?: string;
   Price: number;
+  EducationStage?: EducationStage;
+  Grade?: string;
   IsPublished: boolean;
   Thumbnail?: string;
   createdAt?: string;
@@ -69,12 +73,16 @@ export interface Course {
 export interface CreateCourseRequest {
   Title: string;
   Price: number;
-  IsPublished: boolean;
+  EducationStage: EducationStage;
+  Grade: string;
+  IsPublished?: boolean;
 }
 
 export interface UpdateCourseRequest {
   Title?: string;
   Price?: number;
+  EducationStage?: EducationStage;
+  Grade?: string;
   IsPublished?: boolean;
 }
 
@@ -86,6 +94,8 @@ export interface CourseQueryParams {
   search?: string;
   Title?: string;
   Price?: number;
+  EducationStage?: EducationStage;
+  Grade?: string;
   IsPublished?: boolean;
 }
 
@@ -161,7 +171,7 @@ export interface Enrollment {
   StudentId: string;
   CourseId: EnrollmentCourse;
   Status: 'Active' | 'Expired' | string;
-  AcquisitionMethod: 'Purchase' | 'ScratchCard' | 'AdminGrant' | string;
+  AcquisitionMethod: 'Purchase' | 'ScratchCard' | 'AdminGift' | 'AdminGrant' | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -173,6 +183,30 @@ export interface MyCoursesResponse {
   data: {
     enrollments: Enrollment[];
   };
+}
+
+export interface ManualEnrollmentRequest {
+  StudentId: string;
+  CourseId: string;
+}
+
+export interface ManualEnrollmentResponse {
+  message: string;
+  data?: {
+    enrollment: {
+      _id?: string;
+      StudentId: string;
+      CourseId: string;
+      Status: 'Active' | string;
+      AcquisitionMethod: 'AdminGift' | string;
+      createdAt?: string;
+      updatedAt?: string;
+    };
+  };
+}
+
+export interface PromoteUserRoleRequest {
+  Role: 'Admin';
 }
 
 // ── Admin Student Management ──────────────────────────────────────────────
@@ -246,6 +280,120 @@ export interface HeartbeatResponse {
 }
 
 // ── Exams ─────────────────────────────────────────────────────────────────
+export type ExamStatus = 'Draft' | 'Published' | 'Closed';
+
+export interface Exam {
+  _id: string;
+  Title: string;
+  CourseId: string;
+  LessonId?: string | null;
+  DurationMinutes: number;
+  PassingScore: number;
+  MaxAttempts: number;
+  Status: ExamStatus;
+  IsRandomized: boolean;
+  IsGated: boolean;
+  questionsCount?: number;
+  attemptsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateExamRequest {
+  Title: string;
+  CourseId: string;
+  LessonId?: string;
+  DurationMinutes: number;
+  PassingScore: number;
+  MaxAttempts: number;
+  Status: ExamStatus;
+  IsRandomized: boolean;
+  IsGated: boolean;
+}
+
+export interface UpdateExamRequest {
+  Title?: string;
+  CourseId?: string;
+  LessonId?: string | null;
+  DurationMinutes?: number;
+  PassingScore?: number;
+  MaxAttempts?: number;
+  Status?: ExamStatus;
+  IsRandomized?: boolean;
+  IsGated?: boolean;
+}
+
+export interface ExamsListResponse {
+  status?: string;
+  results?: number;
+  pagination?: PaginationMeta;
+  exams?: Exam[];
+  data?: {
+    exams?: Exam[];
+    exam?: Exam;
+  };
+}
+
+export type QuestionType = 'MCQ' | 'TrueFalse' | 'Essay' | 'FillInBlank' | 'DragDrop';
+
+export interface Question {
+  _id: string;
+  ExamId: string;
+  QuestionType: QuestionType;
+  QuestionText: string;
+  Points: number;
+  OrderIndex: number;
+  Options?: string[];
+  CorrectAnswer?: any; // Admin only - NEVER sent or exposed for Student
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateQuestionRequest {
+  QuestionType: QuestionType;
+  QuestionText: string;
+  Points: number;
+  OrderIndex: number;
+  Options?: string[];
+  CorrectAnswer?: any; // NEVER sent for Essay questions
+}
+
+export interface UpdateQuestionRequest {
+  QuestionType?: QuestionType;
+  QuestionText?: string;
+  Points?: number;
+  OrderIndex?: number;
+  Options?: string[];
+  CorrectAnswer?: any;
+}
+
+export interface ReorderQuestionsRequest {
+  questionIds: string[];
+}
+
+export interface ExamAttempt {
+  _id: string;
+  ExamId: string;
+  StudentId: string | { _id: string; FullName?: string; Phone?: string };
+  score: number;
+  totalPoints?: number;
+  status: 'Passed' | 'Failed' | 'PendingReview' | 'AutoSubmitted' | string;
+  passingScore: number;
+  startedAt?: string;
+  submittedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExamAttemptsResponse {
+  status?: string;
+  results?: number;
+  attempts?: ExamAttempt[];
+  data?: {
+    attempts?: ExamAttempt[];
+  };
+}
+
 export interface ExamInfo {
   _id: string;
   Title: string;
