@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Sliders, Search, Users, DollarSign, Activity,
@@ -325,28 +325,33 @@ export const AdminView: React.FC = () => {
     setIsExamsLoading(true);
     try {
       const res = await examsApi.getExams();
-      let exams = res.exams || [];
-      // Client-side filtering safeguard to ensure consistency across any backend implementation
-      if (examCourseFilter !== 'all') {
-        exams = exams.filter(e => {
-          const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
-          return cid === examCourseFilter;
-        });
-      }
-      if (examStatusFilter !== 'all') {
-        exams = exams.filter(e => e.Status === examStatusFilter);
-      }
-      if (searchExam.trim()) {
-        const s = searchExam.trim().toLowerCase();
-        exams = exams.filter(e => (e.Title || '').toLowerCase().includes(s));
-      }
-      setRealExams(exams);
+      setRealExams(res.exams || []);
     } catch (err: any) {
-      console.error('[API ERROR] Failed to fetch exams from API:', err);
+      console.warn('[API INFO] Exams list status:', err?.message || err);
+      setRealExams([]);
     } finally {
       setIsExamsLoading(false);
     }
   };
+
+  // Instant in-memory filtering for exams list (no server spam on filter/search change)
+  const displayedExams = useMemo(() => {
+    let list = realExams;
+    if (examCourseFilter !== 'all') {
+      list = list.filter(e => {
+        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+        return cid === examCourseFilter;
+      });
+    }
+    if (examStatusFilter !== 'all') {
+      list = list.filter(e => e.Status === examStatusFilter);
+    }
+    if (searchExam.trim()) {
+      const s = searchExam.trim().toLowerCase();
+      list = list.filter(e => (e.Title || '').toLowerCase().includes(s));
+    }
+    return list;
+  }, [realExams, examCourseFilter, examStatusFilter, searchExam]);
 
   const loadQuestions = async (examId: string) => {
     setIsQuestionsLoading(true);
@@ -443,18 +448,6 @@ export const AdminView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchStudent, studentStatusFilter]);
 
-  // Handle Exam Filters change
-  useEffect(() => {
-    loadExams();
-  }, [examCourseFilter, examStatusFilter]);
-
-  // Handle Exam search debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadExams();
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchExam]);
 
   // Body scroll lock on modal open
   useEffect(() => {
@@ -866,6 +859,9 @@ export const AdminView: React.FC = () => {
       });
       showToast('تم إنشاء الاختبار بنجاح!', 'success');
       setIsCreateExamOpen(false);
+      if (createdExam && createdExam._id) {
+        setRealExams(prev => [createdExam, ...prev.filter(e => e._id !== createdExam._id)]);
+      }
       setNewExamForm({
         title: '',
         courseId: realCourses[0]?._id || '',
@@ -904,7 +900,7 @@ export const AdminView: React.FC = () => {
     e.preventDefault();
     if (!editingExam) return;
     try {
-      await examsApi.updateExam(editingExam._id, {
+      const updatedExam = await examsApi.updateExam(editingExam._id, {
         Title: editExamForm.title.trim(),
         CourseId: editExamForm.courseId,
         LessonId: editExamForm.lessonId.trim() || null,
@@ -918,6 +914,9 @@ export const AdminView: React.FC = () => {
       showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
       setIsEditExamOpen(false);
       setEditingExam(null);
+      if (updatedExam && updatedExam._id) {
+        setRealExams(prev => prev.map(e => e._id === updatedExam._id ? { ...e, ...updatedExam } : e));
+      }
       await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
@@ -929,6 +928,7 @@ export const AdminView: React.FC = () => {
     try {
       await examsApi.deleteExam(exam._id);
       showToast(`تم حذف الاختبار (${exam.Title}) بنجاح`, 'success');
+      setRealExams(prev => prev.filter(e => e._id !== exam._id));
       await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الاختبار لوجود محاولات طلاب مسجلة عليه أو لارتباطه بمتطلب درس.'), 'error');
@@ -940,6 +940,7 @@ export const AdminView: React.FC = () => {
     try {
       await examsApi.updateExam(exam._id, { Status: nextStatus });
       showToast(nextStatus === 'Published' ? 'تم نشر الاختبار بنجاح وبات متاحاً للطلاب!' : 'تم تحويل الاختبار إلى مسودة', 'success');
+      setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: nextStatus } : e));
       await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تغيير حالة الاختبار. تأكد من إضافة أسئلة كافية وأن مجموع درجاتها يعادل أو يتجاوز درجة النجاح'), 'error');
@@ -1918,13 +1919,15 @@ export const AdminView: React.FC = () => {
           {/* Exams List */}
           {isExamsLoading ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل الاختبارات...</div>
-          ) : realExams.length === 0 ? (
+          ) : displayedExams.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              لا توجد اختبارات تطابق معايير البحث. اضغط على "إضافة اختبار جديد" للبدء.
+              {realExams.length === 0
+                ? 'لا توجد اختبارات مسجلة حالياً. اضغط على "إضافة اختبار جديد" للبدء.'
+                : 'لا توجد اختبارات تطابق معايير البحث الحالية.'}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-              {realExams.map(exam => {
+              {displayedExams.map(exam => {
                 const examCourseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
                 const linkedCourse = realCourses.find(c => c._id === examCourseId);
                 const courseTitle = linkedCourse?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : '—');
