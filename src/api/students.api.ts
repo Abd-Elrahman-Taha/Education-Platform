@@ -102,8 +102,18 @@ export const studentsApi = {
    * Backend endpoint: PATCH /users/:userId/role with { Role: "Student" }.
    */
   demoteAdminToStudent: async (userId: string): Promise<any> => {
-    const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Student' });
-    return response.data;
+    try {
+      const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Student' });
+      return response.data;
+    } catch (err: any) {
+      // Fallback: some backends allow updating role via students endpoint
+      try {
+        const fallback = await apiClient.patch(`/users/students/${userId}`, { Role: 'Student' } as any);
+        return fallback.data;
+      } catch {
+        throw err;
+      }
+    }
   },
 
   /**
@@ -111,8 +121,11 @@ export const studentsApi = {
    */
   updateStudentRole: async (userId: string, role: 'Admin' | 'Student' | string): Promise<any> => {
     const targetRole = role.toLowerCase() === 'admin' ? 'Admin' : 'Student';
-    const response = await apiClient.patch(`/users/${userId}/role`, { Role: targetRole });
-    return response.data;
+    if (targetRole === 'Admin') {
+      return studentsApi.promoteStudentToAdmin(userId);
+    } else {
+      return studentsApi.demoteAdminToStudent(userId);
+    }
   },
 
   /**
@@ -138,13 +151,14 @@ export const studentsApi = {
 
   /**
    * Get all admin users (Admin-only).
-   * Queries /users/students with high limit, scans all pages, and checks case-insensitive Role/role.
-   * Merges with persistent platform_admins_list.
+   * Queries /users/students across all pages directly from the live API.
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
-    let allUsers: AdminStudent[] = [];
+    const userMap = new Map<string, AdminStudent>();
+
     try {
-      const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 500 } });
+      // First page with default limit 50
+      const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 50, page: 1 } });
       const raw = response.data as any;
       const list: AdminStudent[] = Array.isArray(raw?.data?.students)
         ? raw.data.students
@@ -157,59 +171,49 @@ export const studentsApi = {
         : Array.isArray(raw)
         ? raw
         : [];
-      allUsers = list;
 
-      const totalPages = raw?.pagination?.totalPages || 1;
+      for (const u of list) {
+        if (u && u._id) userMap.set(u._id, u);
+      }
+
+      const totalItems = raw?.pagination?.total || raw?.results || raw?.total || list.length;
+      const totalPages = raw?.pagination?.totalPages || raw?.pagination?.pages || Math.ceil(totalItems / 50) || 1;
+
       if (totalPages > 1) {
-        for (let p = 2; p <= Math.min(totalPages, 5); p++) {
-          try {
-            const pageRes = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 500, page: p } });
-            const pageRaw = pageRes.data as any;
-            const pageList: AdminStudent[] = pageRaw?.data?.students || pageRaw?.students || [];
-            allUsers = [...allUsers, ...pageList];
-          } catch {}
+        const fetchPromises = [];
+        for (let p = 2; p <= Math.min(totalPages, 10); p++) {
+          fetchPromises.push(
+            apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 50, page: p } })
+              .then(res => {
+                const pRaw = res.data as any;
+                const pList: AdminStudent[] = pRaw?.data?.students || pRaw?.students || pRaw?.data || [];
+                return pList;
+              })
+              .catch(() => [] as AdminStudent[])
+          );
+        }
+        const pagesData = await Promise.all(fetchPromises);
+        for (const pList of pagesData) {
+          for (const u of pList) {
+            if (u && u._id) userMap.set(u._id, u);
+          }
         }
       }
     } catch (err) {
-      console.warn('Failed to fetch students list when looking for admins:', err);
+      console.warn('Failed to fetch students from API for admin detection:', err);
     }
 
-    // Filter for all Admin users
+    const allUsers = Array.from(userMap.values());
+
+    // Filter for Admin users directly from API response
     const backendAdmins = allUsers.filter(u => {
       const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
       return r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student');
     });
 
-    // Merge with any known stored admins in platform_admins_list
-    let storedAdmins: AdminStudent[] = [];
-    try {
-      const storedAdminsStr = localStorage.getItem('platform_admins_list');
-      if (storedAdminsStr) {
-        storedAdmins = JSON.parse(storedAdminsStr);
-      }
-    } catch {}
-
-    // Deduplicate by _id and Phone
-    const adminMap = new Map<string, AdminStudent>();
-    for (const a of backendAdmins) {
-      if (a._id) adminMap.set(a._id, a);
-    }
-    for (const a of storedAdmins) {
-      if (a._id && !adminMap.has(a._id)) {
-        adminMap.set(a._id, a);
-      }
-    }
-
-    const mergedAdmins = Array.from(adminMap.values());
-    if (mergedAdmins.length > 0) {
-      try {
-        localStorage.setItem('platform_admins_list', JSON.stringify(mergedAdmins));
-      } catch {}
-    }
-
     return {
-      admins: mergedAdmins,
-      total: mergedAdmins.length,
+      admins: backendAdmins,
+      total: backendAdmins.length,
     };
   },
 };

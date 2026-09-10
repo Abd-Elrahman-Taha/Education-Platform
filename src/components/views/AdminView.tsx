@@ -229,7 +229,7 @@ export const AdminView: React.FC = () => {
     durationMinutes: 60,
     passingScore: 10,
     maxAttempts: 0,
-    status: 'Published',
+    status: 'Draft',
     isRandomized: true,
     isGated: true,
   });
@@ -321,27 +321,10 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  const EXAMS_CACHE_KEY = 'admin_exams_cache';
-
   const loadExams = async () => {
     setIsExamsLoading(true);
-    // Restore from cache immediately so the list never shows empty on load
     try {
-      const cached = localStorage.getItem(EXAMS_CACHE_KEY);
-      if (cached) {
-        const parsed: Exam[] = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setRealExams(parsed);
-        }
-      }
-    } catch { /* ignore cache read errors */ }
-
-    try {
-      const res = await examsApi.getExams({
-        CourseId: examCourseFilter !== 'all' ? examCourseFilter : undefined,
-        Status: examStatusFilter !== 'all' ? examStatusFilter : undefined,
-        search: searchExam.trim() || undefined,
-      });
+      const res = await examsApi.getExams();
       let exams = res.exams || [];
       // Client-side filtering safeguard to ensure consistency across any backend implementation
       if (examCourseFilter !== 'all') {
@@ -358,13 +341,8 @@ export const AdminView: React.FC = () => {
         exams = exams.filter(e => (e.Title || '').toLowerCase().includes(s));
       }
       setRealExams(exams);
-      // Only cache when no filters are active (so cache always holds full list)
-      if (examCourseFilter === 'all' && examStatusFilter === 'all' && !searchExam.trim()) {
-        try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(exams)); } catch { /* ignore */ }
-      }
     } catch (err: any) {
-      console.error('[API ERROR] Failed to fetch exams:', err);
-      // On failure: do NOT wipe state — keep whatever is already showing (from cache or previous load)
+      console.error('[API ERROR] Failed to fetch exams from API:', err);
     } finally {
       setIsExamsLoading(false);
     }
@@ -401,6 +379,17 @@ export const AdminView: React.FC = () => {
     try {
       const res = await studentsApi.getAdmins();
       let admins = res.admins || [];
+
+      // Also merge any users from realStudents whose Role is Admin or not Student
+      if (realStudents && realStudents.length > 0) {
+        for (const s of realStudents) {
+          const r = (s.Role || (s as any).role || '').toLowerCase();
+          if (r === 'admin' && !admins.some(a => a._id === s._id)) {
+            admins.push(s);
+          }
+        }
+      }
+
       // Also ensure current logged in admin is present if role is Admin
       if (currentUser && ((currentUser.role || '').toLowerCase() === 'admin' || (currentUser as any).Role?.toLowerCase() === 'admin')) {
         const currId = currentUser.id || (currentUser as any)._id;
@@ -421,13 +410,6 @@ export const AdminView: React.FC = () => {
       setRealAdmins(admins);
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch admins:', err);
-      // Fallback: load from platform_admins_list if available
-      try {
-        const stored = localStorage.getItem('platform_admins_list');
-        if (stored) {
-          setRealAdmins(JSON.parse(stored));
-        }
-      } catch {}
     } finally {
       setIsAdminsLoading(false);
     }
@@ -565,16 +547,6 @@ export const AdminView: React.FC = () => {
     setIsPromoting(true);
     try {
       await studentsApi.promoteStudentToAdmin(promoteTargetStudent._id);
-      try {
-        const stored = localStorage.getItem('platform_admins_list');
-        const list: AdminStudent[] = stored ? JSON.parse(stored) : [];
-        const updatedAdmin: AdminStudent = {
-          ...promoteTargetStudent,
-          Role: 'Admin',
-        };
-        const nextList = [updatedAdmin, ...list.filter(a => a._id !== promoteTargetStudent._id)];
-        localStorage.setItem('platform_admins_list', JSON.stringify(nextList));
-      } catch {}
       showToast(
         `تمت ترقية (${promoteTargetStudent.FullName}) إلى مدير بنجاح! تم إنهاء جلسته الحالية ويجب عليه تسجيل الدخول كمدير.`,
         'success'
@@ -737,33 +709,12 @@ export const AdminView: React.FC = () => {
       if (willPromote) {
         try {
           await studentsApi.promoteStudentToAdmin(studentId);
-          try {
-            const stored = localStorage.getItem('platform_admins_list');
-            const list: AdminStudent[] = stored ? JSON.parse(stored) : [];
-            const adminObj: AdminStudent = {
-              ...editingStudent,
-              _id: studentId,
-              FullName: trimmedName,
-              Phone: trimmedPhone,
-              ParentPhone: trimmedParentPhone || editingStudent.ParentPhone,
-              NationalId: trimmedNationalId || editingStudent.NationalId,
-              Role: 'Admin',
-            };
-            localStorage.setItem('platform_admins_list', JSON.stringify([adminObj, ...list.filter(a => a._id !== studentId)]));
-          } catch {}
         } catch (promoteErr: any) {
           console.warn('Role promotion error:', promoteErr);
         }
       } else if (willDemote) {
         try {
           await studentsApi.demoteAdminToStudent(studentId);
-          try {
-            const stored = localStorage.getItem('platform_admins_list');
-            if (stored) {
-              const list: AdminStudent[] = JSON.parse(stored);
-              localStorage.setItem('platform_admins_list', JSON.stringify(list.filter(a => a._id !== studentId)));
-            }
-          } catch {}
         } catch (demoteErr: any) {
           console.warn('Role demotion error:', demoteErr);
         }
@@ -915,13 +866,6 @@ export const AdminView: React.FC = () => {
       });
       showToast('تم إنشاء الاختبار بنجاح!', 'success');
       setIsCreateExamOpen(false);
-      if (createdExam && createdExam._id) {
-        setRealExams(prev => {
-          const updated = [createdExam, ...prev.filter(e => e._id !== createdExam._id)];
-          try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
-          return updated;
-        });
-      }
       setNewExamForm({
         title: '',
         courseId: realCourses[0]?._id || '',
@@ -929,11 +873,11 @@ export const AdminView: React.FC = () => {
         durationMinutes: 60,
         passingScore: 10,
         maxAttempts: 0,
-        status: 'Published',
+        status: 'Draft',
         isRandomized: true,
         isGated: true,
       });
-      loadExams(); // attempt refresh but won't wipe state if it fails
+      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الاختبار، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
@@ -960,7 +904,7 @@ export const AdminView: React.FC = () => {
     e.preventDefault();
     if (!editingExam) return;
     try {
-      const updatedExam = await examsApi.updateExam(editingExam._id, {
+      await examsApi.updateExam(editingExam._id, {
         Title: editExamForm.title.trim(),
         CourseId: editExamForm.courseId,
         LessonId: editExamForm.lessonId.trim() || null,
@@ -974,14 +918,7 @@ export const AdminView: React.FC = () => {
       showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
       setIsEditExamOpen(false);
       setEditingExam(null);
-      if (updatedExam && updatedExam._id) {
-        setRealExams(prev => {
-          const updated = prev.map(e => e._id === updatedExam._id ? { ...e, ...updatedExam } : e);
-          try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
-          return updated;
-        });
-      }
-      loadExams(); // attempt refresh but won't wipe state if it fails
+      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
     }
@@ -992,14 +929,20 @@ export const AdminView: React.FC = () => {
     try {
       await examsApi.deleteExam(exam._id);
       showToast(`تم حذف الاختبار (${exam.Title}) بنجاح`, 'success');
-      setRealExams(prev => {
-        const updated = prev.filter(e => e._id !== exam._id);
-        try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
-        return updated;
-      });
-      loadExams(); // attempt refresh but won't wipe state if it fails
+      await loadExams();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الاختبار لوجود محاولات طلاب مسجلة عليه أو لارتباطه بمتطلب درس.'), 'error');
+    }
+  };
+
+  const handleTogglePublishExam = async (exam: Exam) => {
+    const nextStatus = exam.Status === 'Published' ? 'Draft' : 'Published';
+    try {
+      await examsApi.updateExam(exam._id, { Status: nextStatus });
+      showToast(nextStatus === 'Published' ? 'تم نشر الاختبار بنجاح وبات متاحاً للطلاب!' : 'تم تحويل الاختبار إلى مسودة', 'success');
+      await loadExams();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر تغيير حالة الاختبار. تأكد من إضافة أسئلة كافية وأن مجموع درجاتها يعادل أو يتجاوز درجة النجاح'), 'error');
     }
   };
 
@@ -2055,6 +1998,33 @@ export const AdminView: React.FC = () => {
                         <button
                           type="button"
                           className="btn btn-secondary"
+                          style={{
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.78rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.25rem',
+                            color: exam.Status === 'Published' ? '#F59E0B' : '#10B981',
+                            borderColor: exam.Status === 'Published' ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)',
+                          }}
+                          onClick={() => handleTogglePublishExam(exam)}
+                          title={exam.Status === 'Published' ? 'تحويل الاختبار إلى مسودة' : 'نشر الاختبار للطلاب'}
+                        >
+                          {exam.Status === 'Published' ? (
+                            <>
+                              <XCircle size={13} /> مسودة
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 size={13} /> نشر
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
                           style={{ flex: 1, padding: '0.35rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
                           onClick={() => handleOpenEditExam(exam)}
                         >
@@ -2339,13 +2309,6 @@ export const AdminView: React.FC = () => {
                           if (window.confirm(`هل أنت متأكد من رغبتك في سحب صلاحيات الإدارة وتحويل الحساب (${adminUser.FullName}) إلى حساب طالب عادي (Normal Student User)؟`)) {
                             try {
                               await studentsApi.demoteAdminToStudent(adminUser._id);
-                              try {
-                                const stored = localStorage.getItem('platform_admins_list');
-                                if (stored) {
-                                  const list = JSON.parse(stored);
-                                  localStorage.setItem('platform_admins_list', JSON.stringify(list.filter((a: any) => a._id !== adminUser._id)));
-                                }
-                              } catch {}
                               showToast(`تم تحويل حساب (${adminUser.FullName}) إلى حساب طالب عادي بنجاح!`, 'success');
                               await loadAdmins();
                               await loadStudents();
@@ -3118,8 +3081,8 @@ export const AdminView: React.FC = () => {
                     value={newExamForm.status}
                     onChange={e => setNewExamForm({ ...newExamForm, status: e.target.value as ExamStatus })}
                   >
-                    <option value="Published">منشور (Published) — متاح للطلاب فوراً</option>
-                    <option value="Draft">مسودة (Draft)</option>
+                    <option value="Draft">مسودة (Draft) — موصى به حتى يتم إضافة الأسئلة</option>
+                    <option value="Published">منشور (Published)</option>
                     <option value="Closed">مغلق (Closed)</option>
                   </select>
                 </div>
