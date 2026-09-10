@@ -137,19 +137,19 @@ export const studentsApi = {
 
   /**
    * Get all admin users (Admin-only).
-   * Backend endpoint: GET /users/admins
+   * Uses GET /users/students?Role=Admin since there is no dedicated /users/admins route.
    * Returns all users with Role === 'Admin'.
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
-    const response = await apiClient.get<any>('/users/admins');
+    const response = await apiClient.get<any>('/users/students', { params: { Role: 'Admin' } });
     const raw = response.data;
     // Handle multiple possible response shapes
-    const adminsList: AdminStudent[] = Array.isArray(raw?.data?.admins)
-      ? raw.data.admins
+    const adminsList: AdminStudent[] = Array.isArray(raw?.data?.students)
+      ? raw.data.students
       : Array.isArray(raw?.data?.users)
       ? raw.data.users
-      : Array.isArray(raw?.admins)
-      ? raw.admins
+      : Array.isArray(raw?.students)
+      ? raw.students
       : Array.isArray(raw?.data)
       ? raw.data
       : Array.isArray(raw)

@@ -321,14 +321,26 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  const EXAMS_CACHE_KEY = 'admin_exams_cache';
+
   const loadExams = async () => {
     setIsExamsLoading(true);
+    // Restore from cache immediately so the list never shows empty on load
+    try {
+      const cached = localStorage.getItem(EXAMS_CACHE_KEY);
+      if (cached) {
+        const parsed: Exam[] = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRealExams(parsed);
+        }
+      }
+    } catch { /* ignore cache read errors */ }
+
     try {
       const res = await examsApi.getExams({
         CourseId: examCourseFilter !== 'all' ? examCourseFilter : undefined,
         Status: examStatusFilter !== 'all' ? examStatusFilter : undefined,
         search: searchExam.trim() || undefined,
-        limit: 100,
       });
       let exams = res.exams || [];
       // Client-side filtering safeguard to ensure consistency across any backend implementation
@@ -346,8 +358,13 @@ export const AdminView: React.FC = () => {
         exams = exams.filter(e => (e.Title || '').toLowerCase().includes(s));
       }
       setRealExams(exams);
+      // Only cache when no filters are active (so cache always holds full list)
+      if (examCourseFilter === 'all' && examStatusFilter === 'all' && !searchExam.trim()) {
+        try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(exams)); } catch { /* ignore */ }
+      }
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch exams:', err);
+      // On failure: do NOT wipe state — keep whatever is already showing (from cache or previous load)
     } finally {
       setIsExamsLoading(false);
     }
@@ -383,10 +400,28 @@ export const AdminView: React.FC = () => {
     setIsAdminsLoading(true);
     try {
       const res = await studentsApi.getAdmins();
-      setRealAdmins(res.admins);
+      // If Role=Admin filter worked, res.admins only contains admins
+      // If backend ignores the filter and returns all users, filter locally as fallback
+      const admins = res.admins.length > 0
+        ? res.admins.filter(u => (u.Role || '').toLowerCase() === 'admin')
+        : [];
+
+      if (admins.length === 0) {
+        // Fallback: fetch all students and filter locally (in case backend ignores Role param)
+        const allRes = await studentsApi.getStudents({});
+        const allAdmins = allRes.students.filter(s => (s.Role || '').toLowerCase() === 'admin');
+        setRealAdmins(allAdmins);
+      } else {
+        setRealAdmins(admins);
+      }
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch admins:', err);
-      setRealAdmins([]);
+      // Fallback: filter from already-loaded students list if available
+      if (realStudents.length > 0) {
+        setRealAdmins(realStudents.filter(s => (s.Role || '').toLowerCase() === 'admin'));
+      } else {
+        setRealAdmins([]);
+      }
     } finally {
       setIsAdminsLoading(false);
     }
@@ -842,7 +877,11 @@ export const AdminView: React.FC = () => {
       showToast('تم إنشاء الاختبار بنجاح!', 'success');
       setIsCreateExamOpen(false);
       if (createdExam && createdExam._id) {
-        setRealExams(prev => [createdExam, ...prev.filter(e => e._id !== createdExam._id)]);
+        setRealExams(prev => {
+          const updated = [createdExam, ...prev.filter(e => e._id !== createdExam._id)];
+          try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+          return updated;
+        });
       }
       setNewExamForm({
         title: '',
@@ -855,7 +894,7 @@ export const AdminView: React.FC = () => {
         isRandomized: true,
         isGated: true,
       });
-      await loadExams();
+      loadExams(); // attempt refresh but won't wipe state if it fails
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الاختبار، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
@@ -897,9 +936,13 @@ export const AdminView: React.FC = () => {
       setIsEditExamOpen(false);
       setEditingExam(null);
       if (updatedExam && updatedExam._id) {
-        setRealExams(prev => prev.map(e => e._id === updatedExam._id ? { ...e, ...updatedExam } : e));
+        setRealExams(prev => {
+          const updated = prev.map(e => e._id === updatedExam._id ? { ...e, ...updatedExam } : e);
+          try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+          return updated;
+        });
       }
-      await loadExams();
+      loadExams(); // attempt refresh but won't wipe state if it fails
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
     }
@@ -910,8 +953,12 @@ export const AdminView: React.FC = () => {
     try {
       await examsApi.deleteExam(exam._id);
       showToast(`تم حذف الاختبار (${exam.Title}) بنجاح`, 'success');
-      setRealExams(prev => prev.filter(e => e._id !== exam._id));
-      await loadExams();
+      setRealExams(prev => {
+        const updated = prev.filter(e => e._id !== exam._id);
+        try { localStorage.setItem(EXAMS_CACHE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+        return updated;
+      });
+      loadExams(); // attempt refresh but won't wipe state if it fails
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'لا يمكن حذف الاختبار لوجود محاولات طلاب مسجلة عليه أو لارتباطه بمتطلب درس.'), 'error');
     }
