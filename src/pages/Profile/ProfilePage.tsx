@@ -8,9 +8,10 @@ import { useWalletBalance } from '../../hooks/useWalletBalance';
 
 interface ProfilePageProps {
   onLogoutSuccess?: () => void;
+  onPasswordChanged?: () => void;
 }
 
-export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess }) => {
+export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPasswordChanged }) => {
   const { currentUser, logout, updateUserName } = useAuth();
   const { walletBalance, updateBalance } = useWalletBalance();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -142,7 +143,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess }) => 
         <ChangePasswordModal
           isOpen={isPasswordModalOpen}
           onClose={() => setIsPasswordModalOpen(false)}
-          onPasswordChanged={handleLogout}
+          onPasswordChanged={() => {
+            if (onPasswordChanged) {
+              onPasswordChanged();
+            } else {
+              handleLogout();
+            }
+          }}
         />
       )}
 

@@ -523,3 +523,49 @@ export interface ScratchCardResponse {
     RedeemedAt?: string;
   };
 }
+
+// ── Parent Portal Types (POST /parent-portal/lookup & report/pdf) ─────────
+export interface ParentPortalLookupRequest {
+  nationalId: string; // Exactly 14 digits
+  phone: string;      // Egyptian phone 11 digits (starts with 01)
+}
+
+export interface ParentPortalExamAttempt {
+  attemptNumber: number;
+  score: number;
+  status: 'Passed' | 'Failed' | 'AutoSubmitted' | string;
+}
+
+export interface ParentPortalExam {
+  examId: string;
+  title: string;
+  attempts: ParentPortalExamAttempt[];
+}
+
+export interface ParentPortalCourseProgress {
+  viewedLessons: number;
+  totalLessons: number;
+  percentage: number;
+}
+
+export interface ParentPortalCourse {
+  courseId: string;
+  title: string;
+  progress: ParentPortalCourseProgress;
+  exams: ParentPortalExam[];
+}
+
+export interface ParentPortalStudent {
+  fullName: string;
+}
+
+export interface ParentPortalLookupData {
+  student: ParentPortalStudent;
+  courses: ParentPortalCourse[];
+}
+
+export interface ParentPortalLookupResponse {
+  status: string;
+  data: ParentPortalLookupData;
+}
+

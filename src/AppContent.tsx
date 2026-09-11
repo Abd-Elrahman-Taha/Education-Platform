@@ -352,7 +352,13 @@ export const AppContent: React.FC = () => {
             allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
             onNavigateHome={() => setIsAuthModalOpen(true)}
           >
-            <ProfilePage onLogoutSuccess={() => handleNavigateView('view-landing')} />
+            <ProfilePage
+              onLogoutSuccess={() => handleNavigateView('view-landing')}
+              onPasswordChanged={() => {
+                handleNavigateView('view-landing');
+                setIsAuthModalOpen(true);
+              }}
+            />
           </RoleGuard>
         )}
 

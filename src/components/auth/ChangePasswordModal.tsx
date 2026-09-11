@@ -47,7 +47,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       onClose();
       if (onPasswordChanged) onPasswordChanged();
     } catch (err: any) {
-      setError(getFriendlyErrorMessage(err, 'تعذر تغيير كلمة المرور، يرجى التأكد من صحة كلمة المرور الحالية والمحاولة مجدداً.'));
+      if (err?.response?.status === 401 || err?.status === 401) {
+        setError('كلمة المرور الحالية غير صحيحة. يرجى التأكد من كلمة المرور الحالية والمحاولة مجدداً.');
+      } else if (err?.response?.status === 400 || err?.status === 400) {
+        setError(err?.response?.data?.message || 'فشل التحقق من كلمة المرور الجديدة (يجب أن تتراوح بين 8 إلى 40 حرفاً/رقماً).');
+      } else {
+        setError(getFriendlyErrorMessage(err, 'تعذر تغيير كلمة المرور، يرجى التأكد من صحة البيانات والمحاولة مجدداً.'));
+      }
     } finally {
       setIsLoading(false);
     }
