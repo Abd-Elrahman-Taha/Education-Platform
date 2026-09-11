@@ -332,8 +332,19 @@ select.input-field { cursor: pointer; }
   flex-wrap: wrap;
 }
 
+.module-switcher--superadmin {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  box-shadow: 0 2px 14px rgba(245, 158, 11, 0.08);
+}
+
 [data-theme="light"] .module-switcher {
   background: rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="light"] .module-switcher--superadmin {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .module-btn {
@@ -406,6 +417,19 @@ select.input-field { cursor: pointer; }
 
 .nav-user-badge:hover { background: rgba(8, 145, 178, 0.22); }
 
+.nav-user-badge--superadmin {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.12);
+}
+.nav-user-badge--superadmin:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(139, 92, 246, 0.22));
+  border-color: #F59E0B;
+}
+.nav-user-badge--superadmin .nav-user-avatar {
+  border-color: #F59E0B;
+}
+
 .nav-user-avatar {
   width: 28px;
   height: 28px;
@@ -428,10 +452,11 @@ select.input-field { cursor: pointer; }
   font-size: 0.75rem;
   font-weight: 700;
 }
-.role-badge--student  { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16,185,129,.3); }
-.role-badge--parent   { background: rgba(245, 158, 11, 0.15);  color: #F59E0B; border: 1px solid rgba(245,158,11,.3); }
-.role-badge--admin    { background: rgba(239, 68, 68, 0.15);   color: #EF4444; border: 1px solid rgba(239,68,68,.3);  }
-.role-badge--teacher  { background: rgba(8, 145, 178, 0.15);   color: #22D3EE; border: 1px solid rgba(8,145,178,.3);  }
+.role-badge--student    { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16,185,129,.3); }
+.role-badge--parent     { background: rgba(245, 158, 11, 0.15);  color: #F59E0B; border: 1px solid rgba(245,158,11,.3); }
+.role-badge--admin      { background: rgba(239, 68, 68, 0.15);   color: #EF4444; border: 1px solid rgba(239,68,68,.3);  }
+.role-badge--superadmin { background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.18)); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.55); box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+.role-badge--teacher    { background: rgba(8, 145, 178, 0.15);   color: #22D3EE; border: 1px solid rgba(8,145,178,.3);  }
 
 /* ── Role Guard Wall ─────────────────────────────────── */
 .role-guard-wall {

@@ -3,7 +3,7 @@ import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
   BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
   BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard,
-  HelpCircle, Shield, Edit3
+  HelpCircle, Shield, Edit3, Crown
 } from 'lucide-react';
 import { AppView, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -37,7 +37,7 @@ const studentNav: NavItem[] = [
 const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
+  { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
   { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
@@ -50,8 +50,8 @@ const adminNav: NavItem[] = [
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-student-dashboard', label: 'لوحة الطالب', icon: LayoutDashboard },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
-  { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
+  { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
   { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
   { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
@@ -59,15 +59,21 @@ const adminNav: NavItem[] = [
 
 const superAdminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
-  { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
-  { id: 'view-student-dashboard', label: 'لوحة تحليلات الطالب', icon: LayoutDashboard },
-  { id: 'view-courses',           label: 'الكورسات والمحتوى', icon: BookOpen },
-  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
-  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
-  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
-  { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
-  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
+  { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
+  { id: 'view-student-dashboard', label: 'لوحة الطالب', icon: LayoutDashboard },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
+  { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
+  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
+];
+
+const parentLoggedInNav: NavItem[] = [
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const guestNav: NavItem[] = [
@@ -80,7 +86,7 @@ const guestNav: NavItem[] = [
 
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
   student: studentNav,
-  parent:  guestNav,
+  parent:  parentLoggedInNav,
   admin:   adminNav,
   superadmin: superAdminNav,
   teacher: teacherNav,
@@ -167,9 +173,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     (currentUser as any)?.Role === 'SuperAdmin' ||
     (currentUser as any)?.Role === 'superadmin';
 
-  const navItems = isAuthenticated && currentUser
+  const rawNavItems = isAuthenticated && currentUser
     ? (isSuperAdmin ? superAdminNav : (ROLE_NAV[currentUser.role] || guestNav))
     : guestNav;
+
+  // Strict requirement: Never display Parent Portal when logged in with any account
+  const navItems = isAuthenticated
+    ? rawNavItems.filter(item => item.id !== 'view-parent-portal')
+    : rawNavItems;
 
   const handleNavClick = (view: AppView) => {
     onNavigateView(view);
@@ -192,17 +203,28 @@ export const Navbar: React.FC<NavbarProps> = ({
         </a>
 
         {/* Desktop Navigation Modules */}
-        <nav className="module-switcher desktop-only-nav">
+        <nav className={`module-switcher desktop-only-nav ${isSuperAdmin ? 'module-switcher--superadmin' : ''}`}>
           {navItems.map(item => {
             const IconComponent = item.icon;
             const isActive = currentView === item.id;
+            const isAdminDashboard = item.id === 'view-admin';
             return (
               <button
                 key={item.id + item.label}
                 className={`module-btn ${isActive ? 'active' : ''}`}
                 onClick={() => handleNavClick(item.id)}
+                style={isAdminDashboard && isSuperAdmin ? {
+                  border: isActive ? undefined : '1px solid rgba(245, 158, 11, 0.45)',
+                  color: isActive ? '#FFF' : '#FBBF24',
+                  background: isActive ? undefined : 'rgba(245, 158, 11, 0.1)',
+                  fontWeight: 700,
+                } : undefined}
               >
-                <IconComponent size={14} />
+                {isAdminDashboard && isSuperAdmin ? (
+                  <Crown size={14} color={isActive ? '#FFF' : '#F59E0B'} fill={isActive ? '#FFF' : '#F59E0B'} />
+                ) : (
+                  <IconComponent size={14} />
+                )}
                 {item.label}
               </button>
             );
@@ -240,17 +262,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <User size={18} />
               </button>
               <div
-                className="nav-user-badge desktop-only-user"
+                className={`nav-user-badge desktop-only-user ${isSuperAdmin ? 'nav-user-badge--superadmin' : ''}`}
                 onClick={() => { setTempName(isPlaceholderName(cleanDisplayName) ? '' : cleanDisplayName); setIsEditingName(true); }}
                 title="اضغط لتعديل الاسم الظاهر"
               >
                 <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
-                <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700, color: 'var(--text-bright)' }}>
+                {isSuperAdmin && (
+                  <Crown size={13} fill="#F59E0B" color="#F59E0B" style={{ flexShrink: 0 }} />
+                )}
+                <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800, color: 'var(--text-bright)' }}>
                   {cleanDisplayName.split(' ').slice(0, 3).join(' ')}
                 </span>
-                <Edit3 size={12} color="var(--primary-light)" style={{ opacity: 0.7 }} />
-                <span className={`role-badge role-badge--${currentUser.role}`} style={{ padding: '0.1rem 0.5rem', fontSize: '0.7rem' }}>
-                  {ROLE_LABELS[currentUser.role]}
+                <Edit3 size={11} color="var(--primary-light)" style={{ opacity: 0.7 }} />
+                <span className={`role-badge role-badge--${currentUser.role}`} style={{ padding: '0.12rem 0.55rem', fontSize: '0.72rem' }}>
+                  {isSuperAdmin ? 'المدير العام' : ROLE_LABELS[currentUser.role]}
                 </span>
               </div>
               <button
@@ -304,11 +329,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               <img src={currentUser.avatar} className="nav-user-avatar" alt={cleanDisplayName} />
               <div>
                 <strong style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-bright)', fontWeight: 800 }}>
+                  {isSuperAdmin && <Crown size={15} fill="#F59E0B" color="#F59E0B" />}
                   {cleanDisplayName}
                   <Edit3 size={13} color="var(--primary-light)" />
                 </strong>
                 <span className={`role-badge role-badge--${currentUser.role}`}>
-                  {ROLE_LABELS[currentUser.role]}
+                  {isSuperAdmin ? 'المدير العام (SuperAdmin)' : ROLE_LABELS[currentUser.role]}
                 </span>
               </div>
             </div>
