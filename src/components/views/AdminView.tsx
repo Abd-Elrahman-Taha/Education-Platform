@@ -1336,9 +1336,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
     let chosenOrder = Number(questionForm.orderIndex);
     if (!chosenOrder || chosenOrder <= 0) {
+      // No order set → auto-assign next
       chosenOrder = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
     } else if (!editingQuestion && existingOrders.includes(chosenOrder)) {
-      chosenOrder = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
+      // User picked an order that collides with an existing question → warn & auto-fix
+      const nextSafe = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
+      showToast(
+        `الترتيب ${chosenOrder} مستخدم بالفعل — تم تعيين الترتيب ${nextSafe} تلقائياً. يمكنك تغييره يدوياً قبل الحفظ.`,
+        'warning'
+      );
+      // Update form so user can see/correct the resolved value
+      setQuestionForm(prev => ({ ...prev, orderIndex: nextSafe }));
+      chosenOrder = nextSafe;
     }
 
     const payload: any = {
