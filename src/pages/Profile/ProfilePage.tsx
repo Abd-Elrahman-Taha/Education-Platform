@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getDeviceUuid } from '../../utils/device';
 import { ChangePasswordModal } from '../../components/auth/ChangePasswordModal';
 import { ScratchCardModal } from '../../components/payment/ScratchCardModal';
+import { useWalletBalance } from '../../hooks/useWalletBalance';
 
 interface ProfilePageProps {
   onLogoutSuccess?: () => void;
@@ -11,9 +12,9 @@ interface ProfilePageProps {
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess }) => {
   const { currentUser, logout, updateUserName } = useAuth();
+  const { walletBalance, updateBalance } = useWalletBalance();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isScratchCardOpen, setIsScratchCardOpen] = useState(false);
-  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(currentUser?.name || '');
 
@@ -149,7 +150,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess }) => 
         <ScratchCardModal
           isOpen={isScratchCardOpen}
           onClose={() => setIsScratchCardOpen(false)}
-          onRedeemSuccess={(_credited, newBal) => setWalletBalance(newBal)}
+          onRedeemSuccess={(_credited, newBal) => updateBalance(newBal)}
         />
       )}
     </div>

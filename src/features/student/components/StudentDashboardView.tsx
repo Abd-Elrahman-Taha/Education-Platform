@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '../api/studentApi';
 import { enrollmentsApi } from '../../../api/enrollments.api';
@@ -6,12 +6,14 @@ import { AppView } from '../../../types';
 import {
   GraduationCap, BookOpen, Clock, Award, Flame, Calendar,
   TrendingUp, CheckCircle, BarChart3, ArrowLeft, PlayCircle,
-  FileCheck, AlertCircle, RefreshCw
+  FileCheck, AlertCircle, RefreshCw, Wallet, Sparkles, Plus
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { ScratchCardModal } from '../../../components/payment/ScratchCardModal';
+import { useWalletBalance } from '../../../hooks/useWalletBalance';
 
 interface Props {
   onNavigateView: (view: AppView, lessonId?: string) => void;
@@ -21,6 +23,9 @@ interface Props {
 const PIE_COLORS = ['#0891B2', ' #ffc800', '#E11D48'];
 
 export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelectCourse }) => {
+  const [isScratchModalOpen, setIsScratchModalOpen] = useState(false);
+  const { walletBalance, updateBalance } = useWalletBalance();
+
   const { data: dashboardRes, isLoading: isDashLoading, isError: isDashError, refetch: refetchDash } = useQuery({
     queryKey: ['studentDashboard'],
     queryFn: studentApi.getDashboard,
@@ -85,7 +90,62 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Wallet Balance Widget */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.85rem',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              padding: '0.6rem 1.15rem',
+              borderRadius: '14px',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 4px 15px rgba(16, 185, 129, 0.08)',
+            }}
+          >
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(16, 185, 129, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#10B981',
+              }}
+            >
+              <Wallet size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>رصيد المحفظة</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#10B981', lineHeight: 1.2 }}>
+                {walletBalance} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>ج.م</span>
+              </div>
+            </div>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setIsScratchModalOpen(true)}
+              style={{
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.8rem',
+                marginRight: '0.25rem',
+                borderColor: 'rgba(16, 185, 129, 0.4)',
+                color: '#10B981',
+                background: 'rgba(16, 185, 129, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: 'pointer',
+              }}
+              title="شحن رصيد كارت سنتر"
+            >
+              <Sparkles size={14} color="var(--accent)" /> شحن كارت
+            </button>
+          </div>
+
           <button className="btn btn-primary" onClick={() => onNavigateView('view-courses')}>
             <BookOpen size={18} /> تصفح جميع الكورسات
           </button>
@@ -218,6 +278,45 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
       </h2>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+        {/* Widget 0: Available Wallet Balance (Featured) */}
+        <div
+          className="glass-card"
+          style={{
+            padding: '1.25rem',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.05) 100%)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.82rem', color: '#10B981', fontWeight: 700 }}>رصيد المحفظة المتاح</span>
+            <div style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '0.35rem', borderRadius: '8px', color: '#10B981' }}>
+              <Wallet size={18} />
+            </div>
+          </div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10B981', marginBottom: '0.5rem' }}>
+            {walletBalance} <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>ج.م</span>
+          </div>
+          <button
+            onClick={() => setIsScratchModalOpen(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              fontSize: '0.78rem',
+              color: 'var(--primary-light)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontWeight: 600,
+            }}
+          >
+            <Sparkles size={13} color="var(--accent)" /> شحن رصيد كارت السنتر ⚡
+          </button>
+        </div>
+
         {/* Widget 1: Grade */}
         <div className="glass-card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -407,6 +506,15 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
           </div>
         </div>
       </div>
+
+      {/* ── MODALS ────────────────────────────────────────── */}
+      {isScratchModalOpen && (
+        <ScratchCardModal
+          isOpen={isScratchModalOpen}
+          onClose={() => setIsScratchModalOpen(false)}
+          onRedeemSuccess={(_credited, newBal) => updateBalance(newBal)}
+        />
+      )}
     </div>
   );
 };

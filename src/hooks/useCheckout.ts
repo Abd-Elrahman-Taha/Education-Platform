@@ -46,6 +46,14 @@ export function useCheckout() {
     try {
       const res = await paymentApi.redeemScratchCard({ code: code.trim() });
       setRedeemSuccess(res);
+      if (typeof res.newWalletBalance === 'number') {
+        try {
+          localStorage.setItem('student_wallet_balance', String(res.newWalletBalance));
+          window.dispatchEvent(
+            new CustomEvent('wallet:balance-updated', { detail: { balance: res.newWalletBalance } })
+          );
+        } catch {}
+      }
       return res;
     } catch (err: any) {
       const friendly = getFriendlyErrorMessage(err, 'كود الكارت غير صالح أو تم استخدامه مسبقاً.');
