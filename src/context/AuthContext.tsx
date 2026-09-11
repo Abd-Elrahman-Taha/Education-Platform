@@ -27,26 +27,7 @@ const STORAGE_KEY = 'syntax_current_user_v2';
 export async function fetchBackendUserName(userId?: string, authToken?: string, phone?: string): Promise<string | null> {
   if (!authToken) return null;
 
-  // 1. Query by phone search: GET /users/students?search=:phone
-  if (phone && phone.trim()) {
-    try {
-      const listRes = await apiClient.get<any>('/users/students', {
-        headers: { Authorization: `Bearer ${authToken}` },
-        params: { search: phone.trim() },
-      });
-      const students: any[] = listRes.data?.data?.students || listRes.data?.students || [];
-      const match = students.find((s) => 
-        (s.Phone && s.Phone.trim() === phone.trim()) ||
-        (userId && s._id === userId)
-      );
-      const cand = match?.FullName || match?.fullName || match?.name;
-      if (cand && !isPlaceholderName(cand)) {
-        return cand.trim();
-      }
-    } catch {}
-  }
-
-  // 2. Direct query: GET /users/students/:userId
+  // 1. Direct query: GET /users/students/:userId
   if (userId) {
     try {
       const res = await apiClient.get<any>(`/users/students/${userId}`, {
@@ -56,41 +37,21 @@ export async function fetchBackendUserName(userId?: string, authToken?: string, 
       if (cand && !isPlaceholderName(cand)) {
         return cand.trim();
       }
-    } catch {}
+    } catch (err: any) {
+      if (err?.status === 401 || err?.status === 403) return null;
+    }
   }
 
-  // 3. Query all students list: GET /users/students
+  // 2. Try current user profile / me endpoint
   try {
-    const allRes = await apiClient.get<any>('/users/students', {
+    const r = await apiClient.get<any>('/users/me', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
-    const allStudents: any[] = allRes.data?.data?.students || allRes.data?.students || [];
-    const found = allStudents.find((s) =>
-      (userId && s._id === userId) ||
-      (phone && s.Phone && s.Phone.trim() === phone.trim()) ||
-      (phone && s.Phone && s.Phone.endsWith(phone.trim().slice(-8)))
-    );
-    const cand = found?.FullName || found?.fullName || found?.name;
+    const cand = r.data?.data?.FullName || r.data?.user?.FullName || r.data?.FullName || r.data?.data?.name || r.data?.name;
     if (cand && !isPlaceholderName(cand)) {
       return cand.trim();
     }
   } catch {}
-
-  // 4. Try current user profile / me endpoints
-  const profileEndpoints = ['/users/me', '/auth/me', '/users/profile'];
-  if (userId) profileEndpoints.push(`/users/${userId}`);
-
-  for (const ep of profileEndpoints) {
-    try {
-      const r = await apiClient.get<any>(ep, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const cand = r.data?.data?.FullName || r.data?.user?.FullName || r.data?.FullName || r.data?.data?.name || r.data?.name;
-      if (cand && !isPlaceholderName(cand)) {
-        return cand.trim();
-      }
-    } catch {}
-  }
 
   return null;
 }
@@ -217,9 +178,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     };
 
+    const handleAuthLogout = () => {
+      setToken(null);
+      setCurrentUser(null);
+      try {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    };
+
+    window.addEventListener('auth:logout', handleAuthLogout);
     window.addEventListener('user:profile-updated', handleProfileUpdated);
     window.addEventListener('storage', handleStorageChange);
     return () => {
+      window.removeEventListener('auth:logout', handleAuthLogout);
       window.removeEventListener('user:profile-updated', handleProfileUpdated);
       window.removeEventListener('storage', handleStorageChange);
     };

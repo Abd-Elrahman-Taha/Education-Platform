@@ -20,6 +20,11 @@ export function useWalletBalance() {
 
   const fetchBalance = useCallback(async () => {
     if (!token) return;
+    // Admins and SuperAdmins do not have student wallets; skip network call
+    if (currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.isSuperAdmin) {
+      return;
+    }
+
     setIsLoading(true);
     try {
       // 1. Try to query student profile if userId is available
@@ -35,32 +40,31 @@ export function useWalletBalance() {
             localStorage.setItem(WALLET_BALANCE_KEY, String(bal));
             return;
           }
-        } catch {}
+        } catch (err: any) {
+          if (err?.status === 401 || err?.status === 403) return;
+        }
       }
 
-      // 2. Try common profile endpoints
-      const profileEndpoints = ['/users/me', '/auth/me', '/users/profile'];
-      for (const ep of profileEndpoints) {
-        try {
-          const r = await apiClient.get<any>(ep);
-          const bal =
-            r.data?.data?.student?.WalletBalance ??
-            r.data?.data?.WalletBalance ??
-            r.data?.user?.WalletBalance ??
-            r.data?.WalletBalance;
-          if (typeof bal === 'number') {
-            setWalletBalance(bal);
-            localStorage.setItem(WALLET_BALANCE_KEY, String(bal));
-            return;
-          }
-        } catch {}
-      }
+      // 2. Try official me endpoint
+      try {
+        const r = await apiClient.get<any>('/users/me');
+        const bal =
+          r.data?.data?.student?.WalletBalance ??
+          r.data?.data?.WalletBalance ??
+          r.data?.user?.WalletBalance ??
+          r.data?.WalletBalance;
+        if (typeof bal === 'number') {
+          setWalletBalance(bal);
+          localStorage.setItem(WALLET_BALANCE_KEY, String(bal));
+          return;
+        }
+      } catch {}
     } catch {
       // Gracefully keep cached balance on failure
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser?.id, token]);
+  }, [currentUser?.id, currentUser?.role, currentUser?.isSuperAdmin, token]);
 
   useEffect(() => {
     fetchBalance();

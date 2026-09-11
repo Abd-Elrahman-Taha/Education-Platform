@@ -18,6 +18,7 @@ import { SearchModal } from './components/modals/SearchModal';
 import { ShareModal } from './components/modals/ShareModal';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { useAuth } from './context/AuthContext';
+import { useToast } from './context/ToastContext';
 import { StandaloneAIView } from './features/ai/components/StandaloneAIView';
 
 // New LMS REST API Integrated Pages
@@ -164,6 +165,24 @@ export const AppContent: React.FC = () => {
       localStorage.setItem('syntax_active_view', currentView);
     } catch {}
   }, [currentView, selectedCourseId, selectedLessonId, selectedExamId]);
+
+  const { showToast } = useToast();
+
+  // Listen to session invalidation / multi-device logout
+  useEffect(() => {
+    const handleAuthLogout = (e: any) => {
+      const detail = e?.detail;
+      if (detail?.reason === 'multi_device') {
+        showToast(detail?.message || 'تم تسجيل الدخول بحسابك من جهاز آخر. يرجى تسجيل الدخول مجدداً للمتابعة.', 'warning');
+      } else {
+        showToast('انتهت صلاحية جلستك الحالية. يرجى تسجيل الدخول مرة أخرى.', 'info');
+      }
+      setIsAuthModalOpen(true);
+    };
+
+    window.addEventListener('auth:logout', handleAuthLogout);
+    return () => window.removeEventListener('auth:logout', handleAuthLogout);
+  }, [showToast]);
 
   // Listen to browser Back/Forward navigation
   useEffect(() => {

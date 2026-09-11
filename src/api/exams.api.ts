@@ -36,15 +36,19 @@ export const examsApi = {
 
     // First attempt: GET /exams (clean)
     try {
-      const response = await apiClient.get<ExamsListResponse>('/exams');
+      const response = await apiClient.get<ExamsListResponse>('/exams', { params });
       raw = response.data;
     } catch (firstErr: any) {
-      // Second attempt: GET /exams with pagination parameters (in case backend expects integer page/limit)
-      try {
-        const response = await apiClient.get<ExamsListResponse>('/exams', { params: { page: 1, limit: 50 } });
-        raw = response.data;
-      } catch (secondErr: any) {
-        console.warn('[Exams API] Backend /exams returned error, reading registry cache:', secondErr?.message || firstErr?.message);
+      // Only retry with page/limit if it wasn't a 401/403 auth or forbidden error
+      if (firstErr?.status !== 401 && firstErr?.status !== 403 && !firstErr?.isForbidden && !firstErr?.isAuthError) {
+        try {
+          const response = await apiClient.get<ExamsListResponse>('/exams', { params: { page: 1, limit: 50, ...(params || {}) } });
+          raw = response.data;
+        } catch (secondErr: any) {
+          console.warn('[Exams API] Backend /exams returned error, reading registry cache:', secondErr?.message || firstErr?.message);
+        }
+      } else {
+        console.warn('[Exams API] Backend /exams returned auth error, reading registry cache:', firstErr?.message);
       }
     }
 

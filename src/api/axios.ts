@@ -63,14 +63,31 @@ apiClient.interceptors.response.use(
       raw: backendData,
     });
 
-    // 401 Unauthorized: Invalidate session and redirect to signin
-    if (status === 401) {
+    // Invalidate session if 401 Unauthorized or 403 Multi-Device session revocation
+    const isMultiDeviceOrSessionRevoked =
+      status === 401 ||
+      (status === 403 &&
+        typeof rawErrorMessage === 'string' &&
+        (rawErrorMessage.includes('تم تسجيل الدخول من جهاز آخر') ||
+         rawErrorMessage.toLowerCase().includes('device') ||
+         rawErrorMessage.toLowerCase().includes('suspended') ||
+         rawErrorMessage.toLowerCase().includes('jwt') ||
+         rawErrorMessage.toLowerCase().includes('token')));
+
+    if (isMultiDeviceOrSessionRevoked) {
       try {
         const hadToken = localStorage.getItem(AUTH_TOKEN_KEY);
         if (hadToken) {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           // Emit auth:logout event so AuthContext reactively updates
-          window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: '401' } }));
+          window.dispatchEvent(
+            new CustomEvent('auth:logout', {
+              detail: {
+                reason: status === 401 ? '401' : 'multi_device',
+                message: rawErrorMessage || 'تم تسجيل الدخول من جهاز آخر. يرجى تسجيل الدخول مجدداً.',
+              },
+            })
+          );
         }
       } catch {}
     }
