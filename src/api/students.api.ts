@@ -152,33 +152,10 @@ export const studentsApi = {
   },
 
   /**
-   * Get all admin users (SuperAdmin endpoint: GET /users/admins or filtered from /users/students).
+   * Get all admin users (filtered from backend /users/students).
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
-    // 1. Try direct call to /users/admins
-    try {
-      const response = await apiClient.get<any>('/users/admins');
-      const raw = response.data;
-      const list: AdminStudent[] = Array.isArray(raw?.data?.admins)
-        ? raw.data.admins
-        : Array.isArray(raw?.data)
-        ? raw.data
-        : Array.isArray(raw?.admins)
-        ? raw.admins
-        : Array.isArray(raw)
-        ? raw
-        : [];
-      if (list.length > 0) {
-        return {
-          admins: list,
-          total: list.length,
-        };
-      }
-    } catch (err) {
-      // Endpoint may not exist on backend, fall back to /users/students
-    }
-
-    // 2. Query /users/students and extract admin roles
+    // Query /users/students and extract admin roles safely without triggering 403
     try {
       const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 100, page: 1 } });
       const raw = response.data as any;

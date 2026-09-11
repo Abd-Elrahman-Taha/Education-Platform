@@ -10,13 +10,26 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
   }
 
   const status = error?.status || error?.response?.status;
-  const backendMsg =
+  let backendMsg =
     error?.backendMessage ||
     error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.response?.data?.msg ||
+    error?.response?.data?.details ||
     error?.raw?.message ||
     (typeof error?.response?.data === 'string' ? error?.response?.data : null) ||
     (typeof error === 'string' ? error : null) ||
     error?.rawMessage;
+
+  if (!backendMsg && error?.response?.data?.errors) {
+    const errs = error.response.data.errors;
+    if (Array.isArray(errs)) {
+      backendMsg = errs.map((e: any) => (typeof e === 'string' ? e : e?.message || JSON.stringify(e))).join(' • ');
+    } else if (typeof errs === 'object') {
+      backendMsg = Object.values(errs).map((e: any) => (typeof e === 'string' ? e : e?.message || JSON.stringify(e))).join(' • ');
+    }
+  }
+
   const rawMsg = backendMsg || error?.message || '';
   const lowerMsg = String(rawMsg).toLowerCase().trim();
 
@@ -189,6 +202,13 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
       return 'لا يمكن إضافة، تعديل أو حذف أسئلة لاختبار بدأت عليه محاولات طلاب بالفعل لحماية درجاتهم.';
     }
     return 'لا يمكن تعديل إعدادات هذا الاختبار لوجود محاولات طلاب مسجلة عليه بالفعل حفاظاً على نزاهة الدرجات.';
+  }
+
+  if (
+    (lowerMsg.includes('published') || lowerMsg.includes('is published')) &&
+    (lowerMsg.includes('question') || lowerMsg.includes('modify') || lowerMsg.includes('cannot') || lowerMsg.includes('edit'))
+  ) {
+    return 'لا يمكن إضافة أو تعديل أسئلة اختبار منشور للطلاب حالياً. يرجى تحويل حالة الاختبار إلى مسودة (Draft) أولاً ثم إضافة الأسئلة.';
   }
 
   // 6. QUESTIONS: OrderIndex, Options & CorrectAnswer

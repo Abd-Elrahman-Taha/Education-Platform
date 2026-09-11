@@ -9,6 +9,8 @@ import { PublicPackagesView } from '../../../components/views/PublicPackagesView
 import { FAQView } from '../../../components/views/FAQView';
 import { coursesApi } from '../../../api/courses.api';
 import { lessonsApi as apiLessonsApi } from '../../../api/lessons.api';
+import { enrollmentsApi } from '../../../api/enrollments.api';
+import { Course } from '../../../types/api.types';
 import {
   Lock, Unlock, Play, Pause, ShieldCheck, Download, FileText,
   CheckCircle2, Star, Send, Award, Clock, ChevronLeft, ChevronRight,
@@ -77,57 +79,148 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
 
   const [liveLessons, setLiveLessons] = useState<Lesson[]>([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<string>>(new Set());
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
 
-  // Fetch live lessons from backend API for current academic year & courses
+  // Fetch live lessons from backend API for current academic year & subscribed courses
   useEffect(() => {
     let active = true;
     setLoadingLessons(true);
 
-    coursesApi.getCourses()
-      .then(async (res) => {
-        const coursesList = res.courses || res.data?.courses || [];
-        if (!coursesList.length) {
-          if (active) setLiveLessons([]);
-          return;
+    const loadData = async () => {
+      try {
+        // 1. Fetch courses list
+        const res = await coursesApi.getCourses({ limit: 100 });
+        const coursesList: Course[] = res.courses || (res.data as any)?.courses || [];
+        if (!active) return;
+
+        // 2. Fetch student enrolled courses if authenticated
+        let enrolledIds = new Set<string>();
+        let myEnrolledCourses: Course[] = [];
+
+        if (isAuthenticated) {
+          try {
+            const myEnrollments = await enrollmentsApi.getMyCourses({ limit: 100 });
+            enrolledIds = new Set(
+              myEnrollments
+                .map(e => typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId)
+                .filter(Boolean)
+            );
+
+            // Populate courses from enrollments and coursesList
+            const enrolledFromEnrollments = myEnrollments
+              .map(e => (typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any) : null))
+              .filter(Boolean);
+
+            const enrolledMap = new Map<string, Course>();
+            coursesList.forEach(c => {
+              if (enrolledIds.has(c._id)) enrolledMap.set(c._id, c);
+            });
+            enrolledFromEnrollments.forEach(c => {
+              if (c._id && !enrolledMap.has(c._id)) enrolledMap.set(c._id, c as Course);
+            });
+            myEnrolledCourses = Array.from(enrolledMap.values());
+          } catch (enrollErr) {
+            console.warn('[Lessons] Could not fetch enrollments:', enrollErr);
+          }
         }
 
+        // Combine all courses
+        const combinedAllCourses = [...coursesList];
+        myEnrolledCourses.forEach(c => {
+          if (!combinedAllCourses.some(ac => ac._id === c._id)) combinedAllCourses.push(c);
+        });
+
+        if (!active) return;
+        setAllCourses(combinedAllCourses);
+        setEnrolledCourses(myEnrolledCourses);
+        setEnrolledCourseIds(enrolledIds);
+
+        // 3. Choose the active course: default to student's subscribed course!
+        let activeCourse = selectedCourseId;
+        const availableCourses = myEnrolledCourses.length > 0 ? myEnrolledCourses : combinedAllCourses;
+        if (!activeCourse || !combinedAllCourses.some(c => c._id === activeCourse)) {
+          if (myEnrolledCourses.length > 0) {
+            activeCourse = myEnrolledCourses[0]._id;
+          } else if (combinedAllCourses.length > 0) {
+            activeCourse = combinedAllCourses[0]._id;
+          }
+          if (activeCourse && activeCourse !== selectedCourseId) {
+            setSelectedCourseId(activeCourse);
+          }
+        }
+
+        // 4. Determine which courses to fetch lessons for:
+        // If activeCourse is selected, fetch lessons for activeCourse
+        const targetCourses = activeCourse
+          ? combinedAllCourses.filter(c => c._id === activeCourse)
+          : (myEnrolledCourses.length > 0 ? myEnrolledCourses : combinedAllCourses);
+
         const gathered: Lesson[] = [];
-        for (const c of coursesList) {
+        for (const c of targetCourses) {
           try {
             const lessons = await apiLessonsApi.getCourseLessons(c._id);
             if (Array.isArray(lessons)) {
-              for (const l of lessons) {
+              const isSubscribedToThisCourse = isTeacherOrAdmin || enrolledIds.has(c._id);
+              lessons.forEach((l, idx) => {
                 gathered.push({
                   id: l._id,
-                  title: l.Title,
+                  title: l.Title || `المحاضرة ${idx + 1}`,
+                  subtitle: `المحاضرة #${(l.OrderIndex !== undefined ? l.OrderIndex : idx) + 1}`,
                   description: l.Description || 'شرح تفصيلي للمحاضرة وتطبيقات مباشرة على المنهج المقرر.',
                   subject: c.Title || 'الرياضيات',
                   academicYear: selectedAcademicYear,
-                  videoUrl: l.VideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+                  videoUrl: (l as any).VideoStoragePath || l.VideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
                   duration: l.DurationMinutes ? `${l.DurationMinutes} دقيقة` : (l.DurationSeconds ? `${Math.round(l.DurationSeconds / 60)} دقيقة` : '45 دقيقة'),
-                  isLocked: isSuperAdmin ? false : (l.IsLocked ?? false),
+                  isLocked: isSubscribedToThisCourse ? false : (l.IsLocked ?? false),
                   userExamPassed: false,
+                  pdfTitle: `ملزمة ${l.Title || 'المحاضرة'}.pdf`,
+                  pdfUrl: '#',
                   pdfNotes: {
-                    title: `ملزمة ${l.Title}.pdf`,
+                    title: `ملزمة ${l.Title || 'المحاضرة'}.pdf`,
                     downloadUrl: '#',
                     size: '4.5 MB',
                   },
+                  homework: {
+                    id: `hw-${l._id}`,
+                    title: `واجب: ${l.Title || 'المحاضرة'}`,
+                    description: 'تطبيقات وتمارين على محتوى المحاضرة',
+                    dueDate: 'متاح دائماً',
+                    isSubmitted: false,
+                    score: 0,
+                    questions: [],
+                  },
+                  exam: {
+                    id: l.PrerequisiteExamId || `exam-${l._id}`,
+                    title: `امتحان: ${l.Title || 'المحاضرة'}`,
+                    durationMinutes: 15,
+                    passingScorePercentage: 60,
+                    questions: [],
+                  },
                 } as any);
-              }
+              });
             }
-          } catch {}
+          } catch (err) {
+            console.warn(`[Lessons] Failed to fetch lessons for course ${c._id}:`, err);
+          }
         }
-        if (active) setLiveLessons(gathered);
-      })
-      .catch(() => {
+
+        if (active) {
+          setLiveLessons(gathered);
+        }
+      } catch (err) {
         if (active) setLiveLessons([]);
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoadingLessons(false);
-      });
+      }
+    };
+
+    loadData();
 
     return () => { active = false; };
-  }, [selectedAcademicYear]);
+  }, [selectedAcademicYear, selectedCourseId, isAuthenticated]);
 
   const allYearLessons = liveLessons;
 
@@ -433,6 +526,88 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
           </div>
 
 
+          {/* ── COURSE SELECTOR (Subscribed & Available Courses) ── */}
+          <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <BookOpen size={20} color="var(--primary-light)" />
+                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-bright)' }}>
+                  الكورسات والمناهج الدراسية
+                </span>
+              </div>
+              {enrolledCourses.length > 0 && (
+                <span style={{ fontSize: '0.78rem', color: '#10B981', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', padding: '0.2rem 0.65rem', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <CheckCircle2 size={13} /> مشترك في {enrolledCourses.length} {enrolledCourses.length === 1 ? 'كورس' : 'كورسات'}
+                </span>
+              )}
+            </div>
+
+            {allCourses.length === 0 && !loadingLessons ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
+                لا توجد كورسات متاحة حالياً.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.4rem' }}>
+                {(enrolledCourses.length > 0 ? [
+                  ...enrolledCourses,
+                  ...allCourses.filter(ac => !enrolledCourseIds.has(ac._id))
+                ] : allCourses).map((c) => {
+                  const isSelected = c._id === selectedCourseId;
+                  const isSubscribed = isTeacherOrAdmin || enrolledCourseIds.has(c._id);
+                  return (
+                    <button
+                      key={c._id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCourseId(c._id);
+                        setExamStarted(false);
+                        setIsPlaying(false);
+                      }}
+                      className={`btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{
+                        padding: '0.55rem 1.1rem',
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        borderRadius: 'var(--radius-md)',
+                        borderColor: isSelected ? 'var(--primary-light)' : (isSubscribed ? 'rgba(16,185,129,0.4)' : undefined),
+                        background: isSelected ? undefined : (isSubscribed ? 'rgba(16,185,129,0.06)' : undefined),
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span>{c.Title}</span>
+                      {isSubscribed ? (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '9999px',
+                          background: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(16,185,129,0.2)',
+                          color: isSelected ? '#fff' : '#10B981',
+                          fontWeight: 800,
+                        }}>
+                          مشترك ✓
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '9999px',
+                          background: 'rgba(255,255,255,0.08)',
+                          color: 'var(--text-muted)',
+                        }}>
+                          {c.Price > 0 ? `${c.Price} ج.م` : 'مجاني'}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* ── LESSON UNLOCK SELECTOR BAR ────────────────────── */}
           <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '2rem' }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-light)', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -442,9 +617,14 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
               </span>
             </div>
 
-            {allYearLessons.length === 0 ? (
+            {loadingLessons ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 0', color: 'var(--primary-light)', fontSize: '0.9rem' }}>
+                <div className="spinner" style={{ width: '20px', height: '20px', border: '2px solid rgba(8,145,178,0.2)', borderTopColor: 'var(--primary-light)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                <span>جاري استرجاع المحاضرات من السيرفر...</span>
+              </div>
+            ) : allYearLessons.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
-                لا توجد محاضرات مدرجة لهذا الصف حالياً.
+                لا توجد محاضرات مدرجة لهذا الكورس حالياً.
               </p>
             ) : (
               <div style={{ display: 'flex', gap: '0.85rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
@@ -704,16 +884,16 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                     <div>
                       <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                        {lesson.homework.title}
+                        {lesson.homework?.title || 'واجب المحاضرة'}
                       </h3>
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: '0.25rem 0 0' }}>
-                        {lesson.homework.description} (تاريخ التسليم: {lesson.homework.dueDate})
+                        {lesson.homework?.description || 'تطبيقات وتدريبات تفاعلية على محتوى الدرس'} {lesson.homework?.dueDate ? `(تاريخ التسليم: ${lesson.homework.dueDate})` : ''}
                       </p>
                     </div>
 
-                    {isAuthorized && lesson.homework.isSubmitted && (
+                    {isAuthorized && lesson.homework?.isSubmitted && (
                       <span style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10B981', padding: '0.35rem 0.85rem', borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 700 }}>
-                        تم التسليم بنجاح ({lesson.homework.score}%)
+                        تم التسليم بنجاح ({lesson.homework?.score || 0}%)
                       </span>
                     )}
                   </div>
@@ -728,7 +908,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                         <Lock size={15} /> تسجيل الدخول لحل الواجب
                       </button>
                     </div>
-                  ) : lesson.homework.questions && lesson.homework.questions.length > 0 ? (
+                  ) : lesson.homework?.questions && lesson.homework.questions.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                       {lesson.homework.questions.map((q, qIdx) => (
                         <div key={q.id} style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem' }}>
@@ -743,7 +923,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                                 <div
                                   key={opt.key}
                                   onClick={() => {
-                                    if (!lesson.homework.isSubmitted) {
+                                    if (!lesson.homework?.isSubmitted) {
                                       setHwAnswers(p => ({ ...p, [q.id]: opt.key }));
                                     }
                                   }}
@@ -752,7 +932,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                                     borderRadius: '8px',
                                     background: isSel ? 'rgba(8,145,178,0.2)' : 'var(--bg-glass-card)',
                                     border: `1px solid ${isSel ? 'var(--primary-light)' : 'var(--border-glass)'}`,
-                                    cursor: lesson.homework.isSubmitted ? 'default' : 'pointer',
+                                    cursor: lesson.homework?.isSubmitted ? 'default' : 'pointer',
                                     fontSize: '0.88rem',
                                     color: 'var(--text-bright)',
                                   }}
@@ -765,7 +945,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                         </div>
                       ))}
 
-                      {!lesson.homework.isSubmitted && (
+                      {!lesson.homework?.isSubmitted && (
                         <button
                           className="btn btn-primary"
                           style={{ alignSelf: 'flex-start', marginTop: '0.5rem' }}
@@ -804,12 +984,12 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                           </span>
                         </div>
                         <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                          {lesson.exam.title}
+                          {lesson.exam?.title || 'امتحان المحاضرة'}
                         </h3>
                         <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Clock size={14} /> المدة المقررة: {lesson.exam.durationMinutes} دقيقة</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Target size={14} /> نسبة النجاح: {lesson.exam.passingScorePercentage}%</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><FileQuestion size={14} /> عدد الأسئلة: {lesson.exam.questions?.length || 0} أسئلة</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Clock size={14} /> المدة المقررة: {lesson.exam?.durationMinutes || 15} دقيقة</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Target size={14} /> نسبة النجاح: {lesson.exam?.passingScorePercentage || 60}%</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><FileQuestion size={14} /> عدد الأسئلة: {lesson.exam?.questions?.length || 0} أسئلة</span>
                         </div>
                       </div>
 
@@ -831,12 +1011,12 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                           </span>
                         </div>
                         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                          {lesson.exam.title}
+                          {lesson.exam?.title || 'امتحان المحاضرة'}
                         </h3>
                         <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                          <span>المدة: {lesson.exam.durationMinutes} دقيقة</span>
-                          <span>درجة النجاح: {lesson.exam.passingScorePercentage}%</span>
-                          <span>عدد الأسئلة: {lesson.exam.questions.length}</span>
+                          <span>المدة: {lesson.exam?.durationMinutes || 15} دقيقة</span>
+                          <span>درجة النجاح: {lesson.exam?.passingScorePercentage || 60}%</span>
+                          <span>عدد الأسئلة: {lesson.exam?.questions?.length || 0}</span>
                         </div>
                       </div>
 
@@ -848,12 +1028,12 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
                       <div>
                         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                          {lesson.exam.title}
+                          {lesson.exam?.title || 'امتحان المحاضرة'}
                         </h3>
                         <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                          <span>المدة: {lesson.exam.durationMinutes} دقيقة</span>
-                          <span>درجة النجاح: {lesson.exam.passingScorePercentage}%</span>
-                          <span>عدد الأسئلة: {lesson.exam.questions.length}</span>
+                          <span>المدة: {lesson.exam?.durationMinutes || 15} دقيقة</span>
+                          <span>درجة النجاح: {lesson.exam?.passingScorePercentage || 60}%</span>
+                          <span>عدد الأسئلة: {lesson.exam?.questions?.length || 0}</span>
                         </div>
                         <p style={{ fontSize: '0.82rem', color: '#F59E0B', marginTop: '0.5rem', margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                           <AlertCircle size={14} /> النجاح بنسبة 60% في هذا الامتحان يفتح لك الدرس التالي مباشرة.
@@ -865,7 +1045,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                         style={{ padding: '0.85rem 1.75rem', fontSize: '0.95rem' }}
                         onClick={() => {
                           setExamStarted(true);
-                          setExamTimer(lesson.exam.durationMinutes * 60);
+                          setExamTimer((lesson.exam?.durationMinutes || 15) * 60);
                           showToast('بدأ امتحان الدرس — بالتوفيق!', 'success');
                         }}
                       >
@@ -889,7 +1069,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        {lesson.exam.questions.map((q, idx) => (
+                        {(lesson.exam?.questions || []).map((q, idx) => (
                           <div key={q.id} style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem' }}>
                             <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-bright)', marginBottom: '1rem' }}>
                               س{idx + 1}: {q.text}

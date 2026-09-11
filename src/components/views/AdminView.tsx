@@ -1336,16 +1336,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     };
 
     if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
+      const rawCorrectText = (questionForm.options[questionForm.correctOptionIndex] || questionForm.correctAnswer || '').trim();
       const cleanedOpts = questionForm.options.map(o => o.trim()).filter(Boolean);
       if (cleanedOpts.length < 2) {
-        showToast('يرجى كتابة خيارين على الأقل', 'warning');
+        showToast('يرجى كتابة خيارين على الأقل للاختيار من متعدد', 'warning');
         return;
       }
       payload.Options = cleanedOpts;
-      let correct = cleanedOpts[questionForm.correctOptionIndex];
-      if (!correct) {
-        correct = cleanedOpts.find(o => o === questionForm.correctAnswer?.trim()) || cleanedOpts[0];
-      }
+      const correct = cleanedOpts.find(o => o === rawCorrectText) || cleanedOpts[0];
       payload.CorrectAnswer = correct;
     } else if (questionForm.questionType === 'TrueFalse') {
       payload.CorrectAnswer = String(questionForm.correctAnswer).toLowerCase() === 'true' ? 'true' : 'false';
@@ -4134,8 +4132,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', width: '20px' }}>{i + 1}.</span>
                       <input
                         type="text"
-                        required
-                        placeholder={`الخيار ${i + 1}`}
+                        required={i < 2}
+                        placeholder={`الخيار ${i + 1}${i >= 2 ? ' (اختياري)' : ''}`}
                         className="input-field"
                         style={{ flex: 1, fontSize: '0.85rem' }}
                         value={opt}
@@ -4257,8 +4255,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     <input
                       key={i}
                       type="text"
-                      required
-                      placeholder={`عنصر ${i + 1}`}
+                      required={i < 2}
+                      placeholder={`عنصر ${i + 1}${i >= 2 ? ' (اختياري)' : ''}`}
                       className="input-field"
                       style={{ width: '100%', fontSize: '0.85rem' }}
                       value={opt}
