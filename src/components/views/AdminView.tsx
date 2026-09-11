@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Sliders, Search, Users, DollarSign, Activity,
@@ -107,10 +107,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   }, [isSuperAdmin, activeTab]);
 
   // ── LIVE BACKEND STATE ───────────────────────────────────────
+  const [allStudents, setAllStudents] = useState<AdminStudent[]>([]);
   const [realStudents, setRealStudents] = useState<AdminStudent[]>([]);
   const [isStudentsLoading, setIsStudentsLoading] = useState(false);
   const [searchStudent, setSearchStudent] = useState('');
   const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'Active' | 'Blocked' | 'SuspendedMultiDevice'>('all');
+  const searchReqIdRef = useRef(0);
 
   const [realCourses, setRealCourses] = useState<Course[]>([]);
   const [isCoursesLoading, setIsCoursesLoading] = useState(false);
@@ -319,9 +321,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsStudentsLoading(true);
     try {
       const res = await studentsApi.getStudents({
-        search: searchStudent.trim() || undefined,
         Status: studentStatusFilter !== 'all' ? studentStatusFilter : undefined,
       });
+      setAllStudents(res.students);
       setRealStudents(res.students);
       loadAdmins(res.students);
     } catch (err: any) {
@@ -330,6 +332,54 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       setIsStudentsLoading(false);
     }
   };
+
+  // Instant in-memory filtering for students list (instant search, instant restore when cleared)
+  const displayedStudents = useMemo(() => {
+    const master = allStudents.length > 0 ? allStudents : realStudents;
+    let list = master;
+
+    if (studentStatusFilter !== 'all') {
+      list = list.filter(s => s.Status === studentStatusFilter);
+    }
+
+    const query = searchStudent.trim();
+    if (!query) {
+      return list;
+    }
+
+    // Normalize arabic digits to standard ascii digits
+    const cleanDigits = (val: string) =>
+      val ? val.replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 1632)).replace(/\D/g, '') : '';
+    const queryDigits = cleanDigits(query);
+
+    // Normalize arabic characters for fuzzy search
+    const normalizeArabic = (text: string) =>
+      (text || '')
+        .toLowerCase()
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي')
+        .trim();
+    const queryArabic = normalizeArabic(query);
+    const queryLower = query.toLowerCase();
+
+    return list.filter(student => {
+      const name = normalizeArabic(student.FullName || '');
+      const rawName = (student.FullName || '').toLowerCase();
+      const phone = cleanDigits(student.Phone || '');
+      const parentPhone = cleanDigits(student.ParentPhone || '');
+      const nationalId = cleanDigits(student.NationalId || '');
+      const role = (student.Role || '').toLowerCase();
+
+      const matchesName = name.includes(queryArabic) || rawName.includes(queryLower);
+      const matchesPhone = queryDigits ? phone.includes(queryDigits) : false;
+      const matchesParentPhone = queryDigits ? parentPhone.includes(queryDigits) : false;
+      const matchesNationalId = queryDigits ? nationalId.includes(queryDigits) : false;
+      const matchesRole = role.includes(queryLower);
+
+      return matchesName || matchesPhone || matchesParentPhone || matchesNationalId || matchesRole;
+    });
+  }, [allStudents, realStudents, studentStatusFilter, searchStudent]);
 
   const loadCourses = async () => {
     setIsCoursesLoading(true);
@@ -491,7 +541,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       let admins = [...(res.admins || [])].filter(a => !demotedIds.includes(a._id));
 
       // Also merge any users from realStudents whose Role is Admin or not Student (excluding demoted)
-      const sourceStudents = (studentsList && studentsList.length > 0) ? studentsList : realStudents;
+      const sourceStudents = (studentsList && studentsList.length > 0) ? studentsList : (allStudents.length > 0 ? allStudents : realStudents);
       if (sourceStudents && sourceStudents.length > 0) {
         for (const s of sourceStudents) {
           if (demotedIds.includes(s._id)) continue;
@@ -573,13 +623,40 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
   }, [selectedCourseForLessons]);
 
-  // Handle Search Debounce for students
+  // Handle Search & Filter for students
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadStudents();
-    }, 400);
+    const trimmed = searchStudent.trim();
+    if (!trimmed) {
+      // When search query is cleared/empty, instantly restore all students
+      if (allStudents.length > 0 && realStudents.length !== allStudents.length) {
+        setRealStudents(allStudents);
+      }
+      return;
+    }
+
+    const currentReqId = ++searchReqIdRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await studentsApi.getStudents({
+          search: trimmed,
+          Status: studentStatusFilter !== 'all' ? studentStatusFilter : undefined,
+        });
+        if (currentReqId === searchReqIdRef.current && searchStudent.trim() === trimmed) {
+          if (res.students && res.students.length > 0) {
+            setAllStudents(prev => {
+              const map = new Map(prev.map(s => [s._id, s]));
+              res.students.forEach(s => map.set(s._id, s));
+              return Array.from(map.values());
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[API WARN] Background student search:', err);
+      }
+    }, 450);
+
     return () => clearTimeout(timer);
-  }, [searchStudent, studentStatusFilter]);
+  }, [searchStudent, studentStatusFilter, allStudents, realStudents]);
 
 
   // Body scroll lock on modal open
@@ -1358,7 +1435,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           >
             <Users size={16} />
             <span>إدارة الطلاب الحية</span>
-            <span className="admin-tab-badge">{realStudents.length}</span>
+            <span className="admin-tab-badge">{allStudents.length || realStudents.length}</span>
           </button>
 
           <button
@@ -1386,7 +1463,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('exams')}
           >
             <Award size={16} />
-            <span>إدارة الامتحانات (Exams & Questions)</span>
+            <span>إدارة الامتحانات والتقييمات</span>
             <span className="admin-tab-badge">{realExams.length}</span>
           </button>
 
@@ -1396,7 +1473,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('scratch-cards')}
           >
             <Key size={16} />
-            <span>توليد كروت الشحن (Scratch Cards)</span>
+            <span>شحن الأكواد وكروت الشحن</span>
           </button>
 
           {isSuperAdmin && (
@@ -1404,10 +1481,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               type="button"
               className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
               onClick={() => setActiveTab('admins')}
+              style={{
+                background: activeTab === 'admins' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.35))' : undefined,
+                borderColor: activeTab === 'admins' ? 'rgba(245, 158, 11, 0.5)' : undefined,
+                color: activeTab === 'admins' ? '#F59E0B' : undefined,
+              }}
             >
-              <Shield size={16} />
-              <span>إدارة المشرفين والمديرين (SuperAdmin)</span>
-              <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' }}>
+              <Crown size={16} color="#F59E0B" />
+              <span>إدارة المسؤولين (SuperAdmin)</span>
+              <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                 {realAdmins.length}
               </span>
             </button>
@@ -1422,7 +1504,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             <div className="glass-card" style={{ padding: '1.5rem' }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>إجمالي الطلاب المسجلين</span>
               <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary-light)', margin: '0.35rem 0' }}>
-                {realStudents.length}
+                {allStudents.length || realStudents.length}
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                 <CheckCircle2 size={12} /> متصل بقاعدة بيانات MongoDB
@@ -1470,7 +1552,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                الطلاب المسجلون في المنظومة ({realStudents.length})
+                الطلاب المسجلون في المنظومة ({displayedStudents.length}{(searchStudent.trim() || studentStatusFilter !== 'all') && (allStudents.length > 0 || realStudents.length > 0) ? ` من ${allStudents.length || realStudents.length}` : ''})
               </h2>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 إدارة كاملة لحسابات الطلاب، تفعيل الحسابات، الحظر، والحذف الآمن
@@ -1495,10 +1577,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 type="text"
                 className="input-field"
                 placeholder="بحث بالاسم أو رقم الهاتف..."
-                style={{ width: '100%', paddingRight: '40px', fontSize: '0.88rem' }}
+                style={{ width: '100%', paddingRight: '40px', paddingLeft: searchStudent ? '38px' : '14px', fontSize: '0.88rem' }}
                 value={searchStudent}
                 onChange={e => setSearchStudent(e.target.value)}
               />
+              {searchStudent && (
+                <button
+                  type="button"
+                  onClick={() => setSearchStudent('')}
+                  style={{
+                    position: 'absolute',
+                    left: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  title="مسح البحث وعرض كل الطلاب"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
 
             <select
@@ -1515,9 +1620,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           </div>
 
           {/* Students Table */}
-          {isStudentsLoading ? (
+          {isStudentsLoading && allStudents.length === 0 && realStudents.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>جاري تحميل بيانات الطلاب...</div>
-          ) : realStudents.length === 0 ? (
+          ) : displayedStudents.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>لا يوجد طلاب مطابقين للبحث.</div>
           ) : (
             <div className="user-table-wrapper">
@@ -1534,7 +1639,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {realStudents.map(student => {
+                  {displayedStudents.map(student => {
                     const isActive = student.Status === 'Active';
                     const isAdmin = (student.Role || '').toLowerCase() === 'admin';
                     const isSub = !!student.isSubscribed || enrolledStudentIds.has(student._id);
@@ -2498,6 +2603,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                             try {
                               await studentsApi.demoteAdminToStudent(adminUser._id);
                               setRealAdmins(prev => prev.filter(a => a._id !== adminUser._id));
+                              setAllStudents(prev => prev.map(s => s._id === adminUser._id ? { ...s, Role: 'Student' } : s));
                               setRealStudents(prev => prev.map(s => s._id === adminUser._id ? { ...s, Role: 'Student' } : s));
                               showToast(`تم تحويل حساب (${adminUser.FullName}) إلى حساب طالب عادي بنجاح!`, 'success');
                               await loadAdmins();
@@ -2535,6 +2641,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                             try {
                               await studentsApi.deleteAdmin(adminUser._id);
                               setRealAdmins(prev => prev.filter(a => a._id !== adminUser._id));
+                              setAllStudents(prev => prev.filter(s => s._id !== adminUser._id));
                               setRealStudents(prev => prev.filter(s => s._id !== adminUser._id));
                               showToast(`تم حذف المشرف (${adminUser.FullName}) نهائياً بنجاح!`, 'success');
                               await loadAdmins();
@@ -3252,7 +3359,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 className="input-field"
                 style={{ width: '100%' }}
                 onChange={e => {
-                  const student = realStudents.find(s => s._id === e.target.value);
+                  const targetList = allStudents.length > 0 ? allStudents : realStudents;
+                  const student = targetList.find(s => s._id === e.target.value);
                   if (student) {
                     setIsQuickPromoteOpen(false);
                     handleOpenPromoteModal(student);
@@ -3261,7 +3369,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 defaultValue=""
               >
                 <option value="" disabled>-- اختر الحساب المطلوب ترقيته --</option>
-                {realStudents.map(s => (
+                {(allStudents.length > 0 ? allStudents : realStudents).map(s => (
                   <option key={s._id} value={s._id}>
                     {s.FullName} ({s.Phone}) {s.Role === 'Admin' ? '[مسؤول]' : ''}
                   </option>

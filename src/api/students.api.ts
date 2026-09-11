@@ -20,11 +20,13 @@ export const studentsApi = {
    * List students with search, sorting, and status filter (Admin only).
    */
   getStudents: async (params?: StudentQueryParams): Promise<{ students: AdminStudent[]; total: number; totalPages: number }> => {
-    let cleanParams = params ? { ...params } : undefined;
-    if (cleanParams && typeof cleanParams.search === 'string' && !cleanParams.search.trim()) {
-      delete cleanParams.search;
-    }
-    const queryParams = { limit: 500, ...cleanParams };
+    const queryParams: Record<string, any> = { limit: 500 };
+    if (params?.page) queryParams.page = params.page;
+    if (params?.limit) queryParams.limit = params.limit;
+    if (params?.sort) queryParams.sort = params.sort;
+    if (params?.search && params.search.trim()) queryParams.search = params.search.trim();
+    if (params?.Status && params.Status !== 'all') queryParams.Status = params.Status;
+
     const response = await apiClient.get<StudentsListResponse>('/users/students', { params: queryParams });
     const students = response.data?.data?.students || (response.data as any)?.students || [];
     const pagination = response.data?.pagination || { total: students.length, totalPages: 1 };
