@@ -20,6 +20,12 @@ export function useExamSession(examId: string) {
   const [result, setResult] = useState<SubmitExamResponse | null>(null);
   const [isFinished, setIsFinished] = useState(false);
 
+  // Anti-cheating states (POST /exams/:id/warning)
+  const [warningCount, setWarningCount] = useState<number>(0);
+  const [showWarningModal, setShowWarningModal] = useState<boolean>(false);
+  const [autoSubmittedByCheating, setAutoSubmittedByCheating] = useState<boolean>(false);
+  const lastWarningTimeRef = useRef<number>(0);
+
   // Timer states (in seconds)
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(0);
   const [isTimerExpired, setIsTimerExpired] = useState(false);
@@ -44,6 +50,8 @@ export function useExamSession(examId: string) {
       setQuestions(questionsList);
       setAttemptId(attemptIdVal);
       setIsTimerExpired(false);
+      setWarningCount(0);
+      setAutoSubmittedByCheating(false);
     } catch (err: any) {
       setError(getFriendlyErrorMessage(err, 'تعذر بدء الاختبار حالياً. يرجى المحاولة مرة أخرى.'));
     } finally {
@@ -91,6 +99,62 @@ export function useExamSession(examId: string) {
     }
   }, [examId, answers, isSubmitting, isFinished]);
 
+  // Register cheating warning (tab switch / blur / devtools)
+  const registerCheatingWarning = useCallback(async () => {
+    if (!examId || !attemptId || isFinished || isSubmitting) return;
+
+    // Cooldown of 3 seconds to prevent double triggers
+    const now = Date.now();
+    if (now - lastWarningTimeRef.current < 3000) return;
+    lastWarningTimeRef.current = now;
+
+    try {
+      const res = await examsApi.registerWarning(examId);
+      const newCount = res.warningCount ?? (res as any).data?.warningCount ?? (warningCount + 1);
+      const isAutoSub = res.autoSubmitted || (res as any).data?.autoSubmitted || newCount >= 3;
+      setWarningCount(newCount);
+      setShowWarningModal(true);
+
+      if (isAutoSub) {
+        setAutoSubmittedByCheating(true);
+        await submitExam();
+      }
+    } catch (err) {
+      console.warn('[Anti-Cheat] Failed to register warning on server:', err);
+      // Local fallback increment if network fails
+      const fallbackCount = warningCount + 1;
+      setWarningCount(fallbackCount);
+      setShowWarningModal(true);
+      if (fallbackCount >= 3) {
+        setAutoSubmittedByCheating(true);
+        await submitExam();
+      }
+    }
+  }, [examId, attemptId, isFinished, isSubmitting, warningCount, submitExam]);
+
+  // Tab switch & window blur detection
+  useEffect(() => {
+    if (!attemptId || isFinished) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        registerCheatingWarning();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      registerCheatingWarning();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [attemptId, isFinished, registerCheatingWarning]);
+
   // Countdown timer effect
   useEffect(() => {
     if (!exam || isFinished) return;
@@ -132,9 +196,14 @@ export function useExamSession(examId: string) {
     isFinished,
     timeRemainingSeconds,
     isTimerExpired,
+    warningCount,
+    showWarningModal,
+    setShowWarningModal,
+    autoSubmittedByCheating,
     formatTimeRemaining,
     startExam,
     selectAnswer,
     submitExam,
+    registerCheatingWarning,
   };
 }

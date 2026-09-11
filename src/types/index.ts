@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'admin' | 'teacher' | 'parent';
+export type UserRole = 'student' | 'admin' | 'superadmin' | 'teacher' | 'parent';
 
 export type AcademicYear = 'first_secondary' | 'second_secondary' | 'third_secondary';
 
@@ -82,6 +82,7 @@ export interface User {
     plan?: string;
     expiresAt?: string | null;
   };
+  isSuperAdmin?: boolean;
   permissions?: TeacherPermission[];
 }
 

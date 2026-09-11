@@ -81,11 +81,25 @@ export const AdminView: React.FC = () => {
   const { showToast } = useToast();
   const { currentUser } = useAuth();
 
+  const isSuperAdmin =
+    currentUser?.role === 'superadmin' ||
+    currentUser?.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin' ||
+    (currentUser as any)?.role === 'superadmin';
+
   // Selected academic year filter ('all' shows all courses, or specific secondary year)
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'admins'>('overview');
+
+  // Redirect if non-superadmin attempts to open admins tab
+  useEffect(() => {
+    if (!isSuperAdmin && activeTab === 'admins') {
+      setActiveTab('overview');
+    }
+  }, [isSuperAdmin, activeTab]);
 
   // ── LIVE BACKEND STATE ───────────────────────────────────────
   const [realStudents, setRealStudents] = useState<AdminStudent[]>([]);
@@ -141,6 +155,14 @@ export const AdminView: React.FC = () => {
   const [selectedExamForAttempts, setSelectedExamForAttempts] = useState<Exam | null>(null);
   const [examAttempts, setExamAttempts] = useState<ExamAttempt[]>([]);
   const [isAttemptsLoading, setIsAttemptsLoading] = useState(false);
+
+  // ── ESSAY GRADING STATE (POST /exams/:id/attempts/:attemptId/grade) ──
+  const [isGradeModalOpen, setIsGradeModalOpen] = useState(false);
+  const [gradingAttempt, setGradingAttempt] = useState<ExamAttempt | null>(null);
+  const [gradingQuestions, setGradingQuestions] = useState<Question[]>([]);
+  const [gradingScores, setGradingScores] = useState<Record<string, number>>({});
+  const [gradingFeedbacks, setGradingFeedbacks] = useState<Record<string, string>>({});
+  const [isSubmittingGrade, setIsSubmittingGrade] = useState(false);
 
   // ── ENROLLMENT & PROMOTION MODALS ─────────────────────────────
   const [isManualEnrollOpen, setIsManualEnrollOpen] = useState(false);
@@ -405,7 +427,53 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  const handleOpenGradingModal = async (attempt: ExamAttempt) => {
+    if (!selectedExamForAttempts) return;
+    setGradingAttempt(attempt);
+    setIsGradeModalOpen(true);
+    try {
+      const qList = await examsApi.getQuestions(selectedExamForAttempts._id);
+      const essays = qList.filter(q => q.QuestionType === 'Essay');
+      const targetQuestions = essays.length > 0 ? essays : qList;
+      setGradingQuestions(targetQuestions);
+      const initialScores: Record<string, number> = {};
+      const initialFeedbacks: Record<string, string> = {};
+      targetQuestions.forEach(q => {
+        initialScores[q._id] = q.Points || 0;
+        initialFeedbacks[q._id] = '';
+      });
+      setGradingScores(initialScores);
+      setGradingFeedbacks(initialFeedbacks);
+    } catch (err) {
+      console.warn('Failed to load questions for grading:', err);
+    }
+  };
+
+  const handleSubmitGrades = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedExamForAttempts || !gradingAttempt) return;
+    setIsSubmittingGrade(true);
+    try {
+      const gradesPayload = gradingQuestions.map(q => ({
+        questionId: q._id,
+        awardedScore: Number(gradingScores[q._id] ?? 0),
+        feedback: gradingFeedbacks[q._id]?.trim() || undefined,
+      }));
+
+      await examsApi.gradeAttempt(selectedExamForAttempts._id, gradingAttempt._id, gradesPayload);
+      showToast('تم اعتماد تصحيح إجابات الطالب بنجاح وتحديث النتيجة!', 'success');
+      setIsGradeModalOpen(false);
+      setGradingAttempt(null);
+      await loadExamAttempts(selectedExamForAttempts._id);
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ درجات التصحيح المقالي'), 'error');
+    } finally {
+      setIsSubmittingGrade(false);
+    }
+  };
+
   const loadAdmins = async (studentsList?: AdminStudent[]) => {
+    if (!isSuperAdmin) return;
     setIsAdminsLoading(true);
     try {
       const res = await studentsApi.getAdmins();
@@ -474,15 +542,17 @@ export const AdminView: React.FC = () => {
     loadStudents();
     loadCourses();
     loadExams();
-    loadAdmins();
-  }, []);
+    if (isSuperAdmin) {
+      loadAdmins();
+    }
+  }, [isSuperAdmin]);
 
   // Reload data when switching tabs to ensure fresh data from API
   useEffect(() => {
     if (activeTab === 'exams') loadExams();
-    if (activeTab === 'admins') loadAdmins();
+    if (activeTab === 'admins' && isSuperAdmin) loadAdmins();
     if (activeTab === 'students') loadStudents();
-  }, [activeTab]);
+  }, [activeTab, isSuperAdmin]);
 
   useEffect(() => {
     if (selectedCourseForLessons) {
@@ -1294,17 +1364,19 @@ export const AdminView: React.FC = () => {
             <span>توليد كروت الشحن (Scratch Cards)</span>
           </button>
 
-          <button
-            type="button"
-            className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
-            onClick={() => setActiveTab('admins')}
-          >
-            <Shield size={16} />
-            <span>إدارة المشرفين والمديرين</span>
-            <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' }}>
-              {realAdmins.length}
-            </span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
+              onClick={() => setActiveTab('admins')}
+            >
+              <Shield size={16} />
+              <span>إدارة المشرفين والمديرين (SuperAdmin)</span>
+              <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' }}>
+                {realAdmins.length}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2229,8 +2301,8 @@ export const AdminView: React.FC = () => {
         </div>
       )}
 
-      {/* ── TAB 6: ADMINS MANAGEMENT (Switch Admin to Normal User) ── */}
-      {activeTab === 'admins' && (
+      {/* ── TAB 6: ADMINS MANAGEMENT (Strictly SuperAdmin Only) ── */}
+      {isSuperAdmin && activeTab === 'admins' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
@@ -2345,11 +2417,11 @@ export const AdminView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         className="btn btn-secondary"
-                        style={{ flex: 1, fontSize: '0.82rem', padding: '0.45rem' }}
+                        style={{ flex: 1, minWidth: '100px', fontSize: '0.82rem', padding: '0.45rem' }}
                         onClick={() => handleOpenEditStudent(adminUser)}
                       >
                         <Edit3 size={14} /> تعديل البيانات
@@ -2359,12 +2431,13 @@ export const AdminView: React.FC = () => {
                         type="button"
                         className="btn"
                         style={{
-                          flex: 1.6,
+                          flex: 1.2,
+                          minWidth: '120px',
                           fontSize: '0.82rem',
                           padding: '0.45rem',
-                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3))',
-                          border: '1px solid rgba(239, 68, 68, 0.5)',
-                          color: '#F87171',
+                          background: 'rgba(245, 158, 11, 0.12)',
+                          border: '1px solid rgba(245, 158, 11, 0.4)',
+                          color: '#F59E0B',
                           fontWeight: 700,
                           display: 'flex',
                           alignItems: 'center',
@@ -2386,7 +2459,42 @@ export const AdminView: React.FC = () => {
                           }
                         }}
                       >
-                        <XCircle size={14} /> تحويل إلى طالب عادي
+                        <XCircle size={14} /> سحب الصلاحيات
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{
+                          flex: 1,
+                          minWidth: '100px',
+                          fontSize: '0.82rem',
+                          padding: '0.45rem',
+                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3))',
+                          border: '1px solid rgba(239, 68, 68, 0.5)',
+                          color: '#F87171',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: 'pointer'
+                        }}
+                        onClick={async () => {
+                          if (window.confirm(`هل أنت متأكد من رغبتك في حذف حساب المشرف (${adminUser.FullName}) نهائياً من قاعدة البيانات (DELETE /users/admins/:userId)؟`)) {
+                            try {
+                              await studentsApi.deleteAdmin(adminUser._id);
+                              showToast(`تم حذف المشرف (${adminUser.FullName}) نهائياً بنجاح!`, 'success');
+                              await loadAdmins();
+                              await loadStudents();
+                            } catch (err: any) {
+                              showToast(getFriendlyErrorMessage(err, 'تعذر حذف المشرف'), 'error');
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 size={14} /> حذف نهائي
                       </button>
                     </div>
                   </div>
@@ -3759,11 +3867,13 @@ export const AdminView: React.FC = () => {
                       <th>الدرجة المحققة</th>
                       <th>الحالة</th>
                       <th>تاريخ المحاولة</th>
+                      <th>الإجراءات والتصحيح</th>
                     </tr>
                   </thead>
                   <tbody>
                     {examAttempts.map(attempt => {
                       const studentInfo = typeof attempt.StudentId === 'object' ? attempt.StudentId : null;
+                      const isPendingReview = attempt.status === 'PendingReview';
                       const isPassed = attempt.status === 'Passed' || (attempt.score >= selectedExamForAttempts.PassingScore);
 
                       return (
@@ -3779,7 +3889,7 @@ export const AdminView: React.FC = () => {
                             )}
                           </td>
                           <td>
-                            <strong style={{ fontSize: '1rem', color: isPassed ? '#10B981' : 'var(--danger)' }}>
+                            <strong style={{ fontSize: '1rem', color: isPendingReview ? '#F59E0B' : (isPassed ? '#10B981' : 'var(--danger)') }}>
                               {attempt.score}
                             </strong>
                             {attempt.totalPoints ? ` / ${attempt.totalPoints}` : ''}
@@ -3791,10 +3901,24 @@ export const AdminView: React.FC = () => {
                               borderRadius: '9999px',
                               fontSize: '0.75rem',
                               fontWeight: 700,
-                              background: isPassed ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                              color: isPassed ? '#10B981' : 'var(--danger)',
+                              background: isPendingReview
+                                ? 'rgba(245, 158, 11, 0.15)'
+                                : isPassed
+                                ? 'rgba(16,185,129,0.15)'
+                                : 'rgba(239,68,68,0.15)',
+                              color: isPendingReview
+                                ? '#F59E0B'
+                                : isPassed
+                                ? '#10B981'
+                                : 'var(--danger)',
                             }}>
-                              {attempt.status === 'Passed' ? 'ناجح ✓' : attempt.status === 'Failed' ? 'راسب ✗' : attempt.status || 'مكتمل'}
+                              {isPendingReview
+                                ? 'بانتظار تصحيح المقالي ⏳'
+                                : attempt.status === 'Passed'
+                                ? 'ناجح ✓'
+                                : attempt.status === 'Failed'
+                                ? 'راسب ✗'
+                                : attempt.status || 'مكتمل'}
                             </span>
                           </td>
                           <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -3804,6 +3928,26 @@ export const AdminView: React.FC = () => {
                                 })
                               : '—'}
                           </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => handleOpenGradingModal(attempt)}
+                              style={{
+                                fontSize: '0.78rem',
+                                padding: '0.3rem 0.65rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                background: isPendingReview ? 'rgba(245, 158, 11, 0.15)' : undefined,
+                                color: isPendingReview ? '#F59E0B' : undefined,
+                                borderColor: isPendingReview ? 'rgba(245, 158, 11, 0.4)' : undefined,
+                              }}
+                            >
+                              <CheckCircle2 size={13} />
+                              {isPendingReview ? 'تصحيح المقالي الآن' : 'تعديل الدرجات'}
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -3811,6 +3955,108 @@ export const AdminView: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: ESSAY GRADING (POST /exams/:id/attempts/:attemptId/grade) ── */}
+      {isGradeModalOpen && gradingAttempt && selectedExamForAttempts && createPortal(
+        <div className="modal-overlay active" onClick={() => setIsGradeModalOpen(false)} style={{ zIndex: 100000 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem' }}>
+            <button className="modal-close" onClick={() => setIsGradeModalOpen(false)}><X size={18} /></button>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <span className="gradient-badge" style={{ marginBottom: '0.4rem', display: 'inline-flex' }}>
+                <Award size={13} /> تصحيح الأسئلة المقالية (Manual Essay Grading)
+              </span>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.3rem 0' }}>
+                تصحيح محاولة: {typeof gradingAttempt.StudentId === 'object' ? gradingAttempt.StudentId.FullName : `طالب #${gradingAttempt.StudentId.slice(-6)}`}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                امتحان: {selectedExamForAttempts.Title} • درجة النجاح: {selectedExamForAttempts.PassingScore}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitGrades} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {gradingQuestions.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  جاري تحميل أسئلة الاختبار للتصحيح...
+                </div>
+              ) : (
+                gradingQuestions.map((q, idx) => (
+                  <div key={q._id} className="glass-card" style={{ padding: '1.25rem', border: '1px solid var(--border-glass)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--primary-light)' }}>
+                        سؤال #{idx + 1} ({q.QuestionType === 'Essay' ? 'سؤال مقالي' : q.QuestionType})
+                      </strong>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        الدرجة القصوى: {q.Points} درجات
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: '0.92rem', color: 'var(--text-bright)', marginBottom: '1rem', whiteSpace: 'pre-wrap' }}>
+                      {q.QuestionText}
+                    </p>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0.75rem', alignItems: 'flex-start' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                          الدرجة الممنوحة
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max={q.Points}
+                          required
+                          value={gradingScores[q._id] ?? 0}
+                          onChange={e => setGradingScores({ ...gradingScores, [q._id]: parseFloat(e.target.value) || 0 })}
+                          className="input-field"
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                          ملاحظات وتوجيهات للمعلم (Feedback)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="مثال: إجابة نموذجية ومكتملة..."
+                          value={gradingFeedbacks[q._id] || ''}
+                          onChange={e => setGradingFeedbacks({ ...gradingFeedbacks, [q._id]: e.target.value })}
+                          className="input-field"
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsGradeModalOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isSubmittingGrade || gradingQuestions.length === 0}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  {isSubmittingGrade ? 'جاري الاعتماد...' : (
+                    <>
+                      <Check size={16} /> اعتماد الدرجات وإنهاء التصحيح
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

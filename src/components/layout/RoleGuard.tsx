@@ -14,6 +14,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   student: 'طالب',
   parent: 'ولي أمر',
   admin: 'مدير النظام',
+  superadmin: 'المدير العام (SuperAdmin)',
   teacher: 'معلم',
 };
 

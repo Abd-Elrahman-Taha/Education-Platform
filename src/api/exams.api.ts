@@ -12,6 +12,10 @@ import {
   StartExamResponse,
   SubmitExamRequest,
   SubmitExamResponse,
+  ExamWarningResponse,
+  GradeItem,
+  GradeAttemptResponse,
+  FileUploadResponse,
 } from '../types/api.types';
 
 export interface ExamQueryParams {
@@ -331,5 +335,54 @@ export const examsApi = {
       data
     );
     return response.data;
+  },
+
+  // ── Anti-Cheating Warnings ───────────────────────────────────────
+  /**
+   * Register a cheating warning. 3rd warning auto-submits.
+   * Backend route: POST /api/v1/exams/:id/warning
+   */
+  registerWarning: async (examId: string): Promise<ExamWarningResponse> => {
+    const response = await apiClient.post<any>(`/exams/${examId}/warning`);
+    const raw = response.data;
+    return raw?.data || raw;
+  },
+
+  // ── Manual Attempt Grading (Admin / SuperAdmin) ──────────────────
+  /**
+   * Manually grade essay questions for an attempt.
+   * Transitions PendingReview to Passed or Failed once fully graded.
+   * Backend route: POST /api/v1/exams/:id/attempts/:attemptId/grade
+   */
+  gradeAttempt: async (
+    examId: string,
+    attemptId: string,
+    grades: GradeItem[]
+  ): Promise<GradeAttemptResponse> => {
+    const response = await apiClient.post<any>(`/exams/${examId}/attempts/${attemptId}/grade`, {
+      grades,
+    });
+    const raw = response.data;
+    return raw?.data || raw;
+  },
+
+  // ── File Upload (QuestionImage / EssayImage) ─────────────────────
+  /**
+   * Upload an image for question or essay answer via multipart/form-data.
+   * Backend route: POST /api/v1/files
+   */
+  uploadFile: async (file: File, purpose: 'QuestionImage' | 'EssayImage'): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('purpose', purpose);
+    const response = await apiClient.post<any>('/files', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const raw = response.data;
+    return raw?.data || raw;
+  },
+
+  getFileUrl: (fileKey: string): string => {
+    return `${apiClient.defaults.baseURL || 'https://edc-platform.vercel.app/api/v1'}/files/${fileKey}`;
   },
 };

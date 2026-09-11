@@ -223,7 +223,7 @@ export const AppContent: React.FC = () => {
   };
 
   const handleLoginSuccess = (role: UserRole) => {
-    if (role === 'admin' || role === 'teacher') {
+    if (role === 'admin' || role === 'superadmin' || role === 'teacher') {
       handleNavigateView('view-admin');
     } else {
       handleNavigateView('view-courses');
@@ -432,7 +432,7 @@ export const AppContent: React.FC = () => {
         {/* Admin Hub */}
         {currentView === 'view-admin' && (
           <RoleGuard
-            allowedRoles={['admin', 'teacher']}
+            allowedRoles={['admin', 'superadmin', 'teacher']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <AdminView />
@@ -442,7 +442,7 @@ export const AppContent: React.FC = () => {
         {/* Placeholder views */}
         {(currentView === 'view-homework' || currentView === 'view-pdfs' || currentView === 'view-live') && (
           <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
+            allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <div className="container fade-in-up" style={{ padding: '5rem 1.5rem', textAlign: 'center' }}>

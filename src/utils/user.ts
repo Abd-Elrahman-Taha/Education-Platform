@@ -10,7 +10,7 @@ export function isPlaceholderName(name?: string | null, role?: string): boolean 
   if (/^\+?[0-9\s\-]+$/.test(clean)) return true;
 
   // If role is admin/teacher, "admin", "administrator", "مدير", "مدير المنصة" ARE valid usernames!
-  const isAdmin = role === 'admin' || role === 'Admin' || role === 'teacher';
+  const isAdmin = role === 'admin' || role === 'Admin' || role === 'superadmin' || role === 'SuperAdmin' || role === 'teacher';
   if (isAdmin) {
     if (['admin', 'administrator', 'superadmin', 'مدير', 'مدير المنصة', 'admin user'].includes(clean)) {
       return false; // Valid admin username!

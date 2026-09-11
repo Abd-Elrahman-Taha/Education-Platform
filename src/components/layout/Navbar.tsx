@@ -68,6 +68,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
   student: studentNav,
   parent:  guestNav,
   admin:   adminNav,
+  superadmin: adminNav,
   teacher: teacherNav,
 };
 
@@ -75,6 +76,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   student: 'طالب',
   parent:  'ولي أمر',
   admin:   'مدير المنصة',
+  superadmin: 'المدير العام (SuperAdmin)',
   teacher: 'معلم',
 };
 
@@ -92,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const cleanDisplayName = (() => {
     if (!currentUser) return '';
-    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'teacher';
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'teacher';
 
     // 1. Check current user's name
     const raw = (currentUser.name || '').trim();

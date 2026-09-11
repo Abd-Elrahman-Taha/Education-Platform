@@ -187,14 +187,38 @@ export const studentsApi = {
   },
 
   /**
-   * Get all admin users (Admin-only).
-   * Queries /users/students across all pages directly from the live API,
-   * plus checks the persistent admins registry so promoted/existing admins are always preserved.
+   * Get all admin users (SuperAdmin endpoint: GET /users/admins).
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
+    // 1. Direct call to the new official GET /users/admins
+    try {
+      const response = await apiClient.get<any>('/users/admins');
+      const raw = response.data;
+      const list: AdminStudent[] = Array.isArray(raw?.data?.admins)
+        ? raw.data.admins
+        : Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw?.admins)
+        ? raw.admins
+        : Array.isArray(raw)
+        ? raw
+        : [];
+      if (list.length > 0) {
+        try {
+          localStorage.setItem('platform_admins_registry', JSON.stringify(list));
+        } catch {}
+        return {
+          admins: list,
+          total: list.length,
+        };
+      }
+    } catch (err) {
+      console.warn('[Admins API] /users/admins query error:', err);
+    }
+
     const userMap = new Map<string, AdminStudent>();
 
-    // 1. Load registry first so known admins are never empty
+    // 2. Load registry cache
     try {
       const stored = localStorage.getItem('platform_admins_registry');
       if (stored) {
@@ -207,9 +231,8 @@ export const studentsApi = {
       }
     } catch {}
 
-    // 2. Query API /users/students across pages
+    // 3. Fallback: Query API /users/students across pages
     try {
-      // First page with default limit 50
       const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 50, page: 1 } });
       const raw = response.data as any;
       const list: AdminStudent[] = Array.isArray(raw?.data?.students)
@@ -226,35 +249,8 @@ export const studentsApi = {
 
       for (const u of list) {
         const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
-        if (r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student')) {
-          if (u && u._id) userMap.set(u._id, { ...u, Role: 'Admin' });
-        }
-      }
-
-      const totalItems = raw?.pagination?.total || raw?.results || raw?.total || list.length;
-      const totalPages = raw?.pagination?.totalPages || raw?.pagination?.pages || Math.ceil(totalItems / 50) || 1;
-
-      if (totalPages > 1) {
-        const fetchPromises = [];
-        for (let p = 2; p <= Math.min(totalPages, 10); p++) {
-          fetchPromises.push(
-            apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 50, page: p } })
-              .then(res => {
-                const pRaw = res.data as any;
-                const pList: AdminStudent[] = pRaw?.data?.students || pRaw?.students || pRaw?.data || [];
-                return pList;
-              })
-              .catch(() => [] as AdminStudent[])
-          );
-        }
-        const pagesData = await Promise.all(fetchPromises);
-        for (const pList of pagesData) {
-          for (const u of pList) {
-            const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
-            if (r === 'admin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student')) {
-              if (u && u._id) userMap.set(u._id, { ...u, Role: 'Admin' });
-            }
-          }
+        if (r === 'admin' || r === 'superadmin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student')) {
+          if (u && u._id) userMap.set(u._id, { ...u, Role: (r === 'superadmin' ? 'SuperAdmin' : 'Admin') as any });
         }
       }
     } catch (err) {
@@ -270,5 +266,17 @@ export const studentsApi = {
       admins: allAdmins,
       total: allAdmins.length,
     };
+  },
+
+  /**
+   * Delete an admin (SuperAdmin only: DELETE /users/admins/:userId).
+   */
+  deleteAdmin: async (userId: string): Promise<void> => {
+    try {
+      await apiClient.delete(`/users/admins/${userId}`);
+    } catch (err) {
+      // Fallback: demote role to Student
+      await studentsApi.demoteAdminToStudent(userId);
+    }
   },
 };

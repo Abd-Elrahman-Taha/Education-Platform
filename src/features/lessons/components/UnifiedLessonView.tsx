@@ -62,7 +62,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
     if (activeLessonId) setSelectedLessonId(activeLessonId);
   }, [activeLessonId]);
 
-  const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'teacher';
+  const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.role === 'teacher';
 
   // Check if current user is authorized to consume protected content
   // Teacher/Admin: always authorized. Authenticated Student with access: authorized. Guest: preview only.

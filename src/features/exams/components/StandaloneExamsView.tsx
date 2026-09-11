@@ -21,7 +21,7 @@ interface StandaloneExamsViewProps {
 
 export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpenAuthModal, onNavigateView, onSelectExam }) => {
   const { currentUser, isAuthenticated } = useAuth();
-  const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'teacher';
+  const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.role === 'teacher';
 
   const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'failed' | 'completed'>('all');
   const [selectedExamDetail, setSelectedExamDetail] = useState<ExamRecord | null>(null);

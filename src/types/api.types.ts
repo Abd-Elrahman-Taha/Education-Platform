@@ -440,6 +440,45 @@ export interface SubmitExamResponse {
   };
 }
 
+export interface ExamWarningResponse {
+  status: 'InProgress' | 'AutoSubmitted' | 'PendingReview' | string;
+  warningCount: number;
+  autoSubmitted: boolean;
+}
+
+export interface GradeItem {
+  questionId: string;
+  awardedScore: number;
+  feedback?: string;
+}
+
+export interface GradeAttemptRequest {
+  grades: GradeItem[];
+}
+
+export interface GradeAttemptResponse {
+  status: 'Passed' | 'Failed' | 'PendingReview' | string;
+  score: number;
+  isFinalized: boolean;
+}
+
+export interface FileUploadResponse {
+  FileKey: string;
+  Purpose: 'QuestionImage' | 'EssayImage' | string;
+}
+
+export interface AdminUser {
+  _id: string;
+  FullName: string;
+  Phone: string;
+  Role: 'Admin' | 'SuperAdmin' | string;
+  NationalId?: string;
+  ParentPhone?: string;
+  Status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ── Payment & Scratch Cards ───────────────────────────────────────────────
 export interface CheckoutRequest {
   courseId: string;

@@ -128,7 +128,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!saved) return null;
       const parsed = JSON.parse(saved);
       if (parsed) {
-        const isAdmin = parsed.role === 'admin' || parsed.role === 'teacher';
+        const isAdmin = parsed.role === 'admin' || parsed.role === 'superadmin' || parsed.role === 'teacher';
+        if (parsed.role === 'superadmin') {
+          parsed.isSuperAdmin = true;
+        }
         // Always check if there is an updated name cached from admin edit or backend
         const cachedUpdated = (parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null)
           || (parsed.id ? localStorage.getItem(`user_fullname_${parsed.id}`) : null)
@@ -245,16 +248,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           'Student'
         ).toString();
         const roleLower = roleRaw.toLowerCase();
-        const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
+        const isSuperAdmin = roleLower === 'superadmin' || payload.isSuperAdmin === true || roleRaw === 'SuperAdmin';
+        const isAdmin = roleLower === 'admin' || isSuperAdmin || roleLower === 'administrator';
         const userId = payload.userId || payload.sub || payload._id;
         const phone = payload.Phone || payload.phone || '';
 
-        const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
+        const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
 
         // Automatically fetch real student / user name from live backend API
         if (userId || phone) {
           fetchBackendUserName(userId, token, phone).then((nameFromApi) => {
-            const isAdminRole = normalizedRole === 'admin';
+            const isAdminRole = normalizedRole === 'admin' || normalizedRole === 'superadmin';
             const adminLocalUser = isAdminRole
               ? (payload.username || payload.userName || (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) || localStorage.getItem('admin_username'))
               : null;
@@ -272,7 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName.trim() : null) ||
               (!isPlaceholderName(payload.username, normalizedRole) ? payload.username.trim() : null) ||
               (!isPlaceholderName(payload.name, normalizedRole) ? payload.name.trim() : null) ||
-              (isAdminRole ? 'مدير المنصة' : (phone ? phone.trim() : null));
+              (isAdminRole ? (isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة') : (phone ? phone.trim() : null));
 
             if (resolvedName) {
               if (phone && !isPlaceholderName(resolvedName, normalizedRole)) {
@@ -299,6 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     email: payload.email || `${phone || 'user'}@lms.edu`,
                     phone: phone,
                     role: normalizedRole,
+                    isSuperAdmin: isSuperAdmin,
                     status: 'active',
                     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
                     registrationDate: new Date().toISOString().slice(0, 10),
@@ -311,6 +316,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   ...prev,
                   name: resolvedName,
                   role: normalizedRole,
+                  isSuperAdmin: isSuperAdmin,
                 };
               });
             }
@@ -368,13 +374,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'Student'
     ).toString();
     const roleLower = roleRaw.toLowerCase();
-    const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'administrator';
+    const isSuperAdmin = roleLower === 'superadmin' || payload.isSuperAdmin === true || roleRaw === 'SuperAdmin' || (res.user as any)?.isSuperAdmin === true || (res.user as any)?.Role === 'SuperAdmin';
+    const isAdmin = roleLower === 'admin' || isSuperAdmin || roleLower === 'administrator';
     const userId = payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`;
 
-    const normalizedRole: UserRole = isAdmin ? 'admin' : 'student';
+    const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
 
     // Get the name directly from the backend API or token payload
-    const isAdminUser = normalizedRole === 'admin';
+    const isAdminUser = normalizedRole === 'admin' || normalizedRole === 'superadmin';
     const resUserAny = res.user as any;
     const candidateAdmin = isAdminUser
       ? (
@@ -433,7 +440,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // FOR ADMIN: NEVER FALL BACK TO PHONE NUMBER!
     const finalName = (backendName && !isPlaceholderName(backendName, normalizedRole))
       ? backendName.trim()
-      : (isAdminUser ? (candidateAdmin || 'مدير المنصة') : (phone || 'حساب الطالب'));
+      : (isAdminUser ? (candidateAdmin || (isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة')) : (phone || 'حساب الطالب'));
 
     const userObj: User = {
       id: userId,
@@ -441,6 +448,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: payload.email || `${phone}@lms.edu`,
       phone: phone.trim(),
       role: normalizedRole,
+      isSuperAdmin: isSuperAdmin,
       status: 'active',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
       registrationDate: new Date().toISOString().slice(0, 10),
@@ -458,9 +466,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Real backend signup (Backend automatically forces role to Student).
+   * Real backend signup using student details.
    */
-  const signupApi = async (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => {
+  const signupApi = async (
+    fullName: string,
+    nationalId: string,
+    phone: string,
+    parentPhone: string,
+    password: string
+  ): Promise<any> => {
     const res = await authApi.signup({
       FullName: fullName.trim(),
       NationalId: nationalId.trim(),
@@ -468,6 +482,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ParentPhone: parentPhone.trim(),
       password,
     });
+
+    try {
+      localStorage.setItem(`user_fullname_${phone.trim()}`, fullName.trim());
+      localStorage.setItem('user_fullname_active', fullName.trim());
+    } catch {}
+
     return res;
   };
 
@@ -479,7 +499,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!clean) return;
     setCurrentUser((prev) => {
       if (!prev) return null;
-      if (prev.role === 'admin') {
+      if (prev.role === 'admin' || prev.role === 'superadmin') {
         try {
           localStorage.setItem('admin_username', clean);
         } catch {}
