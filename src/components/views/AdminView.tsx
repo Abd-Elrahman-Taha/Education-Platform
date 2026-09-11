@@ -2412,37 +2412,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 const examCourseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
                 const linkedCourse = realCourses.find(c => c._id === examCourseId);
                 const courseTitle = linkedCourse?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : '—');
-                const statusColor = exam.Status === 'Published' ? '#10B981' : exam.Status === 'Draft' ? '#F59E0B' : '#EF4444';
-                const statusBg = exam.Status === 'Published' ? 'rgba(16, 185, 129, 0.15)' : exam.Status === 'Draft' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)';
-                const statusText = exam.Status === 'Published' ? 'منشور (Published)' : exam.Status === 'Draft' ? 'مسودة (Draft)' : 'مغلق (Closed)';
 
                 return (
                   <div key={exam._id} className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', border: '1px solid var(--border-glass)' }}>
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <select
-                            value={exam.Status}
-                            onChange={(e) => handleUpdateExamStatus(exam, e.target.value as ExamStatus)}
-                            style={{
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              padding: '0.22rem 0.6rem',
-                              borderRadius: '9999px',
-                              background: statusBg,
-                              color: statusColor,
-                              border: `1px solid ${statusColor}60`,
-                              cursor: 'pointer',
-                              outline: 'none',
-                            }}
-                            title="تغيير حالة الاختبار مباشرة (مسودة / منشور / مغلق)"
-                          >
-                            <option value="Draft" style={{ background: '#1e293b', color: '#F59E0B' }}>• مسودة (Draft)</option>
-                            <option value="Published" style={{ background: '#1e293b', color: '#10B981' }}>• منشور (Published)</option>
-                            <option value="Closed" style={{ background: '#1e293b', color: '#EF4444' }}>• مغلق (Closed)</option>
-                          </select>
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      {(exam.IsGated || exam.IsRandomized) && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem', marginBottom: '0.65rem' }}>
                           {exam.IsGated && (
                             <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
                               مشروط <Lock size={10} />
@@ -2454,7 +2429,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                             </span>
                           )}
                         </div>
-                      </div>
+                      )}
 
                       <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.4rem' }}>
                         {exam.Title}
@@ -4163,7 +4138,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             </h2>
 
             <form onSubmit={handleSaveQuestion} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
                     نوع السؤال (Question Type)
@@ -4185,7 +4160,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     <option value="TrueFalse">صح أو خطأ (True / False)</option>
                     <option value="Essay">سؤال مقالي (Essay - بدون إجابة آلية)</option>
                     <option value="FillInBlank">أكمل الفراغ (Fill In Blank)</option>
-                    <option value="DragDrop">مطابقة وسحب (Drag & Drop)</option>
+                    <option value="DragDrop">مطابقة وسحب (Drag &amp; Drop)</option>
                   </select>
                 </div>
 
@@ -4199,6 +4174,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     style={{ width: '100%' }}
                     value={questionForm.points}
                     onChange={e => setQuestionForm({ ...questionForm, points: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                    ترتيب السؤال
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    title="رقم ترتيب السؤال في الاختبار — يمكنك تغييره يدوياً"
+                    value={questionForm.orderIndex}
+                    onChange={e => setQuestionForm({ ...questionForm, orderIndex: Number(e.target.value) })}
                   />
                 </div>
               </div>
