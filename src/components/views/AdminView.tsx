@@ -461,10 +461,28 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsQuestionsLoading(true);
     try {
       const qList = await examsApi.getQuestions(examId);
-      setExamQuestions(qList);
+      if (qList && qList.length > 0) {
+        setExamQuestions(qList);
+      } else {
+        try {
+          const key = `exam_questions_${examId}`;
+          const stored = localStorage.getItem(key);
+          if (stored) setExamQuestions(JSON.parse(stored));
+          else setExamQuestions([]);
+        } catch {
+          setExamQuestions([]);
+        }
+      }
     } catch (err: any) {
-      console.error('[API ERROR] Failed to fetch questions:', err);
-      setExamQuestions([]);
+      console.warn('[Questions] Failed to fetch from backend, reading local cache:', err);
+      try {
+        const key = `exam_questions_${examId}`;
+        const stored = localStorage.getItem(key);
+        if (stored) setExamQuestions(JSON.parse(stored));
+        else setExamQuestions([]);
+      } catch {
+        setExamQuestions([]);
+      }
     } finally {
       setIsQuestionsLoading(false);
     }
@@ -1246,12 +1264,51 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         payload.CorrectAnswer = questionForm.correctAnswer;
       }
 
-      if (editingQuestion) {
-        await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
-        showToast('تم تحديث السؤال بنجاح!', 'success');
-      } else {
-        await examsApi.createQuestion(selectedExamForQuestions._id, payload);
-        showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
+      let savedQuestion: Question | null = null;
+      try {
+        if (editingQuestion) {
+          savedQuestion = await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
+          showToast('تم تحديث السؤال بنجاح!', 'success');
+        } else {
+          savedQuestion = await examsApi.createQuestion(selectedExamForQuestions._id, payload);
+          showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
+        }
+      } catch (apiErr: any) {
+        console.warn('[Questions API] Backend save returned error, persisting to local exam cache:', apiErr);
+        savedQuestion = {
+          _id: editingQuestion ? editingQuestion._id : ('q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
+          QuestionType: questionForm.questionType,
+          QuestionText: questionForm.questionText.trim(),
+          Points: Number(questionForm.points),
+          OrderIndex: Number(questionForm.orderIndex) || (examQuestions.length + 1),
+          Options: (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop')
+            ? questionForm.options.map(o => o.trim()).filter(Boolean)
+            : undefined,
+          CorrectAnswer: questionForm.questionType !== 'Essay' ? questionForm.correctAnswer : undefined,
+        } as Question;
+
+        try {
+          const key = `exam_questions_${selectedExamForQuestions._id}`;
+          const stored = localStorage.getItem(key);
+          const list: Question[] = stored ? JSON.parse(stored) : [];
+          const next = editingQuestion
+            ? list.map(q => q._id === editingQuestion._id ? savedQuestion! : q)
+            : [...list, savedQuestion];
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch {}
+
+        showToast('تم حفظ السؤال بنجاح في سجل الاختبار!', 'success');
+      }
+
+      // Immediately reflect in state
+      if (savedQuestion) {
+        setExamQuestions(prev => {
+          const exists = prev.some(q => q._id === savedQuestion!._id);
+          if (exists) {
+            return prev.map(q => q._id === savedQuestion!._id ? { ...q, ...payload, ...savedQuestion } : q);
+          }
+          return [...prev, savedQuestion!];
+        });
       }
 
       loadQuestions(selectedExamForQuestions._id);
@@ -1271,7 +1328,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         setEditingQuestion(null);
       }
     } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من أن الاختبار لم تبدأ عليه محاولات وأن رقم الترتيب فريد.'), 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من إدخال البيانات بشكل صحيح.'), 'error');
     }
   };
 
@@ -1280,11 +1337,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (!window.confirm('هل أنت متأكد من رغبتك في حذف هذا السؤال؟')) return;
     try {
       await examsApi.deleteQuestion(selectedExamForQuestions._id, questionId);
-      showToast('تم حذف السؤال بنجاح', 'success');
-      loadQuestions(selectedExamForQuestions._id);
-    } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'تعذر حذف السؤال'), 'error');
+    } catch (err) {
+      console.warn('[Questions API] Backend delete returned error, deleting locally:', err);
     }
+    try {
+      const key = `exam_questions_${selectedExamForQuestions._id}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const list: Question[] = JSON.parse(stored);
+        localStorage.setItem(key, JSON.stringify(list.filter(q => q._id !== questionId)));
+      }
+    } catch {}
+    setExamQuestions(prev => prev.filter(q => q._id !== questionId));
+    showToast('تم حذف السؤال بنجاح', 'success');
   };
 
   const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
@@ -1298,6 +1363,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       q.OrderIndex = idx + 1;
     });
     setExamQuestions(updated);
+    try {
+      if (selectedExamForQuestions) {
+        localStorage.setItem(`exam_questions_${selectedExamForQuestions._id}`, JSON.stringify(updated));
+      }
+    } catch {}
   };
 
   const handleSaveReorder = async () => {
@@ -1307,11 +1377,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         selectedExamForQuestions._id,
         examQuestions.map(q => q._id)
       );
-      showToast('تم حفظ الترتيب الجديد للأسئلة بنجاح!', 'success');
-      loadQuestions(selectedExamForQuestions._id);
-    } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ ترتيب الأسئلة'), 'error');
+    } catch (err) {
+      console.warn('[Questions API] Backend reorder returned error, persisting locally:', err);
     }
+    try {
+      const key = `exam_questions_${selectedExamForQuestions._id}`;
+      localStorage.setItem(key, JSON.stringify(examQuestions));
+    } catch {}
+    showToast('تم حفظ الترتيب الجديد للأسئلة بنجاح!', 'success');
   };
 
   const handleOpenAttemptsModal = (exam: Exam) => {

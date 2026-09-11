@@ -27,7 +27,10 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
   }
 
   if (status === 403 || lowerMsg.includes('forbidden') || lowerMsg.includes('device lock') || lowerMsg.includes('access denied')) {
-    return 'تم تسجيل الدخول من جهاز آخر أو ليس لديك صلاحية للوصول.';
+    if (lowerMsg.includes('device') || lowerMsg.includes('جهاز آخر') || lowerMsg.includes('multidevice')) {
+      return 'تم تسجيل الدخول من جهاز آخر.';
+    }
+    return 'ليس لديك صلاحية للوصول.';
   }
 
   if (status === 404 || lowerMsg.includes('not found') || lowerMsg.includes('not exist')) {
