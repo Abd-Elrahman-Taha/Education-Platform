@@ -10,15 +10,15 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
   }
 
   const status = error?.status || error?.response?.status;
-  const rawMsg =
-    (typeof error === 'string' ? error : null) ||
+  const backendMsg =
     error?.backendMessage ||
-    error?.rawMessage ||
-    error?.message ||
-    error?.raw?.message ||
     error?.response?.data?.message ||
-    '';
+    error?.raw?.message ||
+    (typeof error?.response?.data === 'string' ? error?.response?.data : null) ||
+    (typeof error === 'string' ? error : null) ||
+    error?.rawMessage;
 
+  const rawMsg = backendMsg || error?.message || '';
   const lowerMsg = String(rawMsg).toLowerCase();
 
   // 1. HTTP Status Code Mappings
@@ -30,7 +30,7 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
     if (lowerMsg.includes('device') || lowerMsg.includes('جهاز آخر') || lowerMsg.includes('multidevice')) {
       return 'تم تسجيل الدخول من جهاز آخر.';
     }
-    return 'ليس لديك صلاحية للوصول.';
+    return 'ليس لديك صلاحية مدير (Admin) للوصول أو تنفيذ هذا الإجراء.';
   }
 
   if (status === 404 || lowerMsg.includes('not found') || lowerMsg.includes('not exist')) {
@@ -60,7 +60,27 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
     return 'يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.';
   }
 
-  // 3. Domain Specific Rules
+  // 3. Domain Specific Rules: Exams & Questions
+  if (lowerMsg.includes('attempt') || lowerMsg.includes('started') || lowerMsg.includes('محاولة')) {
+    return 'لا يمكن إضافة أو تعديل أسئلة لاختبار بدأت عليه محاولات طلاب بالفعل لحماية درجاتهم.';
+  }
+
+  if (lowerMsg.includes('orderindex') || lowerMsg.includes('order index') || lowerMsg.includes('duplicate key') || lowerMsg.includes('e11000')) {
+    return 'رقم ترتيب السؤال (Order Index) مكرر داخل هذا الاختبار، يرجى اختيار رقم ترتيب فريد.';
+  }
+
+  if (lowerMsg.includes('option') && (lowerMsg.includes('least') || lowerMsg.includes('minimum') || lowerMsg.includes('contain') || lowerMsg.includes('required'))) {
+    return 'يجب توفير خيارين على الأقل لسؤال الاختيار من متعدد.';
+  }
+
+  if (lowerMsg.includes('correctanswer') || lowerMsg.includes('correct answer') || lowerMsg.includes('match') || lowerMsg.includes('one of the options')) {
+    return 'يجب أن تتطابق الإجابة الصحيحة مع أحد الخيارات المتاحة في السؤال.';
+  }
+
+  if (lowerMsg.includes('point')) {
+    return 'درجات السؤال يجب أن تكون رقماً أكبر من صفر.';
+  }
+
   if (lowerMsg.includes('target user must be a student') || lowerMsg.includes('not a student') || lowerMsg.includes('cannot modify')) {
     return 'لا يمكن تعديل هذا الحساب لأنه حساب مشرف (مدير) وليس طالب.';
   }
@@ -75,10 +95,6 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
 
   if (lowerMsg.includes('parentphone') || lowerMsg.includes('parent phone')) {
     return 'يرجى التأكد من كتابة رقم هاتف ولي الأمر صحيحاً (11 رقماً مصرياً يبدأ بـ 01).';
-  }
-
-  if (lowerMsg.includes('e11000') || lowerMsg.includes('duplicate key')) {
-    return 'البيانات المدخلة مسجلة مسبقاً في النظام (مثل رقم الهاتف أو الرقم القومي).';
   }
 
   if (lowerMsg.includes('nationalid') || lowerMsg.includes('national_id') || lowerMsg.includes('رقم قومي')) {
@@ -97,6 +113,9 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
 
   // 4. Bad Request / Validation Errors
   if (status === 400 || lowerMsg.includes('validation')) {
+    if (backendMsg && !isTechnicalText(backendMsg) && backendMsg.length > 4 && !backendMsg.toLowerCase().includes('bad request')) {
+      return backendMsg;
+    }
     if (fallback && !isTechnicalText(fallback)) return fallback;
     return 'البيانات المدخلة غير صحيحة أو غير مستوفية للشروط، يرجى مراجعة الحقول.';
   }

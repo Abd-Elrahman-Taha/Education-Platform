@@ -150,6 +150,9 @@ export const examsApi = {
     const payload = { ...data };
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
+      delete payload.Options;
+    } else if (payload.QuestionType === 'TrueFalse' || payload.QuestionType === 'FillInBlank') {
+      delete payload.Options;
     }
     const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
     const raw = response.data;
@@ -168,6 +171,9 @@ export const examsApi = {
     const payload = { ...data };
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
+      delete payload.Options;
+    } else if (payload.QuestionType === 'TrueFalse' || payload.QuestionType === 'FillInBlank') {
+      delete payload.Options;
     }
     const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
     const raw = response.data;

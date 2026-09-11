@@ -143,6 +143,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [isQuestionsLoading, setIsQuestionsLoading] = useState(false);
   const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
 
   // ── ATTEMPTS STATE ───────────────────────────────────────────
   const [isAttemptsModalOpen, setIsAttemptsModalOpen] = useState(false);
@@ -293,6 +294,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     points: number;
     orderIndex: number;
     options: string[];
+    correctOptionIndex: number;
     correctAnswer: string;
   }>({
     questionType: 'MCQ',
@@ -300,6 +302,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     points: 5,
     orderIndex: 1,
     options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+    correctOptionIndex: 0,
     correctAnswer: 'الخيار الأول',
   });
 
@@ -1037,6 +1040,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           points: 5,
           orderIndex: 1,
           options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+          correctOptionIndex: 0,
           correctAnswer: 'الخيار الأول',
         });
         setIsAddQuestionOpen(true);
@@ -1123,33 +1127,41 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
   const handleOpenAddQuestion = () => {
     setEditingQuestion(null);
+    const existingOrders = examQuestions.map(q => Number(q.OrderIndex) || 0);
+    const nextOrder = existingOrders.length > 0 ? Math.max(0, ...existingOrders) + 1 : 1;
+    const initialOptions = ['', '', '', ''];
     setQuestionForm({
       questionType: 'MCQ',
       questionText: '',
       points: 5,
-      orderIndex: examQuestions.length + 1,
-      options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
-      correctAnswer: 'الخيار الأول',
+      orderIndex: nextOrder,
+      options: initialOptions,
+      correctOptionIndex: 0,
+      correctAnswer: '',
     });
     setIsAddQuestionOpen(true);
   };
 
   const handleOpenEditQuestion = (q: Question) => {
     setEditingQuestion(q);
+    const opts = q.Options && q.Options.length > 0 ? [...q.Options] : ['', '', '', ''];
+    const correctStr = q.CorrectAnswer !== undefined && q.CorrectAnswer !== null ? String(q.CorrectAnswer) : (opts[0] || '');
+    const matchedIdx = opts.findIndex(o => o.trim() === correctStr.trim());
     setQuestionForm({
       questionType: q.QuestionType,
       questionText: q.QuestionText,
       points: q.Points,
       orderIndex: q.OrderIndex,
-      options: q.Options && q.Options.length > 0 ? q.Options : ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
-      correctAnswer: q.CorrectAnswer ? String(q.CorrectAnswer) : (q.Options?.[0] || ''),
+      options: opts,
+      correctOptionIndex: matchedIdx >= 0 ? matchedIdx : 0,
+      correctAnswer: correctStr,
     });
     setIsAddQuestionOpen(true);
   };
 
   const handleSaveQuestion = async (e: React.FormEvent, addAnother: boolean = false) => {
     e.preventDefault();
-    if (!selectedExamForQuestions) return;
+    if (!selectedExamForQuestions || isSubmittingQuestion) return;
 
     if (!questionForm.questionText.trim()) {
       showToast('يرجى كتابة نص السؤال', 'warning');
@@ -1159,29 +1171,50 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       showToast('يرجى تحديد نقاط صالحة للسؤال (1 على الأقل)', 'warning');
       return;
     }
-    if (
-      (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') &&
-      questionForm.options.filter(o => o.trim()).length < 2
-    ) {
-      showToast('يرجى تحديد خيارين على الأقل', 'warning');
-      return;
+
+    // Determine unique OrderIndex to avoid backend duplicate key conflict
+    const existingOrders = examQuestions
+      .filter(q => !editingQuestion || q._id !== editingQuestion._id)
+      .map(q => Number(q.OrderIndex) || 0);
+
+    let chosenOrder = Number(questionForm.orderIndex);
+    if (!chosenOrder || chosenOrder <= 0) {
+      chosenOrder = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
+    } else if (!editingQuestion && existingOrders.includes(chosenOrder)) {
+      chosenOrder = Math.max(0, ...existingOrders) + 1;
     }
 
-    try {
-      const payload: any = {
-        QuestionType: questionForm.questionType,
-        QuestionText: questionForm.questionText.trim(),
-        Points: Number(questionForm.points),
-        OrderIndex: Number(questionForm.orderIndex) || (examQuestions.length + 1),
-      };
-      if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
-        payload.Options = questionForm.options.map(o => o.trim()).filter(Boolean);
-      }
-      // Essay questions must NEVER include CorrectAnswer
-      if (questionForm.questionType !== 'Essay') {
-        payload.CorrectAnswer = questionForm.correctAnswer;
-      }
+    const payload: any = {
+      QuestionType: questionForm.questionType,
+      QuestionText: questionForm.questionText.trim(),
+      Points: Number(questionForm.points),
+      OrderIndex: chosenOrder,
+    };
 
+    if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
+      const cleanedOpts = questionForm.options.map(o => o.trim()).filter(Boolean);
+      if (cleanedOpts.length < 2) {
+        showToast('يرجى كتابة خيارين على الأقل', 'warning');
+        return;
+      }
+      payload.Options = cleanedOpts;
+      let correct = cleanedOpts[questionForm.correctOptionIndex];
+      if (!correct) {
+        correct = cleanedOpts.find(o => o === questionForm.correctAnswer?.trim()) || cleanedOpts[0];
+      }
+      payload.CorrectAnswer = correct;
+    } else if (questionForm.questionType === 'TrueFalse') {
+      payload.CorrectAnswer = String(questionForm.correctAnswer).toLowerCase() === 'true' ? 'true' : 'false';
+    } else if (questionForm.questionType === 'FillInBlank') {
+      if (!questionForm.correctAnswer?.trim()) {
+        showToast('يرجى تحديد الإجابة النموذجية الصحيحة', 'warning');
+        return;
+      }
+      payload.CorrectAnswer = questionForm.correctAnswer.trim();
+    }
+
+    setIsSubmittingQuestion(true);
+    try {
       let savedQuestion: Question | null = null;
       if (editingQuestion) {
         savedQuestion = await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
@@ -1205,14 +1238,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       loadQuestions(selectedExamForQuestions._id);
 
       if (addAnother) {
-        const nextOrder = Number(questionForm.orderIndex || examQuestions.length + 1) + 1;
+        const nextOrder = chosenOrder + 1;
         setEditingQuestion(null);
         setQuestionForm(prev => ({
           ...prev,
           questionText: '',
           orderIndex: nextOrder,
-          options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
-          correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : 'الخيار الأول',
+          options: ['', '', '', ''],
+          correctOptionIndex: 0,
+          correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : '',
         }));
       } else {
         setIsAddQuestionOpen(false);
@@ -1220,6 +1254,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       }
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من إدخال البيانات بشكل صحيح.'), 'error');
+    } finally {
+      setIsSubmittingQuestion(false);
     }
   };
 
@@ -3867,7 +3903,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               {/* Dynamic form inputs based on QuestionType */}
               {questionForm.questionType === 'MCQ' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-bright)' }}>خيارات الإجابة:</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-bright)' }}>خيارات الإجابة (حدد الإجابة الصحيحة):</label>
+                    {questionForm.options.length < 6 && (
+                      <button
+                        type="button"
+                        onClick={() => setQuestionForm(prev => ({ ...prev, options: [...prev.options, ''] }))}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      >
+                        <Plus size={12} /> إضافة خيار
+                      </button>
+                    )}
+                  </div>
                   {questionForm.options.map((opt, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', width: '20px' }}>{i + 1}.</span>
@@ -3879,20 +3927,51 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                         style={{ flex: 1, fontSize: '0.85rem' }}
                         value={opt}
                         onChange={e => {
+                          const val = e.target.value;
                           const updated = [...questionForm.options];
-                          updated[i] = e.target.value;
-                          setQuestionForm({ ...questionForm, options: updated });
+                          updated[i] = val;
+                          setQuestionForm(prev => ({
+                            ...prev,
+                            options: updated,
+                            correctAnswer: prev.correctOptionIndex === i ? val : prev.correctAnswer,
+                          }));
                         }}
                       />
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         <input
                           type="radio"
                           name="correctMcqAnswer"
-                          checked={questionForm.correctAnswer === opt}
-                          onChange={() => setQuestionForm({ ...questionForm, correctAnswer: opt })}
+                          checked={questionForm.correctOptionIndex === i || (opt.trim() !== '' && questionForm.correctAnswer === opt)}
+                          onChange={() => setQuestionForm(prev => ({
+                            ...prev,
+                            correctOptionIndex: i,
+                            correctAnswer: opt,
+                          }))}
                         />
-                        <span>الإجابة الصحيحة</span>
+                        <span style={{ color: questionForm.correctOptionIndex === i ? 'var(--primary-light)' : 'var(--text-muted)', fontWeight: questionForm.correctOptionIndex === i ? 700 : 500 }}>
+                          الإجابة الصحيحة
+                        </span>
                       </label>
+                      {questionForm.options.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = questionForm.options.filter((_, idx) => idx !== i);
+                            let newCorrectIdx = questionForm.correctOptionIndex;
+                            if (newCorrectIdx >= updated.length) newCorrectIdx = updated.length - 1;
+                            setQuestionForm(prev => ({
+                              ...prev,
+                              options: updated,
+                              correctOptionIndex: newCorrectIdx,
+                              correctAnswer: updated[newCorrectIdx] || '',
+                            }));
+                          }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                          title="حذف هذا الخيار"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -3995,6 +4074,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   type="button"
                   className="btn btn-secondary"
                   style={{ flex: 1, minWidth: '90px' }}
+                  disabled={isSubmittingQuestion}
                   onClick={() => setIsAddQuestionOpen(false)}
                 >
                   إلغاء
@@ -4003,6 +4083,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    disabled={isSubmittingQuestion}
                     style={{
                       flex: 1.5,
                       minWidth: '160px',
@@ -4013,16 +4094,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     }}
                     onClick={(e) => handleSaveQuestion(e, true)}
                   >
-                    حفظ وإضافة سؤال آخر
+                    {isSubmittingQuestion ? 'جاري الحفظ...' : 'حفظ وإضافة سؤال آخر'}
                   </button>
                 )}
                 <button
                   type="submit"
                   className="btn btn-primary"
+                  disabled={isSubmittingQuestion}
                   style={{ flex: 1.5, minWidth: '130px' }}
                   onClick={(e) => handleSaveQuestion(e, false)}
                 >
-                  {editingQuestion ? 'حفظ تعديل السؤال' : 'حفظ وإغلاق'}
+                  {isSubmittingQuestion ? 'جاري الحفظ...' : editingQuestion ? 'حفظ تعديل السؤال' : 'حفظ وإغلاق'}
                 </button>
               </div>
             </form>
