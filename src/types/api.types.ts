@@ -524,7 +524,7 @@ export interface ScratchCardResponse {
   };
 }
 
-// ── Parent Portal Types (POST /parent-portal/lookup & report/pdf) ─────────
+// ── Parent Portal Types (POST /parent-portal/lookup) ─────────
 export interface ParentPortalLookupRequest {
   nationalId: string; // Exactly 14 digits
   phone: string;      // Egyptian phone 11 digits (starts with 01)

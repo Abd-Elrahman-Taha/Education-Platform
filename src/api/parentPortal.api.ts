@@ -1,4 +1,4 @@
-﻿import { apiClient } from './axios';
+import { apiClient } from './axios';
 import {
   ParentPortalLookupRequest,
   ParentPortalLookupResponse,
@@ -12,17 +12,6 @@ export const parentPortalApi = {
    */
   lookupProgress: async (data: ParentPortalLookupRequest): Promise<ParentPortalLookupResponse> => {
     const response = await apiClient.post<ParentPortalLookupResponse>('/parent-portal/lookup', data);
-    return response.data;
-  },
-
-  /**
-   * Generate and download student educational progress PDF report.
-   * Public endpoint. Returns binary PDF file stream.
-   */
-  downloadPdfReport: async (data: ParentPortalLookupRequest): Promise<Blob> => {
-    const response = await apiClient.post('/parent-portal/report/pdf', data, {
-      responseType: 'blob',
-    });
     return response.data;
   },
 };

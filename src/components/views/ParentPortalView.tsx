@@ -1,8 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   ShieldCheck, Search, CheckCircle2, XCircle,
   TrendingUp, Award, Phone, BookOpen, AlertCircle, RefreshCw, BarChart2,
-  Download, FileText, AlertTriangle, UserCheck, Clock, Check
+  FileText, AlertTriangle, UserCheck, Clock, Check
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -25,7 +25,6 @@ export const ParentPortalView: React.FC = () => {
   const [lookupCredentials, setLookupCredentials] = useState<ParentPortalLookupRequest | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Normalize arabic numerals and remove spaces
   const cleanDigits = (val: string): string => {
@@ -84,31 +83,6 @@ export const ParentPortalView: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleDownloadPdf = async () => {
-    if (!lookupCredentials) return;
-    setIsDownloadingPdf(true);
-    try {
-      const blob = await parentPortalApi.downloadPdfReport(lookupCredentials);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `student-progress-report-${lookupCredentials.nationalId.slice(-4)}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      showToast('تم تحميل التقرير الرسمي PDF بنجاح!', 'success');
-    } catch (err: any) {
-      if (err?.response?.status === 429 || err?.status === 429) {
-        showToast('تم تجاوز حد المحاولات المسموح به للتحميل، يرجى الانتظار قليلاً', 'warning');
-      } else {
-        showToast('تعذر استخراج ملف PDF حالياً. يرجى المحاولة لاحقاً.', 'error');
-      }
-    } finally {
-      setIsDownloadingPdf(false);
     }
   };
 
@@ -343,25 +317,6 @@ export const ParentPortalView: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              {/* PDF Download Button */}
-              <button
-                className="btn btn-primary"
-                onClick={handleDownloadPdf}
-                disabled={isDownloadingPdf}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.15rem' }}
-                title="تحميل تقرير PDF رسمي شامل لولي الأمر"
-              >
-                {isDownloadingPdf ? (
-                  <>
-                    <RefreshCw size={16} className="spin" /> جاري تجهيز PDF...
-                  </>
-                ) : (
-                  <>
-                    <Download size={16} /> تحميل تقرير رسمي (PDF)
-                  </>
-                )}
-              </button>
-
               {/* Reset Search Button */}
               <button className="btn btn-secondary" onClick={handleReset} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                 <Search size={16} /> استعلام عن طالب آخر
