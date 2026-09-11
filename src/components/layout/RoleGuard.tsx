@@ -48,19 +48,21 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
     );
   }
 
+  const userRole = (currentUser.role || (currentUser as any)?.Role || '').toString().toLowerCase();
+
   // SuperAdmin has universal access to any page/view on the platform
   const isSuperAdmin =
-    currentUser.role === 'superadmin' ||
+    userRole === 'superadmin' ||
     currentUser.isSuperAdmin === true ||
-    (currentUser as any)?.Role === 'SuperAdmin' ||
-    (currentUser as any)?.Role === 'superadmin';
+    (currentUser as any)?.Role === 'SuperAdmin';
 
   if (isSuperAdmin) {
     return <>{children}</>;
   }
 
   // Logged in but wrong role
-  if (!allowedRoles.includes(currentUser.role)) {
+  const normalizedAllowed = allowedRoles.map(r => r.toLowerCase());
+  if (!normalizedAllowed.includes(userRole)) {
     return (
       <div className="role-guard-wall">
         <div className="glass-card role-guard-card">

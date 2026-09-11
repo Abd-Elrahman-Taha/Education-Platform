@@ -112,7 +112,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const cleanDisplayName = (() => {
     if (!currentUser) return '';
-    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'teacher';
+    const roleLower = (currentUser.role || (currentUser as any)?.Role || '').toString().toLowerCase();
+    const isAdmin = roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'teacher';
 
     // 1. Check current user's name
     const raw = (currentUser.name || '').trim();
@@ -138,14 +139,15 @@ export const Navbar: React.FC<NavbarProps> = ({
     return 'حساب الطالب';
   })();
 
+  const roleLower = (currentUser?.role || (currentUser as any)?.Role || '').toString().toLowerCase();
   const isSuperAdmin =
-    currentUser?.role === 'superadmin' ||
+    roleLower === 'superadmin' ||
     currentUser?.isSuperAdmin === true ||
-    (currentUser as any)?.Role === 'SuperAdmin' ||
-    (currentUser as any)?.Role === 'superadmin';
+    (currentUser as any)?.Role === 'SuperAdmin';
+  const isAdmin = roleLower === 'admin' || (currentUser as any)?.Role === 'Admin' || isSuperAdmin;
 
   const rawNavItems = isAuthenticated && currentUser
-    ? (isSuperAdmin ? superAdminNav : (ROLE_NAV[currentUser.role] || guestNav))
+    ? (isSuperAdmin ? superAdminNav : (isAdmin ? adminNav : (ROLE_NAV[roleLower as UserRole] || guestNav)))
     : guestNav;
 
   // Strict requirement: Never display Parent Portal when logged in with any account
