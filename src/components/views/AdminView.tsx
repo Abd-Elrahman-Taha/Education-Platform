@@ -94,18 +94,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     (currentUser as any)?.Role === 'superadmin' ||
     (currentUser as any)?.role === 'superadmin';
 
+  const canManageAdmins =
+    isSuperAdmin ||
+    currentUser?.role === 'admin' ||
+    (currentUser as any)?.Role === 'Admin' ||
+    (currentUser as any)?.Role === 'admin' ||
+    (currentUser as any)?.role === 'admin';
+
   // Selected academic year filter ('all' shows all courses, or specific secondary year)
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'admins'>('overview');
 
-  // Redirect if non-superadmin attempts to open admins tab
+  // Redirect if user has no admin/superadmin access and attempts to open admins tab
   useEffect(() => {
-    if (!isSuperAdmin && activeTab === 'admins') {
+    if (!canManageAdmins && activeTab === 'admins') {
       setActiveTab('overview');
     }
-  }, [isSuperAdmin, activeTab]);
+  }, [canManageAdmins, activeTab]);
 
   // ── LIVE BACKEND STATE ───────────────────────────────────────
   const [allStudents, setAllStudents] = useState<AdminStudent[]>([]);
@@ -510,45 +517,58 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   };
 
   const loadAdmins = async (studentsList?: AdminStudent[]) => {
-    if (!isSuperAdmin) return;
+    if (!canManageAdmins) return;
     setIsAdminsLoading(true);
     try {
       const res = await studentsApi.getAdmins();
       let admins = [...(res.admins || [])];
 
-      // Also merge any users from realStudents whose Role is Admin or not Student
+      // Also merge any users from students whose Role is Admin or not Student
       const sourceStudents = (studentsList && studentsList.length > 0) ? studentsList : (allStudents.length > 0 ? allStudents : realStudents);
       if (sourceStudents && sourceStudents.length > 0) {
         for (const s of sourceStudents) {
-          const r = (s.Role || (s as any).role || '').toLowerCase();
-          if (r === 'admin' && !admins.some(a => a._id === s._id)) {
-            admins.push({ ...s, Role: 'Admin' });
+          const r = (s.Role || (s as any).role || '').toString().toLowerCase().trim();
+          if ((r === 'admin' || r === 'superadmin' || (s as any).isAdmin === true || (s.Role && r !== 'student')) && !admins.some(a => a._id === s._id)) {
+            admins.push({ ...s, Role: (r === 'superadmin' ? 'SuperAdmin' : 'Admin') as any });
           }
         }
       }
 
-      // Also ensure current logged in admin is present if role is Admin
-      if (currentUser && ((currentUser.role || '').toLowerCase() === 'admin' || (currentUser as any).Role?.toLowerCase() === 'admin')) {
-        const currId = currentUser.id || (currentUser as any)._id;
-        const exists = admins.some(a => a._id === currId || (currentUser.phone && a.Phone === currentUser.phone));
-        if (!exists && currId) {
+      // Also ensure current logged in admin / superadmin is present in the list
+      if (currentUser) {
+        const roleLower = (currentUser.role || (currentUser as any).Role || (currentUser as any).role || '').toString().toLowerCase().trim();
+        const currId = currentUser.id || (currentUser as any)._id || 'current-admin';
+        const exists = admins.some(a => (currId && a._id === currId) || (currentUser.phone && a.Phone === currentUser.phone));
+        if (!exists) {
           const currentAdminObj: AdminStudent = {
             _id: currId,
-            FullName: currentUser.name || 'مدير المنصة الرئيسي (أنت)',
+            FullName: currentUser.name || (roleLower === 'superadmin' ? 'المدير العام (أنت)' : 'مدير المنصة (أنت)'),
             Phone: currentUser.phone || '',
             NationalId: currentUser.nationalId || '—',
             ParentPhone: '—',
-            Role: 'Admin',
+            Role: (roleLower === 'superadmin' ? 'SuperAdmin' : 'Admin') as any,
             Status: 'Active',
           };
-          admins = [currentAdminObj, ...admins];
+          admins.unshift(currentAdminObj);
         }
       }
 
       setRealAdmins(admins);
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch admins:', err);
-      setRealAdmins([]);
+      if (currentUser) {
+        setRealAdmins([{
+          _id: currentUser.id || (currentUser as any)._id || 'current-admin',
+          FullName: currentUser.name || 'مدير المنصة (أنت)',
+          Phone: currentUser.phone || '',
+          NationalId: currentUser.nationalId || '—',
+          ParentPhone: '—',
+          Role: 'Admin',
+          Status: 'Active',
+        }]);
+      } else {
+        setRealAdmins([]);
+      }
     } finally {
       setIsAdminsLoading(false);
     }
@@ -558,17 +578,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     loadStudents();
     loadCourses();
     loadExams();
-    if (isSuperAdmin) {
+    if (canManageAdmins) {
       loadAdmins();
     }
-  }, [isSuperAdmin]);
+  }, [canManageAdmins]);
 
   // Reload data when switching tabs to ensure fresh data from API
   useEffect(() => {
     if (activeTab === 'exams') loadExams();
-    if (activeTab === 'admins' && isSuperAdmin) loadAdmins();
+    if (activeTab === 'admins' && canManageAdmins) loadAdmins();
     if (activeTab === 'students') loadStudents();
-  }, [activeTab, isSuperAdmin]);
+  }, [activeTab, canManageAdmins]);
 
   useEffect(() => {
     if (selectedCourseForLessons) {
@@ -1702,7 +1722,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             <span>شحن الأكواد وكروت الشحن</span>
           </button>
 
-          {isSuperAdmin && (
+          {canManageAdmins && (
             <button
               type="button"
               className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
@@ -1714,7 +1734,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               }}
             >
               <Crown size={16} color="#F59E0B" />
-              <span>إدارة المسؤولين (SuperAdmin)</span>
+              <span>إدارة المسؤولين (Admins)</span>
               <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                 {realAdmins.length}
               </span>
@@ -2730,8 +2750,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         </div>
       )}
 
-      {/* ── TAB 6: ADMINS MANAGEMENT (Strictly SuperAdmin Only) ── */}
-      {isSuperAdmin && activeTab === 'admins' && (
+      {/* ── TAB 6: ADMINS MANAGEMENT (Admins & SuperAdmin) ── */}
+      {canManageAdmins && activeTab === 'admins' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>

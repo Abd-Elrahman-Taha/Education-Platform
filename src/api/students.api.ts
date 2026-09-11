@@ -152,43 +152,93 @@ export const studentsApi = {
   },
 
   /**
-   * Get all admin users (filtered from backend /users/students).
+   * Get all admin users.
+   * Primary backend endpoint: GET /users/admins
+   * Fallback: Query /users/students and filter non-student accounts.
    */
   getAdmins: async (): Promise<{ admins: AdminStudent[]; total: number }> => {
-    // Query /users/students and extract admin roles safely without triggering 403
+    let adminsList: AdminStudent[] = [];
+
+    // 1. Primary: Official endpoint GET /users/admins
     try {
-      const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 100, page: 1 } });
-      const raw = response.data as any;
-      const list: AdminStudent[] = Array.isArray(raw?.data?.students)
-        ? raw.data.students
-        : Array.isArray(raw?.data?.users)
-        ? raw.data.users
-        : Array.isArray(raw?.students)
-        ? raw.students
+      const response = await apiClient.get<any>('/users/admins');
+      const raw = response.data;
+      const list = Array.isArray(raw?.data?.admins)
+        ? raw.data.admins
+        : Array.isArray(raw?.admins)
+        ? raw.admins
         : Array.isArray(raw?.data)
         ? raw.data
         : Array.isArray(raw)
         ? raw
         : [];
+      if (list.length > 0) {
+        adminsList = list;
+      }
+    } catch (err: any) {
+      console.warn('[Admins API] GET /users/admins not accessible directly, falling back to /users/students:', err?.message);
+    }
 
-      const adminMap = new Map<string, AdminStudent>();
-      for (const u of list) {
-        const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
-        if (r === 'admin' || r === 'superadmin' || (u as any).isAdmin === true || (u.Role && u.Role !== 'Student')) {
-          if (u && u._id) {
-            adminMap.set(u._id, { ...u, Role: (r === 'superadmin' ? 'SuperAdmin' : 'Admin') as any });
+    // 2. Fallback: Filter from /users/students if /users/admins returned nothing or failed
+    if (adminsList.length === 0) {
+      try {
+        const response = await apiClient.get<StudentsListResponse>('/users/students', { params: { limit: 500, page: 1 } });
+        const raw = response.data as any;
+        const list: AdminStudent[] = Array.isArray(raw?.data?.students)
+          ? raw.data.students
+          : Array.isArray(raw?.data?.users)
+          ? raw.data.users
+          : Array.isArray(raw?.students)
+          ? raw.students
+          : Array.isArray(raw?.data)
+          ? raw.data
+          : Array.isArray(raw)
+          ? raw
+          : [];
+
+        const adminMap = new Map<string, AdminStudent>();
+        for (const u of list) {
+          const r = (u.Role || (u as any).role || '').toString().toLowerCase().trim();
+          if (r === 'admin' || r === 'superadmin' || (u as any).isAdmin === true || (u.Role && r !== 'student')) {
+            if (u && u._id) {
+              adminMap.set(u._id, { ...u, Role: (r === 'superadmin' ? 'SuperAdmin' : 'Admin') as any });
+            }
           }
         }
+        adminsList = Array.from(adminMap.values());
+      } catch (err) {
+        console.error('Failed to scan users list for admins:', err);
       }
-      const allAdmins = Array.from(adminMap.values());
-      return {
-        admins: allAdmins,
-        total: allAdmins.length,
-      };
-    } catch (err) {
-      console.error('Failed to fetch admins from backend:', err);
-      return { admins: [], total: 0 };
     }
+
+    // Normalize fields & roles to ensure UI compatibility
+    const normalized = adminsList.map(a => {
+      const r = (a.Role || (a as any).role || '').toString().toLowerCase();
+      return {
+        ...a,
+        _id: a._id || (a as any).id || (a as any).userId,
+        FullName: a.FullName || (a as any).fullName || (a as any).name || 'مسؤول المنصة',
+        Phone: a.Phone || (a as any).phone || '',
+        NationalId: a.NationalId || (a as any).nationalId || '—',
+        ParentPhone: a.ParentPhone || (a as any).parentPhone || '—',
+        Role: (r === 'superadmin' ? 'SuperAdmin' : 'Admin') as any,
+        Status: a.Status || (a as any).status || 'Active',
+      };
+    });
+
+    return {
+      admins: normalized,
+      total: normalized.length,
+    };
+  },
+
+  /**
+   * Get specific admin by ID (Admin only: GET /users/admins/:userId).
+   */
+  getAdminById: async (userId: string): Promise<AdminStudent> => {
+    const response = await apiClient.get<any>(`/users/admins/${userId}`);
+    const raw = response.data;
+    return raw?.data?.admin || raw?.admin || raw?.data || raw;
   },
 
   /**
