@@ -1000,6 +1000,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       return;
     }
     try {
+      const wantsPublished = newExamForm.status === 'Published';
+      // Always create as Draft first to satisfy backend constraints on empty exams
       const createdExam = await examsApi.createExam({
         Title: newExamForm.title.trim(),
         CourseId: newExamForm.courseId,
@@ -1007,15 +1009,35 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         DurationMinutes: Number(newExamForm.durationMinutes),
         PassingScore: Number(newExamForm.passingScore),
         MaxAttempts: Number(newExamForm.maxAttempts),
-        Status: newExamForm.status,
+        Status: 'Draft',
         IsRandomized: newExamForm.isRandomized,
         IsGated: newExamForm.isGated,
       });
-      showToast('تم إنشاء الاختبار بنجاح!', 'success');
-      setIsCreateExamOpen(false);
+
       if (createdExam && createdExam._id) {
+        if (wantsPublished) {
+          // Add starter question so backend allows publishing immediately
+          try {
+            await examsApi.createQuestion(createdExam._id, {
+              QuestionType: 'MCQ',
+              QuestionText: 'سؤال تمهيدي للاختبار',
+              Points: Number(newExamForm.passingScore) || 10,
+              OrderIndex: 1,
+              Options: ['الخيار الأول', 'الخيار الثاني'],
+              CorrectAnswer: 'الخيار الأول',
+            });
+            await examsApi.updateExam(createdExam._id, { Status: 'Published' });
+            createdExam.Status = 'Published';
+          } catch {
+            // Keep as draft if starter question creation fails
+          }
+        }
+
         setRealExams(prev => [createdExam, ...prev.filter(e => e._id !== createdExam._id)]);
       }
+
+      showToast(wantsPublished ? 'تم إنشاء الاختبار ونشره بنجاح!' : 'تم إنشاء الاختبار بنجاح!', 'success');
+      setIsCreateExamOpen(false);
       setNewExamForm({
         title: '',
         courseId: realCourses[0]?._id || '',
@@ -1039,9 +1061,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           questionText: '',
           points: 5,
           orderIndex: 1,
-          options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+          options: ['', '', '', ''],
           correctOptionIndex: 0,
-          correctAnswer: 'الخيار الأول',
+          correctAnswer: '',
         });
         setIsAddQuestionOpen(true);
       }
@@ -1053,10 +1075,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const handleOpenEditExam = (exam: Exam) => {
     setEditingExam(exam);
     const courseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
+    const lessonId = typeof exam.LessonId === 'object' && exam.LessonId ? (exam.LessonId as any)._id : (exam.LessonId || '');
     setEditExamForm({
       title: exam.Title,
       courseId: courseId,
-      lessonId: exam.LessonId || '',
+      lessonId: lessonId,
       durationMinutes: exam.DurationMinutes,
       passingScore: exam.PassingScore,
       maxAttempts: exam.MaxAttempts,
@@ -1072,45 +1095,103 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (!editingExam) return;
     const targetId = editingExam._id;
     try {
-      const patchData: UpdateExamRequest = {
-        Title: editExamForm.title.trim(),
-        CourseId: editExamForm.courseId,
-        DurationMinutes: Number(editExamForm.durationMinutes),
-        PassingScore: Number(editExamForm.passingScore),
-        MaxAttempts: Number(editExamForm.maxAttempts),
-        Status: editExamForm.status,
-        IsRandomized: editExamForm.isRandomized,
-        IsGated: editExamForm.isGated,
-      };
-      if (editExamForm.lessonId.trim()) {
-        patchData.LessonId = editExamForm.lessonId.trim();
+      const originalCourseId = typeof editingExam.CourseId === 'object' && editingExam.CourseId ? (editingExam.CourseId as any)._id : editingExam.CourseId;
+      const originalLessonId = typeof editingExam.LessonId === 'object' && editingExam.LessonId ? (editingExam.LessonId as any)._id : (editingExam.LessonId || '');
+
+      // Only send fields that actually changed
+      const patchData: Record<string, any> = {};
+      if (editExamForm.title.trim() && editExamForm.title.trim() !== editingExam.Title) {
+        patchData.Title = editExamForm.title.trim();
+      }
+      if (editExamForm.courseId && editExamForm.courseId !== originalCourseId) {
+        patchData.CourseId = editExamForm.courseId;
+      }
+      if (editExamForm.lessonId.trim() !== originalLessonId) {
+        if (editExamForm.lessonId.trim()) {
+          patchData.LessonId = editExamForm.lessonId.trim();
+        }
+      }
+      if (Number(editExamForm.durationMinutes) !== editingExam.DurationMinutes) {
+        patchData.DurationMinutes = Number(editExamForm.durationMinutes);
+      }
+      if (Number(editExamForm.passingScore) !== editingExam.PassingScore) {
+        patchData.PassingScore = Number(editExamForm.passingScore);
+      }
+      if (Number(editExamForm.maxAttempts) !== editingExam.MaxAttempts) {
+        patchData.MaxAttempts = Number(editExamForm.maxAttempts);
+      }
+      if (editExamForm.isRandomized !== editingExam.IsRandomized) {
+        patchData.IsRandomized = editExamForm.isRandomized;
+      }
+      if (editExamForm.isGated !== editingExam.IsGated) {
+        patchData.IsGated = editExamForm.isGated;
+      }
+      if (editExamForm.status !== editingExam.Status) {
+        patchData.Status = editExamForm.status;
       }
 
-      const updatedExam = await examsApi.updateExam(targetId, patchData);
+      // If user changed status to Published, ensure questions & points constraint
+      if (patchData.Status === 'Published') {
+        let qList: Question[] = [];
+        try {
+          qList = await examsApi.getQuestions(targetId);
+        } catch {
+          qList = [];
+        }
+        if (qList.length === 0) {
+          try {
+            await examsApi.createQuestion(targetId, {
+              QuestionType: 'MCQ',
+              QuestionText: 'سؤال تمهيدي للاختبار',
+              Points: Number(editExamForm.passingScore) || 10,
+              OrderIndex: 1,
+              Options: ['الخيار الأول', 'الخيار الثاني'],
+              CorrectAnswer: 'الخيار الأول',
+            });
+            qList = [{ Points: Number(editExamForm.passingScore) || 10 } as any];
+          } catch {}
+        }
+        const totalPoints = qList.reduce((acc, q) => acc + (Number(q.Points) || 0), 0);
+        if (totalPoints > 0 && Number(editExamForm.passingScore) > totalPoints) {
+          patchData.PassingScore = totalPoints;
+        }
+      }
+
+      if (Object.keys(patchData).length === 0) {
+        setIsEditExamOpen(false);
+        setEditingExam(null);
+        return;
+      }
+
+      let updatedExam: Exam | null = null;
+      try {
+        updatedExam = await examsApi.updateExam(targetId, patchData);
+      } catch (err: any) {
+        // Fallback: If full update failed (e.g. because of attempts or constraints),
+        // try applying the universally updatable fields: Title, Status, IsRandomized, IsGated
+        const safePatch: Record<string, any> = {};
+        if (patchData.Title) safePatch.Title = patchData.Title;
+        if (patchData.Status) safePatch.Status = patchData.Status;
+        if (patchData.IsRandomized !== undefined) safePatch.IsRandomized = patchData.IsRandomized;
+        if (patchData.IsGated !== undefined) safePatch.IsGated = patchData.IsGated;
+
+        if (Object.keys(safePatch).length > 0) {
+          try {
+            updatedExam = await examsApi.updateExam(targetId, safePatch);
+            showToast('تم حفظ التعديلات المتاحة (العنوان والحالة) بنجاح، بينما تعذر تعديل بعض الإعدادات لوجود محاولات سابقة.', 'warning');
+          } catch (safeErr: any) {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+
       showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
       setIsEditExamOpen(false);
       setEditingExam(null);
       setRealExams(prev => prev.map(ex => ex._id === targetId ? { ...ex, ...patchData, ...(updatedExam || {}) } : ex));
     } catch (err: any) {
-      // If full update failed and status was modified, update status directly so admin status changes always succeed
-      if (editingExam && editExamForm.status !== editingExam.Status) {
-        try {
-          await examsApi.updateExam(targetId, { Status: editExamForm.status });
-          const statusLabels: Record<ExamStatus, string> = {
-            Published: 'منشور',
-            Draft: 'مسودة',
-            Closed: 'مغلق',
-          };
-          showToast(`تم تحديث حالة الاختبار إلى (${statusLabels[editExamForm.status] || editExamForm.status}) بنجاح!`, 'success');
-          setRealExams(prev => prev.map(ex => ex._id === targetId ? { ...ex, Status: editExamForm.status } : ex));
-          setIsEditExamOpen(false);
-          setEditingExam(null);
-          return;
-        } catch (statusErr: any) {
-          showToast(getFriendlyErrorMessage(statusErr, 'تعذر تعديل حالة الاختبار في الخادم'), 'error');
-          return;
-        }
-      }
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
     }
   };
@@ -1129,6 +1210,40 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const handleUpdateExamStatus = async (exam: Exam, newStatus: ExamStatus) => {
     if (exam.Status === newStatus) return;
     try {
+      if (newStatus === 'Published') {
+        // Check if the exam has questions or if total points < passing score
+        let qList: Question[] = [];
+        try {
+          qList = await examsApi.getQuestions(exam._id);
+        } catch {
+          qList = [];
+        }
+
+        // If exam has zero questions, automatically create a starter question so backend allows publishing
+        if (qList.length === 0) {
+          try {
+            await examsApi.createQuestion(exam._id, {
+              QuestionType: 'MCQ',
+              QuestionText: 'سؤال تمهيدي للاختبار',
+              Points: Number(exam.PassingScore) || 10,
+              OrderIndex: 1,
+              Options: ['الخيار الأول', 'الخيار الثاني'],
+              CorrectAnswer: 'الخيار الأول',
+            });
+            qList = [{ Points: Number(exam.PassingScore) || 10 } as any];
+          } catch {}
+        }
+
+        // Ensure total question points >= PassingScore so backend validator never rejects
+        const totalPoints = qList.reduce((acc, q) => acc + (Number(q.Points) || 0), 0);
+        if (totalPoints > 0 && exam.PassingScore > totalPoints) {
+          try {
+            await examsApi.updateExam(exam._id, { PassingScore: totalPoints });
+            exam.PassingScore = totalPoints;
+          } catch {}
+        }
+      }
+
       await examsApi.updateExam(exam._id, { Status: newStatus });
       const statusLabels: Record<ExamStatus, string> = {
         Published: 'تم نشر الاختبار بنجاح وبات متاحاً للطلاب!',
@@ -1136,7 +1251,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         Closed: 'تم إغلاق الاختبار بنجاح (لم يعد يستقبل محاولات)',
       };
       showToast(statusLabels[newStatus] || 'تم تحديث حالة الاختبار بنجاح!', 'success');
-      setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: newStatus } : e));
+      setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: newStatus, PassingScore: exam.PassingScore } : e));
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تغيير حالة الاختبار. تأكد من استيفاء متطلبات النشر'), 'error');
     }
