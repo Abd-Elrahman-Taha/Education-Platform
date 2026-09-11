@@ -121,33 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       return raw;
     }
 
-    // 2. For Admin, check admin_username
-    if (isAdmin) {
-      const adminStored = localStorage.getItem('admin_username');
-      if (adminStored && !isPlaceholderName(adminStored, 'admin')) {
-        return adminStored.trim();
-      }
-    }
-
-    // 3. Check cached by phone
-    const cachedByPhone = currentUser.phone ? localStorage.getItem(`user_fullname_${currentUser.phone.trim()}`) : null;
-    if (cachedByPhone && !isPlaceholderName(cachedByPhone, currentUser.role)) {
-      return cachedByPhone.trim();
-    }
-
-    // 4. Check cached by ID
-    const cachedById = currentUser.id ? localStorage.getItem(`user_fullname_${currentUser.id}`) : null;
-    if (cachedById && !isPlaceholderName(cachedById, currentUser.role)) {
-      return cachedById.trim();
-    }
-
-    // 5. Check active cached
-    const activeCached = localStorage.getItem('user_fullname_active');
-    if (activeCached && !isPlaceholderName(activeCached, currentUser.role)) {
-      return activeCached.trim();
-    }
-
-    // 6. IF ADMIN: NEVER show phone number! Extract username from email or default to 'مدير المنصة'
+    // 2. IF ADMIN: NEVER show phone number! Extract username from email or default to 'مدير المنصة'
     if (isAdmin) {
       if (currentUser.email && currentUser.email.includes('@')) {
         const emailPrefix = currentUser.email.split('@')[0].trim();
@@ -158,12 +132,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       return 'مدير المنصة';
     }
 
-    // 7. For Student: phone number if no name is available
-    if (currentUser.phone) {
+    // 3. For student
+    if (currentUser.phone && !isPlaceholderName(currentUser.phone)) {
       return currentUser.phone.trim();
     }
-
-    return 'طالب';
+    return 'حساب الطالب';
   })();
 
   const isSuperAdmin =

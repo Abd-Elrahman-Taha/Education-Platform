@@ -125,28 +125,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [isLessonsLoading, setIsLessonsLoading] = useState(false);
 
   // ── EXAMS STATE ──────────────────────────────────────────────
-  const [realExams, setRealExams] = useState<Exam[]>(() => {
-    try {
-      const stored = localStorage.getItem('platform_exams_registry');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [realExams, setRealExams] = useState<Exam[]>([]);
   const [isExamsLoading, setIsExamsLoading] = useState(false);
   const [searchExam, setSearchExam] = useState('');
   const [examCourseFilter, setExamCourseFilter] = useState<string>('all');
   const [examStatusFilter, setExamStatusFilter] = useState<string>('all');
 
   // ── ADMINS STATE ─────────────────────────────────────────────
-  const [realAdmins, setRealAdmins] = useState<AdminStudent[]>(() => {
-    try {
-      const stored = localStorage.getItem('platform_admins_registry');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [realAdmins, setRealAdmins] = useState<AdminStudent[]>([]);
   const [isAdminsLoading, setIsAdminsLoading] = useState(false);
   const [isQuickPromoteOpen, setIsQuickPromoteOpen] = useState(false);
 
@@ -419,20 +405,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsExamsLoading(true);
     try {
       const res = await examsApi.getExams();
-      if (res.exams && res.exams.length > 0) {
-        setRealExams(res.exams);
-      } else {
-        try {
-          const stored = localStorage.getItem('platform_exams_registry');
-          if (stored) setRealExams(JSON.parse(stored));
-        } catch {}
-      }
+      setRealExams(res.exams || []);
     } catch (err: any) {
       console.warn('[API INFO] Exams list status:', err?.message || err);
-      try {
-        const stored = localStorage.getItem('platform_exams_registry');
-        if (stored) setRealExams(JSON.parse(stored));
-      } catch {}
+      setRealExams([]);
     } finally {
       setIsExamsLoading(false);
     }
@@ -461,28 +437,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsQuestionsLoading(true);
     try {
       const qList = await examsApi.getQuestions(examId);
-      if (qList && qList.length > 0) {
-        setExamQuestions(qList);
-      } else {
-        try {
-          const key = `exam_questions_${examId}`;
-          const stored = localStorage.getItem(key);
-          if (stored) setExamQuestions(JSON.parse(stored));
-          else setExamQuestions([]);
-        } catch {
-          setExamQuestions([]);
-        }
-      }
+      setExamQuestions(qList || []);
     } catch (err: any) {
-      console.warn('[Questions] Failed to fetch from backend, reading local cache:', err);
-      try {
-        const key = `exam_questions_${examId}`;
-        const stored = localStorage.getItem(key);
-        if (stored) setExamQuestions(JSON.parse(stored));
-        else setExamQuestions([]);
-      } catch {
-        setExamQuestions([]);
-      }
+      console.warn('[Questions] Failed to fetch from backend:', err);
+      setExamQuestions([]);
     } finally {
       setIsQuestionsLoading(false);
     }
@@ -550,20 +508,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (!isSuperAdmin) return;
     setIsAdminsLoading(true);
     try {
-      let demotedIds: string[] = [];
-      try {
-        const demotedRaw = localStorage.getItem('platform_demoted_admins');
-        if (demotedRaw) demotedIds = JSON.parse(demotedRaw);
-      } catch {}
-
       const res = await studentsApi.getAdmins();
-      let admins = [...(res.admins || [])].filter(a => !demotedIds.includes(a._id));
+      let admins = [...(res.admins || [])];
 
-      // Also merge any users from realStudents whose Role is Admin or not Student (excluding demoted)
+      // Also merge any users from realStudents whose Role is Admin or not Student
       const sourceStudents = (studentsList && studentsList.length > 0) ? studentsList : (allStudents.length > 0 ? allStudents : realStudents);
       if (sourceStudents && sourceStudents.length > 0) {
         for (const s of sourceStudents) {
-          if (demotedIds.includes(s._id)) continue;
           const r = (s.Role || (s as any).role || '').toLowerCase();
           if (r === 'admin' && !admins.some(a => a._id === s._id)) {
             admins.push({ ...s, Role: 'Admin' });
@@ -589,32 +540,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         }
       }
 
-      // Merge from persistent registry
-      try {
-        const stored = localStorage.getItem('platform_admins_registry');
-        if (stored) {
-          const parsed: AdminStudent[] = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            for (const a of parsed) {
-              if (demotedIds.includes(a._id)) continue;
-              if (!admins.some(x => x._id === a._id || (a.Phone && x.Phone === a.Phone))) {
-                admins.push(a);
-              }
-            }
-          }
-        }
-      } catch {}
-
       setRealAdmins(admins);
-      try {
-        localStorage.setItem('platform_admins_registry', JSON.stringify(admins));
-      } catch {}
     } catch (err: any) {
       console.error('[API ERROR] Failed to fetch admins:', err);
-      try {
-        const stored = localStorage.getItem('platform_admins_registry');
-        if (stored) setRealAdmins(JSON.parse(stored));
-      } catch {}
+      setRealAdmins([]);
     } finally {
       setIsAdminsLoading(false);
     }
@@ -942,17 +871,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         }
       }
 
-      // Sync name and phone immediately to localStorage caches & emit real-time event
+      // Sync current user session if the edited account is the logged-in user
       try {
-        if (trimmedPhone) {
-          localStorage.setItem(`user_fullname_${trimmedPhone}`, trimmedName);
-        }
-        if (editingStudent.Phone && editingStudent.Phone.trim() !== trimmedPhone) {
-          localStorage.setItem(`user_fullname_${editingStudent.Phone.trim()}`, trimmedName);
-        }
-        if (studentId) {
-          localStorage.setItem(`user_fullname_${studentId}`, trimmedName);
-        }
         const rawSaved = localStorage.getItem('syntax_current_user_v2');
         if (rawSaved) {
           const parsed = JSON.parse(rawSaved);
@@ -962,15 +882,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             if (editStudentForm.role === 'Student') parsed.role = 'student';
             if (editStudentForm.role === 'Admin') parsed.role = 'admin';
             localStorage.setItem('syntax_current_user_v2', JSON.stringify(parsed));
-            localStorage.setItem('user_fullname_active', trimmedName);
           }
         }
         window.dispatchEvent(new CustomEvent('user:profile-updated', {
           detail: { userId: studentId, fullName: trimmedName, phone: trimmedPhone, role: editStudentForm.role }
         }));
-        window.dispatchEvent(new Event('storage'));
       } catch (cacheErr) {
-        console.warn('Cache sync error:', cacheErr);
+        console.warn('Session sync error:', cacheErr);
       }
 
       // Handle subscription / course enrollment
@@ -1265,39 +1183,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       }
 
       let savedQuestion: Question | null = null;
-      try {
-        if (editingQuestion) {
-          savedQuestion = await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
-          showToast('تم تحديث السؤال بنجاح!', 'success');
-        } else {
-          savedQuestion = await examsApi.createQuestion(selectedExamForQuestions._id, payload);
-          showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
-        }
-      } catch (apiErr: any) {
-        console.warn('[Questions API] Backend save returned error, persisting to local exam cache:', apiErr);
-        savedQuestion = {
-          _id: editingQuestion ? editingQuestion._id : ('q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
-          QuestionType: questionForm.questionType,
-          QuestionText: questionForm.questionText.trim(),
-          Points: Number(questionForm.points),
-          OrderIndex: Number(questionForm.orderIndex) || (examQuestions.length + 1),
-          Options: (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop')
-            ? questionForm.options.map(o => o.trim()).filter(Boolean)
-            : undefined,
-          CorrectAnswer: questionForm.questionType !== 'Essay' ? questionForm.correctAnswer : undefined,
-        } as Question;
-
-        try {
-          const key = `exam_questions_${selectedExamForQuestions._id}`;
-          const stored = localStorage.getItem(key);
-          const list: Question[] = stored ? JSON.parse(stored) : [];
-          const next = editingQuestion
-            ? list.map(q => q._id === editingQuestion._id ? savedQuestion! : q)
-            : [...list, savedQuestion];
-          localStorage.setItem(key, JSON.stringify(next));
-        } catch {}
-
-        showToast('تم حفظ السؤال بنجاح في سجل الاختبار!', 'success');
+      if (editingQuestion) {
+        savedQuestion = await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
+        showToast('تم تحديث السؤال بنجاح!', 'success');
+      } else {
+        savedQuestion = await examsApi.createQuestion(selectedExamForQuestions._id, payload);
+        showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
       }
 
       // Immediately reflect in state
@@ -1337,19 +1228,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (!window.confirm('هل أنت متأكد من رغبتك في حذف هذا السؤال؟')) return;
     try {
       await examsApi.deleteQuestion(selectedExamForQuestions._id, questionId);
-    } catch (err) {
-      console.warn('[Questions API] Backend delete returned error, deleting locally:', err);
+      setExamQuestions(prev => prev.filter(q => q._id !== questionId));
+      showToast('تم حذف السؤال بنجاح', 'success');
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حذف السؤال من الخادم'), 'error');
     }
-    try {
-      const key = `exam_questions_${selectedExamForQuestions._id}`;
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const list: Question[] = JSON.parse(stored);
-        localStorage.setItem(key, JSON.stringify(list.filter(q => q._id !== questionId)));
-      }
-    } catch {}
-    setExamQuestions(prev => prev.filter(q => q._id !== questionId));
-    showToast('تم حذف السؤال بنجاح', 'success');
   };
 
   const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
@@ -1363,11 +1246,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       q.OrderIndex = idx + 1;
     });
     setExamQuestions(updated);
-    try {
-      if (selectedExamForQuestions) {
-        localStorage.setItem(`exam_questions_${selectedExamForQuestions._id}`, JSON.stringify(updated));
-      }
-    } catch {}
   };
 
   const handleSaveReorder = async () => {
@@ -1377,14 +1255,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         selectedExamForQuestions._id,
         examQuestions.map(q => q._id)
       );
-    } catch (err) {
-      console.warn('[Questions API] Backend reorder returned error, persisting locally:', err);
+      showToast('تم حفظ الترتيب الجديد للأسئلة بنجاح!', 'success');
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ ترتيب الأسئلة في الخادم'), 'error');
     }
-    try {
-      const key = `exam_questions_${selectedExamForQuestions._id}`;
-      localStorage.setItem(key, JSON.stringify(examQuestions));
-    } catch {}
-    showToast('تم حفظ الترتيب الجديد للأسئلة بنجاح!', 'success');
   };
 
   const handleOpenAttemptsModal = (exam: Exam) => {

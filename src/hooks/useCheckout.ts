@@ -47,12 +47,9 @@ export function useCheckout() {
       const res = await paymentApi.redeemScratchCard({ code: code.trim() });
       setRedeemSuccess(res);
       if (typeof res.newWalletBalance === 'number') {
-        try {
-          localStorage.setItem('student_wallet_balance', String(res.newWalletBalance));
-          window.dispatchEvent(
-            new CustomEvent('wallet:balance-updated', { detail: { balance: res.newWalletBalance } })
-          );
-        } catch {}
+        window.dispatchEvent(
+          new CustomEvent('wallet:balance-updated', { detail: { balance: res.newWalletBalance } })
+        );
       }
       return res;
     } catch (err: any) {

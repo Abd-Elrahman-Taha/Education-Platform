@@ -24,34 +24,60 @@ const STORAGE_KEY = 'syntax_current_user_v2';
 /**
  * Query the live backend API to retrieve the exact FullName stored in the database.
  */
-export async function fetchBackendUserName(userId?: string, authToken?: string, phone?: string): Promise<string | null> {
-  if (!authToken) return null;
+export async function fetchBackendUserName(
+  userId?: string,
+  authToken?: string,
+  phone?: string,
+  role?: string
+): Promise<string | null> {
+  if (!authToken || !userId) return null;
 
-  // 1. Direct query: GET /users/students/:userId
-  if (userId) {
+  const isAdminRole = role && (role.toLowerCase() === 'admin' || role.toLowerCase() === 'superadmin');
+
+  if (isAdminRole) {
+    // 1. Admin endpoint: GET /users/admins/:userId
+    try {
+      const res = await apiClient.get<any>(`/users/admins/${userId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const cand =
+        res.data?.data?.admin?.FullName ||
+        res.data?.admin?.FullName ||
+        res.data?.data?.FullName ||
+        res.data?.FullName;
+      if (cand && !isPlaceholderName(cand, 'admin')) {
+        return cand.trim();
+      }
+    } catch {}
+
+    // 2. Admin endpoint fallback: GET /users/admins
+    try {
+      const res = await apiClient.get<any>('/users/admins', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const list = res.data?.data?.admins || res.data?.admins || res.data || [];
+      if (Array.isArray(list)) {
+        const match = list.find((a: any) => a._id === userId || (phone && a.Phone === phone));
+        if (match?.FullName && !isPlaceholderName(match.FullName, 'admin')) {
+          return match.FullName.trim();
+        }
+      }
+    } catch {}
+  } else {
+    // 3. Student endpoint: GET /users/students/:userId
     try {
       const res = await apiClient.get<any>(`/users/students/${userId}`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      const cand = res.data?.data?.student?.FullName || res.data?.student?.FullName || res.data?.FullName || res.data?.data?.student?.name;
-      if (cand && !isPlaceholderName(cand)) {
+      const cand =
+        res.data?.data?.student?.FullName ||
+        res.data?.student?.FullName ||
+        res.data?.FullName;
+      if (cand && !isPlaceholderName(cand, 'student')) {
         return cand.trim();
       }
-    } catch (err: any) {
-      if (err?.status === 401 || err?.status === 403) return null;
-    }
+    } catch {}
   }
-
-  // 2. Try current user profile / me endpoint
-  try {
-    const r = await apiClient.get<any>('/users/me', {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    const cand = r.data?.data?.FullName || r.data?.user?.FullName || r.data?.FullName || r.data?.data?.name || r.data?.name;
-    if (cand && !isPlaceholderName(cand)) {
-      return cand.trim();
-    }
-  } catch {}
 
   return null;
 }
@@ -93,17 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (parsed.role === 'superadmin') {
           parsed.isSuperAdmin = true;
         }
-        // Always check if there is an updated name cached from admin edit or backend
-        const cachedUpdated = (parsed.phone ? localStorage.getItem(`user_fullname_${parsed.phone.trim()}`) : null)
-          || (parsed.id ? localStorage.getItem(`user_fullname_${parsed.id}`) : null)
-          || (isAdmin ? localStorage.getItem('admin_username') : null)
-          || localStorage.getItem('user_fullname_active');
-
-        if (cachedUpdated && cachedUpdated.trim() && !isPlaceholderName(cachedUpdated, parsed.role)) {
-          parsed.name = cachedUpdated.trim();
-        } else if (isPlaceholderName(parsed.name, parsed.role)) {
+        if (isPlaceholderName(parsed.name, parsed.role)) {
           if (isAdmin) {
-            // NEVER use phone number for admin!
             parsed.name = 'مدير المنصة';
           } else if (parsed.phone) {
             parsed.name = parsed.phone.trim();
@@ -152,13 +169,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-            if (updated.phone) {
-              localStorage.setItem(`user_fullname_${updated.phone.trim()}`, updatedName);
-            }
-            if (updated.id) {
-              localStorage.setItem(`user_fullname_${updated.id}`, updatedName);
-            }
-            localStorage.setItem('user_fullname_active', updatedName);
           } catch {}
           return updated;
         }
@@ -229,44 +239,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Automatically fetch real student / user name from live backend API
         if (userId || phone) {
-          fetchBackendUserName(userId, token, phone).then((nameFromApi) => {
+          fetchBackendUserName(userId, token, phone, normalizedRole).then((nameFromApi) => {
             const isAdminRole = normalizedRole === 'admin' || normalizedRole === 'superadmin';
-            const adminLocalUser = isAdminRole
-              ? (payload.username || payload.userName || (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) || localStorage.getItem('admin_username'))
+            const adminFallbackName = isAdminRole
+              ? (payload.username || payload.userName || (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) || (isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة'))
               : null;
-
-            const cachedName = (phone ? localStorage.getItem(`user_fullname_${phone.trim()}`) : null)
-              || (userId ? localStorage.getItem(`user_fullname_${userId}`) : null)
-              || (isAdminRole ? localStorage.getItem('admin_username') : null)
-              || localStorage.getItem('user_fullname_active');
 
             const resolvedName =
               (nameFromApi && !isPlaceholderName(nameFromApi, normalizedRole) ? nameFromApi.trim() : null) ||
-              (cachedName && !isPlaceholderName(cachedName, normalizedRole) ? cachedName.trim() : null) ||
-              (adminLocalUser && !isPlaceholderName(adminLocalUser, normalizedRole) ? adminLocalUser.trim() : null) ||
               (!isPlaceholderName(payload.FullName, normalizedRole) ? payload.FullName.trim() : null) ||
               (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName.trim() : null) ||
               (!isPlaceholderName(payload.username, normalizedRole) ? payload.username.trim() : null) ||
               (!isPlaceholderName(payload.name, normalizedRole) ? payload.name.trim() : null) ||
-              (isAdminRole ? (isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة') : (phone ? phone.trim() : null));
+              adminFallbackName ||
+              (phone ? phone.trim() : 'حساب الطالب');
 
             if (resolvedName) {
-              if (phone && !isPlaceholderName(resolvedName, normalizedRole)) {
-                try {
-                  localStorage.setItem(`user_fullname_${phone.trim()}`, resolvedName);
-                  localStorage.setItem('user_fullname_active', resolvedName);
-                } catch {}
-              }
-              if (userId && !isPlaceholderName(resolvedName, normalizedRole)) {
-                try {
-                  localStorage.setItem(`user_fullname_${userId}`, resolvedName);
-                } catch {}
-              }
-              if (isAdminRole && !isPlaceholderName(resolvedName, normalizedRole)) {
-                try {
-                  localStorage.setItem('admin_username', resolvedName);
-                } catch {}
-              }
               setCurrentUser((prev) => {
                 if (!prev) {
                   return {
@@ -281,7 +269,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     registrationDate: new Date().toISOString().slice(0, 10),
                     isSubscribed: false,
                     subscribedYear: 'third_secondary',
-                    subscription: undefined,
+                    subscription: {
+                      isActive: false,
+                      year: 'third_secondary',
+                      plan: 'باقة التفوق',
+                    },
                   };
                 }
                 return {
@@ -366,8 +358,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (!isPlaceholderName(payload.FullName, 'admin') ? payload.FullName : null) ||
           (!isPlaceholderName(resUserAny?.name, 'admin') ? resUserAny?.name : null) ||
           (!isPlaceholderName(payload.name, 'admin') ? payload.name : null) ||
-          (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) ||
-          localStorage.getItem('admin_username')
+          (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null)
         )
       : null;
     let backendName =
@@ -385,28 +376,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (!isPlaceholderName(payload.name, normalizedRole) ? payload.name : null);
 
     if (!backendName) {
-      backendName = await fetchBackendUserName(userId, jwtToken, phone.trim());
-    }
-    if (!backendName && phone) {
-      const cached = localStorage.getItem(`user_fullname_${phone.trim()}`);
-      if (cached && !isPlaceholderName(cached, normalizedRole)) backendName = cached.trim();
-    }
-    if (!backendName && isAdminUser) {
-      const storedAdmin = localStorage.getItem('admin_username');
-      if (storedAdmin && !isPlaceholderName(storedAdmin, 'admin')) backendName = storedAdmin.trim();
-    }
-    if (!backendName) {
-      const activeCached = localStorage.getItem('user_fullname_active');
-      if (activeCached && !isPlaceholderName(activeCached, normalizedRole)) backendName = activeCached.trim();
-    }
-
-    if (backendName && !isPlaceholderName(backendName, normalizedRole)) {
-      try {
-        localStorage.setItem(`user_fullname_${phone.trim()}`, backendName.trim());
-        localStorage.setItem('user_fullname_active', backendName.trim());
-        if (userId) localStorage.setItem(`user_fullname_${userId}`, backendName.trim());
-        if (isAdminUser) localStorage.setItem('admin_username', backendName.trim());
-      } catch {}
+      backendName = await fetchBackendUserName(userId, jwtToken, phone.trim(), normalizedRole);
     }
 
     // FOR ADMIN: NEVER FALL BACK TO PHONE NUMBER!
@@ -454,12 +424,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ParentPhone: parentPhone.trim(),
       password,
     });
-
-    try {
-      localStorage.setItem(`user_fullname_${phone.trim()}`, fullName.trim());
-      localStorage.setItem('user_fullname_active', fullName.trim());
-    } catch {}
-
     return res;
   };
 
@@ -471,20 +435,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!clean) return;
     setCurrentUser((prev) => {
       if (!prev) return null;
-      if (prev.role === 'admin' || prev.role === 'superadmin') {
-        try {
-          localStorage.setItem('admin_username', clean);
-        } catch {}
-      }
-      if (prev.phone) {
-        try {
-          localStorage.setItem(`user_fullname_${prev.phone.trim()}`, clean);
-        } catch {}
-      }
-      try {
-        localStorage.setItem(`user_fullname_${prev.id}`, clean);
-        localStorage.setItem('user_fullname_active', clean);
-      } catch {}
       return { ...prev, name: clean };
     });
   };

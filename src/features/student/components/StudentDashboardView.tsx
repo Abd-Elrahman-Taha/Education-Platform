@@ -49,6 +49,8 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
   const { data: enrollments, isLoading: isEnrollmentsLoading } = useQuery({
     queryKey: ['my-enrollments'],
     queryFn: () => enrollmentsApi.getMyCourses(),
+    enabled: !isAdminUser,
+    retry: false,
   });
 
   if (isDashLoading || isTimelineLoading || isEnrollmentsLoading) {

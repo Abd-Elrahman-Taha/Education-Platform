@@ -7,8 +7,15 @@ export const enrollmentsApi = {
    * StudentId is derived automatically by the backend from JWT (no IDOR query params).
    */
   getMyCourses: async (params?: { page?: number; limit?: number; Status?: string }): Promise<Enrollment[]> => {
-    const response = await apiClient.get<MyCoursesResponse>('/enrollments/my-courses', { params });
-    return response.data?.data?.enrollments || [];
+    try {
+      const response = await apiClient.get<MyCoursesResponse>('/enrollments/my-courses', { params });
+      return response.data?.data?.enrollments || [];
+    } catch (err: any) {
+      if (err?.response?.status === 403 || err?.status === 403) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   /**

@@ -32,25 +32,8 @@ export const examsApi = {
    * List all exams with optional filters (CourseId, Status, search, pagination).
    */
   getExams: async (params?: ExamQueryParams): Promise<{ exams: Exam[]; total: number; totalPages: number }> => {
-    let raw: any = null;
-
-    // First attempt: GET /exams (clean)
-    try {
-      const response = await apiClient.get<ExamsListResponse>('/exams', { params });
-      raw = response.data;
-    } catch (firstErr: any) {
-      // Only retry with page/limit if it wasn't a 401/403 auth or forbidden error
-      if (firstErr?.status !== 401 && firstErr?.status !== 403 && !firstErr?.isForbidden && !firstErr?.isAuthError) {
-        try {
-          const response = await apiClient.get<ExamsListResponse>('/exams', { params: { page: 1, limit: 50, ...(params || {}) } });
-          raw = response.data;
-        } catch (secondErr: any) {
-          console.warn('[Exams API] Backend /exams returned error, reading registry cache:', secondErr?.message || firstErr?.message);
-        }
-      } else {
-        console.warn('[Exams API] Backend /exams returned auth error, reading registry cache:', firstErr?.message);
-      }
-    }
+    const response = await apiClient.get<ExamsListResponse>('/exams', { params });
+    const raw = response.data as any;
 
     let examsList: Exam[] = Array.isArray(raw?.data?.exams)
       ? raw.data.exams
@@ -61,21 +44,6 @@ export const examsApi = {
       : Array.isArray(raw)
       ? raw
       : [];
-
-    // Fallback or merge with local registry
-    try {
-      const storedRaw = localStorage.getItem('platform_exams_registry');
-      const storedExams: Exam[] = storedRaw ? JSON.parse(storedRaw) : [];
-      if (examsList.length === 0 && storedExams.length > 0) {
-        examsList = storedExams;
-      } else if (examsList.length > 0) {
-        // Merge: keep all server exams, plus any local exams created recently that server hasn't populated yet
-        const serverIds = new Set(examsList.map(e => e._id));
-        const missingLocals = storedExams.filter(e => !serverIds.has(e._id));
-        examsList = [...missingLocals, ...examsList];
-        localStorage.setItem('platform_exams_registry', JSON.stringify(examsList));
-      }
-    } catch {}
 
     if (params) {
       if (params.CourseId && params.CourseId !== 'all') {
@@ -97,7 +65,7 @@ export const examsApi = {
 
     return {
       exams: examsList,
-      total: examsList.length,
+      total: pagination.total || examsList.length,
       totalPages: pagination.totalPages || 1,
     };
   },
@@ -106,21 +74,9 @@ export const examsApi = {
    * Get single exam by ID (Admin only).
    */
   getExamById: async (examId: string): Promise<Exam> => {
-    try {
-      const response = await apiClient.get<any>(`/exams/${examId}`);
-      const raw = response.data;
-      return raw?.data?.exam || raw?.exam || raw?.data || raw;
-    } catch (err) {
-      try {
-        const storedRaw = localStorage.getItem('platform_exams_registry');
-        if (storedRaw) {
-          const stored: Exam[] = JSON.parse(storedRaw);
-          const found = stored.find(e => e._id === examId);
-          if (found) return found;
-        }
-      } catch {}
-      throw err;
-    }
+    const response = await apiClient.get<any>(`/exams/${examId}`);
+    const raw = response.data;
+    return raw?.data?.exam || raw?.exam || raw?.data || raw;
   },
 
   /**
@@ -143,21 +99,7 @@ export const examsApi = {
 
     const response = await apiClient.post<any>('/exams', cleanPayload);
     const raw = response.data;
-    const created: Exam = raw?.data?.exam || raw?.exam || raw?.data || raw || {
-      _id: `exam-${Date.now()}`,
-      ...cleanPayload,
-      CreatedAt: new Date().toISOString(),
-    };
-
-    // Immediately persist in platform_exams_registry
-    try {
-      const storedRaw = localStorage.getItem('platform_exams_registry');
-      const list: Exam[] = storedRaw ? JSON.parse(storedRaw) : [];
-      const updated = [created, ...list.filter(e => e._id !== created._id)];
-      localStorage.setItem('platform_exams_registry', JSON.stringify(updated));
-    } catch {}
-
-    return created;
+    return raw?.data?.exam || raw?.exam || raw?.data || raw;
   },
 
   /**
@@ -170,62 +112,16 @@ export const examsApi = {
         cleanPayload[k] = v;
       }
     }
-
-    const updateLocalRegistry = (merged: Partial<Exam>): Exam => {
-      let result: Exam = { _id: examId, ...data } as Exam;
-      try {
-        const storedRaw = localStorage.getItem('platform_exams_registry');
-        if (storedRaw) {
-          const list: Exam[] = JSON.parse(storedRaw);
-          const existing = list.find(e => e._id === examId);
-          if (existing) {
-            result = { ...existing, ...merged };
-            const nextList = list.map(e => e._id === examId ? result : e);
-            localStorage.setItem('platform_exams_registry', JSON.stringify(nextList));
-          } else {
-            result = { _id: examId, ...merged } as Exam;
-            list.push(result);
-            localStorage.setItem('platform_exams_registry', JSON.stringify(list));
-          }
-        }
-      } catch {}
-      return result;
-    };
-
-    try {
-      const response = await apiClient.patch<any>(`/exams/${examId}`, cleanPayload);
-      const raw = response.data;
-      const serverUpdated = raw?.data?.exam || raw?.exam || (raw?.data && raw.data._id ? raw.data : null);
-      const finalExam: Exam = {
-        _id: examId,
-        ...cleanPayload,
-        ...(serverUpdated || {}),
-      } as Exam;
-      updateLocalRegistry(finalExam);
-      return finalExam;
-    } catch (err: any) {
-      console.warn(`[Exams API] Backend PATCH /exams/${examId} failed, updating local registry:`, err?.message || err);
-      return updateLocalRegistry(cleanPayload);
-    }
+    const response = await apiClient.patch<any>(`/exams/${examId}`, cleanPayload);
+    const raw = response.data;
+    return raw?.data?.exam || raw?.exam || raw?.data || raw;
   },
 
   /**
    * Delete an exam (Admin only).
    */
   deleteExam: async (examId: string): Promise<void> => {
-    try {
-      await apiClient.delete(`/exams/${examId}`);
-    } catch (err: any) {
-      console.warn(`[Exams API] Backend DELETE /exams/${examId} failed:`, err?.message || err);
-    }
-    try {
-      const storedRaw = localStorage.getItem('platform_exams_registry');
-      if (storedRaw) {
-        const list: Exam[] = JSON.parse(storedRaw);
-        const nextList = list.filter(e => e._id !== examId);
-        localStorage.setItem('platform_exams_registry', JSON.stringify(nextList));
-      }
-    } catch {}
+    await apiClient.delete(`/exams/${examId}`);
   },
 
   // ── Admin Question CRUD & Reorder ───────────────────────────────
@@ -233,34 +129,17 @@ export const examsApi = {
    * List all questions belonging to an exam.
    */
   getQuestions: async (examId: string): Promise<Question[]> => {
-    try {
-      const response = await apiClient.get<any>(`/exams/${examId}/questions`);
-      const raw = response.data as any;
-      const list = Array.isArray(raw?.data?.questions)
-        ? raw.data.questions
-        : Array.isArray(raw?.questions)
-        ? raw.questions
-        : Array.isArray(raw?.data)
-        ? raw.data
-        : Array.isArray(raw)
-        ? raw
-        : [];
-      if (list.length > 0) {
-        try {
-          localStorage.setItem(`exam_questions_${examId}`, JSON.stringify(list));
-        } catch {}
-        return list;
-      }
-    } catch (err) {
-      console.warn(`[Exams API] getQuestions for ${examId} returned error:`, err);
-    }
-    // Fallback to locally stored questions
-    try {
-      const key = `exam_questions_${examId}`;
-      const stored = localStorage.getItem(key);
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return [];
+    const response = await apiClient.get<any>(`/exams/${examId}/questions`);
+    const raw = response.data as any;
+    return Array.isArray(raw?.data?.questions)
+      ? raw.data.questions
+      : Array.isArray(raw?.questions)
+      ? raw.questions
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw)
+      ? raw
+      : [];
   },
 
   /**
@@ -272,41 +151,9 @@ export const examsApi = {
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
     }
-
-    const saveToLocal = (): Question => {
-      const newQ: Question = {
-        _id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-        ...payload,
-      } as Question;
-      try {
-        const key = `exam_questions_${examId}`;
-        const stored = localStorage.getItem(key);
-        const list: Question[] = stored ? JSON.parse(stored) : [];
-        list.push(newQ);
-        localStorage.setItem(key, JSON.stringify(list));
-      } catch {}
-      return newQ;
-    };
-
-    try {
-      const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
-      const raw = response.data;
-      const created = raw?.data?.question || raw?.question || (raw?.data && raw.data._id ? raw.data : null);
-      if (created && created._id) {
-        try {
-          const key = `exam_questions_${examId}`;
-          const stored = localStorage.getItem(key);
-          const list: Question[] = stored ? JSON.parse(stored) : [];
-          list.push(created);
-          localStorage.setItem(key, JSON.stringify(list));
-        } catch {}
-        return created;
-      }
-      return saveToLocal();
-    } catch (err: any) {
-      console.warn(`[Exams API] Backend createQuestion failed for exam ${examId}, storing locally:`, err?.message || err);
-      return saveToLocal();
-    }
+    const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
+    const raw = response.data;
+    return raw?.data?.question || raw?.question || raw?.data || raw;
   },
 
   /**
@@ -322,66 +169,23 @@ export const examsApi = {
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
     }
-
-    const updateLocal = (): Question => {
-      let res: Question = { _id: questionId, ...payload } as Question;
-      try {
-        const key = `exam_questions_${examId}`;
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          const list: Question[] = JSON.parse(stored);
-          const next = list.map(q => q._id === questionId ? { ...q, ...payload } : q);
-          localStorage.setItem(key, JSON.stringify(next));
-          res = next.find(q => q._id === questionId) || res;
-        }
-      } catch {}
-      return res;
-    };
-
-    try {
-      const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
-      const raw = response.data;
-      const updated = raw?.data?.question || raw?.question || (raw?.data && raw.data._id ? raw.data : null);
-      if (updated && updated._id) {
-        updateLocal();
-        return updated;
-      }
-      return updateLocal();
-    } catch (err: any) {
-      console.warn(`[Exams API] Backend updateQuestion failed, using local:`, err?.message || err);
-      return updateLocal();
-    }
+    const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
+    const raw = response.data;
+    return raw?.data?.question || raw?.question || raw?.data || raw;
   },
 
   /**
    * Delete a question from an exam (Admin only).
    */
   deleteQuestion: async (examId: string, questionId: string): Promise<void> => {
-    try {
-      await apiClient.delete(`/exams/${examId}/questions/${questionId}`);
-    } catch (err: any) {
-      console.warn(`[Exams API] Backend deleteQuestion failed, deleting locally:`, err?.message || err);
-    }
-    try {
-      const key = `exam_questions_${examId}`;
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const list: Question[] = JSON.parse(stored);
-        const next = list.filter(q => q._id !== questionId);
-        localStorage.setItem(key, JSON.stringify(next));
-      }
-    } catch {}
+    await apiClient.delete(`/exams/${examId}/questions/${questionId}`);
   },
 
   /**
    * Reorder questions inside an exam (Admin only).
    */
   reorderQuestions: async (examId: string, questionIds: string[]): Promise<void> => {
-    try {
-      await apiClient.put(`/exams/${examId}/questions/reorder`, { questionIds });
-    } catch (err: any) {
-      console.warn(`[Exams API] Backend reorderQuestions failed:`, err?.message || err);
-    }
+    await apiClient.put(`/exams/${examId}/questions/reorder`, { questionIds });
   },
 
   // ── Attempt History ──────────────────────────────────────────────
