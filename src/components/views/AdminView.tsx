@@ -1252,6 +1252,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       };
       showToast(statusLabels[newStatus] || 'تم تحديث حالة الاختبار بنجاح!', 'success');
       setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: newStatus, PassingScore: exam.PassingScore } : e));
+      if (selectedExamForQuestions && selectedExamForQuestions._id === exam._id) {
+        setSelectedExamForQuestions(prev => prev ? { ...prev, Status: newStatus, PassingScore: exam.PassingScore } : null);
+      }
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تغيير حالة الاختبار. تأكد من استيفاء متطلبات النشر'), 'error');
     }
@@ -2448,85 +2451,94 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                         </button>
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                        {exam.Status === 'Draft' && (
+                      {/* ── Status Controller for Admin/SuperAdmin ── */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--bg-subtle)', padding: '0.35rem 0.5rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>الحالة:</span>
+                        <select
+                          value={exam.Status}
+                          onChange={(e) => handleUpdateExamStatus(exam, e.target.value as ExamStatus)}
+                          className="input-field"
+                          style={{
+                            padding: '0.2rem 0.4rem',
+                            fontSize: '0.78rem',
+                            fontWeight: 800,
+                            flex: 1,
+                            borderRadius: '6px',
+                            color: exam.Status === 'Published' ? '#10B981' : exam.Status === 'Draft' ? '#F59E0B' : '#EF4444',
+                            background: 'var(--bg-glass-card)',
+                            borderColor: exam.Status === 'Published' ? 'rgba(16,185,129,0.3)' : exam.Status === 'Draft' ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)',
+                            cursor: 'pointer',
+                          }}
+                          title="تغيير حالة الاختبار فوراً إلى أي حالة تريدها"
+                        >
+                          <option value="Draft">مسودة (Draft)</option>
+                          <option value="Published">منشور (Published)</option>
+                          <option value="Closed">مغلق (Closed)</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
+                        {exam.Status !== 'Published' && (
                           <button
                             type="button"
                             className="btn btn-secondary"
                             style={{
-                              padding: '0.35rem 0.65rem',
-                              fontSize: '0.78rem',
+                              padding: '0.35rem 0.5rem',
+                              fontSize: '0.75rem',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '0.25rem',
+                              gap: '0.2rem',
                               color: '#10B981',
                               borderColor: 'rgba(16,185,129,0.3)',
+                              flex: 1,
                             }}
                             onClick={() => handleUpdateExamStatus(exam, 'Published')}
                             title="نشر الاختبار فوراً للطلاب"
                           >
-                            <CheckCircle2 size={13} /> نشر
+                            <CheckCircle2 size={12} /> نشر
                           </button>
                         )}
-                        {exam.Status === 'Published' && (
-                          <div style={{ display: 'flex', gap: '0.3rem' }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{
-                                padding: '0.35rem 0.5rem',
-                                fontSize: '0.75rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.2rem',
-                                color: '#F59E0B',
-                                borderColor: 'rgba(245,158,11,0.3)',
-                              }}
-                              onClick={() => handleUpdateExamStatus(exam, 'Draft')}
-                              title="تحويل الاختبار إلى مسودة"
-                            >
-                              <XCircle size={12} /> مسودة
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{
-                                padding: '0.35rem 0.5rem',
-                                fontSize: '0.75rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.2rem',
-                                color: '#EF4444',
-                                borderColor: 'rgba(239,68,68,0.3)',
-                              }}
-                              onClick={() => handleUpdateExamStatus(exam, 'Closed')}
-                              title="إغلاق الاختبار"
-                            >
-                              <Ban size={12} /> إغلاق
-                            </button>
-                          </div>
-                        )}
-                        {exam.Status === 'Closed' && (
+                        {exam.Status !== 'Draft' && (
                           <button
                             type="button"
                             className="btn btn-secondary"
                             style={{
-                              padding: '0.35rem 0.65rem',
-                              fontSize: '0.78rem',
+                              padding: '0.35rem 0.5rem',
+                              fontSize: '0.75rem',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '0.25rem',
-                              color: '#10B981',
-                              borderColor: 'rgba(16,185,129,0.3)',
+                              gap: '0.2rem',
+                              color: '#F59E0B',
+                              borderColor: 'rgba(245,158,11,0.3)',
+                              flex: 1,
                             }}
-                            onClick={() => handleUpdateExamStatus(exam, 'Published')}
-                            title="إعادة فتح ونشر الاختبار للطلاب"
+                            onClick={() => handleUpdateExamStatus(exam, 'Draft')}
+                            title="تحويل الاختبار إلى مسودة"
                           >
-                            <RotateCcw size={13} /> إعادة نشر
+                            <XCircle size={12} /> مسودة
+                          </button>
+                        )}
+                        {exam.Status !== 'Closed' && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.35rem 0.5rem',
+                              fontSize: '0.75rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.2rem',
+                              color: '#EF4444',
+                              borderColor: 'rgba(239,68,68,0.3)',
+                              flex: 1,
+                            }}
+                            onClick={() => handleUpdateExamStatus(exam, 'Closed')}
+                            title="إغلاق الاختبار"
+                          >
+                            <Ban size={12} /> إغلاق
                           </button>
                         )}
 
@@ -3931,7 +3943,30 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--bg-subtle)', padding: '0.3rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>حالة الاختبار:</span>
+                  <select
+                    value={selectedExamForQuestions.Status}
+                    onChange={(e) => handleUpdateExamStatus(selectedExamForQuestions, e.target.value as ExamStatus)}
+                    className="input-field"
+                    style={{
+                      padding: '0.2rem 0.5rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      borderRadius: '6px',
+                      color: selectedExamForQuestions.Status === 'Published' ? '#10B981' : selectedExamForQuestions.Status === 'Draft' ? '#F59E0B' : '#EF4444',
+                      background: 'var(--bg-glass-card)',
+                      cursor: 'pointer',
+                    }}
+                    title="تعديل حالة الاختبار مباشرة"
+                  >
+                    <option value="Draft">مسودة (Draft)</option>
+                    <option value="Published">منشور (Published)</option>
+                    <option value="Closed">مغلق (Closed)</option>
+                  </select>
+                </div>
+
                 {examQuestions.length > 1 && (
                   <button
                     type="button"
