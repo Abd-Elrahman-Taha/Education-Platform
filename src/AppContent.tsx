@@ -198,6 +198,15 @@ export const AppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Ensure Admin and SuperAdmin users are redirected away from student dashboard to view-admin
+  useEffect(() => {
+    const role = (currentUser?.role || (currentUser as any)?.Role || '').toString().toLowerCase();
+    const isAdmin = role === 'admin' || role === 'superadmin' || currentUser?.isSuperAdmin;
+    if (isAdmin && currentView === 'view-student-dashboard') {
+      setCurrentView('view-admin');
+    }
+  }, [currentUser?.role, currentUser?.isSuperAdmin, currentView]);
+
   const handleNavigateView = (view: AppView, lessonId?: string) => {
     setCurrentView(view);
     if (lessonId) {
@@ -384,8 +393,8 @@ export const AppContent: React.FC = () => {
         {/* Student Dashboard */}
         {currentView === 'view-student-dashboard' && (
           <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
-            onNavigateHome={() => handleNavigateView('view-landing')}
+            allowedRoles={['student']}
+            onNavigateHome={() => handleNavigateView('view-admin')}
           >
             <StudentDashboardView
               onNavigateView={handleNavigateView}

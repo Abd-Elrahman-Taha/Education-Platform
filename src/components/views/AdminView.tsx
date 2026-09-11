@@ -1354,15 +1354,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                       type="button"
                       className="btn btn-secondary"
                       style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                      onClick={() => onNavigateView('view-student-dashboard')}
-                      title="الانتقال للوحة تحليلات الطالب"
-                    >
-                      <LayoutDashboard size={14} color="var(--primary-light)" /> معاينة لوحة الطالب
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                       onClick={() => onNavigateView('view-courses')}
                       title="تصفح الكورسات والمحاضرات"
                     >
