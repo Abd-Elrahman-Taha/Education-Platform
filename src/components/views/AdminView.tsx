@@ -94,25 +94,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     (currentUser as any)?.Role === 'superadmin' ||
     (currentUser as any)?.role === 'superadmin';
 
-  const canManageAdmins =
-    isSuperAdmin ||
-    currentUser?.role === 'admin' ||
-    (currentUser as any)?.Role === 'Admin' ||
-    (currentUser as any)?.Role === 'admin' ||
-    (currentUser as any)?.role === 'admin';
-
   // Selected academic year filter ('all' shows all courses, or specific secondary year)
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'admins'>('overview');
 
-  // Redirect if user has no admin/superadmin access and attempts to open admins tab
+  // Redirect if user is not superadmin and attempts to open admins tab
   useEffect(() => {
-    if (!canManageAdmins && activeTab === 'admins') {
+    if (!isSuperAdmin && activeTab === 'admins') {
       setActiveTab('overview');
     }
-  }, [canManageAdmins, activeTab]);
+  }, [isSuperAdmin, activeTab]);
 
   // ── LIVE BACKEND STATE ───────────────────────────────────────
   const [allStudents, setAllStudents] = useState<AdminStudent[]>([]);
@@ -517,7 +510,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   };
 
   const loadAdmins = async (studentsList?: AdminStudent[]) => {
-    if (!canManageAdmins) return;
+    if (!isSuperAdmin) return;
     setIsAdminsLoading(true);
     try {
       const res = await studentsApi.getAdmins();
@@ -559,11 +552,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       if (currentUser) {
         setRealAdmins([{
           _id: currentUser.id || (currentUser as any)._id || 'current-admin',
-          FullName: currentUser.name || 'مدير المنصة (أنت)',
+          FullName: currentUser.name || 'المدير العام (أنت)',
           Phone: currentUser.phone || '',
           NationalId: currentUser.nationalId || '—',
           ParentPhone: '—',
-          Role: 'Admin',
+          Role: 'SuperAdmin',
           Status: 'Active',
         }]);
       } else {
@@ -578,17 +571,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     loadStudents();
     loadCourses();
     loadExams();
-    if (canManageAdmins) {
+    if (isSuperAdmin) {
       loadAdmins();
     }
-  }, [canManageAdmins]);
+  }, [isSuperAdmin]);
 
   // Reload data when switching tabs to ensure fresh data from API
   useEffect(() => {
     if (activeTab === 'exams') loadExams();
-    if (activeTab === 'admins' && canManageAdmins) loadAdmins();
+    if (activeTab === 'admins' && isSuperAdmin) loadAdmins();
     if (activeTab === 'students') loadStudents();
-  }, [activeTab, canManageAdmins]);
+  }, [activeTab, isSuperAdmin]);
 
   useEffect(() => {
     if (selectedCourseForLessons) {
@@ -1722,7 +1715,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             <span>شحن الأكواد وكروت الشحن</span>
           </button>
 
-          {canManageAdmins && (
+          {isSuperAdmin && (
             <button
               type="button"
               className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
@@ -1734,7 +1727,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               }}
             >
               <Crown size={16} color="#F59E0B" />
-              <span>إدارة المسؤولين (Admins)</span>
+              <span>إدارة المسؤولين (SuperAdmin)</span>
               <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                 {realAdmins.length}
               </span>
@@ -1949,26 +1942,28 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                                 </span>
                               ) : 'طالب'}
                             </span>
-                            {!isAdmin ? (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.4)' }}
-                                onClick={() => handleOpenPromoteModal(student)}
-                                title="ترقية الطالب إلى مدير (Admin-only)"
-                              >
-                                <Shield size={11} /> ترقية لمدير
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-                                onClick={() => handleToggleRole(student)}
-                                title="تحويل لحساب طالب"
-                              >
-                                تحويل لطالب
-                              </button>
+                            {isSuperAdmin && (
+                              !isAdmin ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+                                  onClick={() => handleOpenPromoteModal(student)}
+                                  title="ترقية الطالب إلى مدير (SuperAdmin only)"
+                                >
+                                  <Shield size={11} /> ترقية لمدير
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                                  onClick={() => handleToggleRole(student)}
+                                  title="تحويل لحساب طالب"
+                                >
+                                  تحويل لطالب
+                                </button>
+                              )
                             )}
                           </div>
                         </td>
@@ -2750,8 +2745,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         </div>
       )}
 
-      {/* ── TAB 6: ADMINS MANAGEMENT (Admins & SuperAdmin) ── */}
-      {canManageAdmins && activeTab === 'admins' && (
+      {/* ── TAB 6: ADMINS MANAGEMENT (Strictly SuperAdmin Only) ── */}
+      {isSuperAdmin && activeTab === 'admins' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
