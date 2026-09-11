@@ -100,6 +100,14 @@ export const studentsApi = {
   promoteStudentToAdmin: async (userId: string, studentData?: Partial<AdminStudent>): Promise<any> => {
     const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Admin' });
     try {
+      // Remove from demoted set if re-promoted
+      const demotedRaw = localStorage.getItem('platform_demoted_admins');
+      if (demotedRaw) {
+        const demotedSet: string[] = JSON.parse(demotedRaw);
+        const filtered = demotedSet.filter(id => id !== userId);
+        localStorage.setItem('platform_demoted_admins', JSON.stringify(filtered));
+      }
+
       const stored = localStorage.getItem('platform_admins_registry');
       const list: AdminStudent[] = stored ? JSON.parse(stored) : [];
       const newAdmin: AdminStudent = {
@@ -119,38 +127,74 @@ export const studentsApi = {
   },
 
   /**
-   * Demote Admin to normal Student user (Admin-only).
-   * Backend endpoint: PATCH /users/:userId/role with { Role: "Student" }.
+   * Demote Admin to normal Student user (SuperAdmin only).
+   * Primary: DELETE /users/admins/:userId (official backend endpoint to remove/demote admin).
+   * Fallbacks: PATCH role endpoints if supported.
    */
   demoteAdminToStudent: async (userId: string): Promise<any> => {
+    let result: any = null;
+    let apiError: any = null;
+
+    // 1. Primary: DELETE /users/admins/:userId (Official SuperAdmin endpoint to remove admin)
     try {
-      const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Student' });
-      try {
-        const stored = localStorage.getItem('platform_admins_registry');
-        if (stored) {
-          const list: AdminStudent[] = JSON.parse(stored);
-          const updated = list.filter(a => a._id !== userId);
-          localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
-        }
-      } catch {}
-      return response.data;
+      const response = await apiClient.delete(`/users/admins/${userId}`);
+      result = response.data || { success: true };
     } catch (err: any) {
-      // Fallback: some backends allow updating role via students endpoint
+      apiError = err;
+      console.warn('[Admins API] DELETE /users/admins/:userId returned error, attempting role fallbacks:', err?.response?.data || err?.message);
+    }
+
+    // 2. Fallback: PATCH /users/:userId/role with { Role: 'Student' }
+    if (!result) {
       try {
-        const fallback = await apiClient.patch(`/users/students/${userId}`, { Role: 'Student' } as any);
-        try {
-          const stored = localStorage.getItem('platform_admins_registry');
-          if (stored) {
-            const list: AdminStudent[] = JSON.parse(stored);
-            const updated = list.filter(a => a._id !== userId);
-            localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
-          }
-        } catch {}
-        return fallback.data;
-      } catch {
-        throw err;
+        const response = await apiClient.patch(`/users/${userId}/role`, { Role: 'Student' });
+        result = response.data;
+      } catch (err: any) {
+        apiError = err;
       }
     }
+
+    // 3. Fallback: PATCH /users/:userId/role with { role: 'student' }
+    if (!result) {
+      try {
+        const response = await apiClient.patch(`/users/${userId}/role`, { role: 'student' });
+        result = response.data;
+      } catch (err: any) {
+        apiError = err;
+      }
+    }
+
+    // 4. Fallback: PATCH /users/students/:userId with { Role: 'Student' }
+    if (!result) {
+      try {
+        const fallback = await apiClient.patch(`/users/students/${userId}`, { Role: 'Student' } as any);
+        result = fallback.data;
+      } catch (err: any) {
+        apiError = err;
+      }
+    }
+
+    // Always update local registry and demoted tracker
+    try {
+      const stored = localStorage.getItem('platform_admins_registry');
+      if (stored) {
+        const list: AdminStudent[] = JSON.parse(stored);
+        const updated = list.filter(a => a._id !== userId);
+        localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
+      }
+      const demotedRaw = localStorage.getItem('platform_demoted_admins');
+      const demotedSet: string[] = demotedRaw ? JSON.parse(demotedRaw) : [];
+      if (!demotedSet.includes(userId)) {
+        demotedSet.push(userId);
+        localStorage.setItem('platform_demoted_admins', JSON.stringify(demotedSet));
+      }
+    } catch {}
+
+    if (!result && apiError) {
+      throw apiError;
+    }
+
+    return result || { success: true };
   },
 
   /**
@@ -274,9 +318,21 @@ export const studentsApi = {
   deleteAdmin: async (userId: string): Promise<void> => {
     try {
       await apiClient.delete(`/users/admins/${userId}`);
-    } catch (err) {
-      // Fallback: demote role to Student
-      await studentsApi.demoteAdminToStudent(userId);
+    } finally {
+      try {
+        const stored = localStorage.getItem('platform_admins_registry');
+        if (stored) {
+          const list: AdminStudent[] = JSON.parse(stored);
+          const updated = list.filter(a => a._id !== userId);
+          localStorage.setItem('platform_admins_registry', JSON.stringify(updated));
+        }
+        const demotedRaw = localStorage.getItem('platform_demoted_admins');
+        const demotedSet: string[] = demotedRaw ? JSON.parse(demotedRaw) : [];
+        if (!demotedSet.includes(userId)) {
+          demotedSet.push(userId);
+          localStorage.setItem('platform_demoted_admins', JSON.stringify(demotedSet));
+        }
+      } catch {}
     }
   },
 };

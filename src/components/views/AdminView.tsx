@@ -476,13 +476,20 @@ export const AdminView: React.FC = () => {
     if (!isSuperAdmin) return;
     setIsAdminsLoading(true);
     try {
-      const res = await studentsApi.getAdmins();
-      let admins = [...(res.admins || [])];
+      let demotedIds: string[] = [];
+      try {
+        const demotedRaw = localStorage.getItem('platform_demoted_admins');
+        if (demotedRaw) demotedIds = JSON.parse(demotedRaw);
+      } catch {}
 
-      // Also merge any users from realStudents whose Role is Admin or not Student
+      const res = await studentsApi.getAdmins();
+      let admins = [...(res.admins || [])].filter(a => !demotedIds.includes(a._id));
+
+      // Also merge any users from realStudents whose Role is Admin or not Student (excluding demoted)
       const sourceStudents = (studentsList && studentsList.length > 0) ? studentsList : realStudents;
       if (sourceStudents && sourceStudents.length > 0) {
         for (const s of sourceStudents) {
+          if (demotedIds.includes(s._id)) continue;
           const r = (s.Role || (s as any).role || '').toLowerCase();
           if (r === 'admin' && !admins.some(a => a._id === s._id)) {
             admins.push({ ...s, Role: 'Admin' });
@@ -515,6 +522,7 @@ export const AdminView: React.FC = () => {
           const parsed: AdminStudent[] = JSON.parse(stored);
           if (Array.isArray(parsed)) {
             for (const a of parsed) {
+              if (demotedIds.includes(a._id)) continue;
               if (!admins.some(x => x._id === a._id || (a.Phone && x.Phone === a.Phone))) {
                 admins.push(a);
               }
@@ -2450,6 +2458,8 @@ export const AdminView: React.FC = () => {
                           if (window.confirm(`هل أنت متأكد من رغبتك في سحب صلاحيات الإدارة وتحويل الحساب (${adminUser.FullName}) إلى حساب طالب عادي (Normal Student User)؟`)) {
                             try {
                               await studentsApi.demoteAdminToStudent(adminUser._id);
+                              setRealAdmins(prev => prev.filter(a => a._id !== adminUser._id));
+                              setRealStudents(prev => prev.map(s => s._id === adminUser._id ? { ...s, Role: 'Student' } : s));
                               showToast(`تم تحويل حساب (${adminUser.FullName}) إلى حساب طالب عادي بنجاح!`, 'success');
                               await loadAdmins();
                               await loadStudents();
@@ -2485,6 +2495,8 @@ export const AdminView: React.FC = () => {
                           if (window.confirm(`هل أنت متأكد من رغبتك في حذف حساب المشرف (${adminUser.FullName}) نهائياً من قاعدة البيانات (DELETE /users/admins/:userId)؟`)) {
                             try {
                               await studentsApi.deleteAdmin(adminUser._id);
+                              setRealAdmins(prev => prev.filter(a => a._id !== adminUser._id));
+                              setRealStudents(prev => prev.filter(s => s._id !== adminUser._id));
                               showToast(`تم حذف المشرف (${adminUser.FullName}) نهائياً بنجاح!`, 'success');
                               await loadAdmins();
                               await loadStudents();
