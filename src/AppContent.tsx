@@ -308,7 +308,7 @@ export const AppContent: React.FC = () => {
         {currentView === 'view-lesson-detail' && (
           selectedCourseId && selectedLessonId ? (
             <RoleGuard
-              allowedRoles={['student', 'teacher', 'admin']}
+              allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
               onNavigateHome={() => setIsAuthModalOpen(true)}
             >
               <LessonViewPage
@@ -327,7 +327,7 @@ export const AppContent: React.FC = () => {
         {currentView === 'view-exam-session' && (
           selectedExamId ? (
             <RoleGuard
-              allowedRoles={['student', 'teacher', 'admin']}
+              allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
               onNavigateHome={() => setIsAuthModalOpen(true)}
             >
               <ExamPage
@@ -349,7 +349,7 @@ export const AppContent: React.FC = () => {
         {/* Profile Page with Device UUID, Scratch Card & Change Password */}
         {currentView === 'view-profile' && (
           <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
+            allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
             onNavigateHome={() => setIsAuthModalOpen(true)}
           >
             <ProfilePage onLogoutSuccess={() => handleNavigateView('view-landing')} />
@@ -359,7 +359,7 @@ export const AppContent: React.FC = () => {
         {/* Student Dashboard */}
         {currentView === 'view-student-dashboard' && (
           <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
+            allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <StudentDashboardView
@@ -372,7 +372,7 @@ export const AppContent: React.FC = () => {
         {/* Lessons & Lectures Unified Hub */}
         {currentView === 'view-drm-player' && (
           <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
+            allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <UnifiedLessonView
@@ -386,7 +386,7 @@ export const AppContent: React.FC = () => {
         {/* Exams View */}
         {currentView === 'view-assessment' && (
           <RoleGuard
-            allowedRoles={['student', 'teacher', 'admin']}
+            allowedRoles={['student', 'teacher', 'admin', 'superadmin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <StandaloneExamsView
@@ -405,7 +405,7 @@ export const AppContent: React.FC = () => {
         {/* Teacher Inbox */}
         {currentView === 'view-teacher-inbox' && (
           <RoleGuard
-            allowedRoles={['teacher', 'admin']}
+            allowedRoles={['teacher', 'admin', 'superadmin']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
             <TeacherInboxView />
@@ -436,7 +436,7 @@ export const AppContent: React.FC = () => {
             allowedRoles={['admin', 'superadmin', 'teacher']}
             onNavigateHome={() => handleNavigateView('view-landing')}
           >
-            <AdminView />
+            <AdminView onNavigateView={handleNavigateView} />
           </RoleGuard>
         )}
 

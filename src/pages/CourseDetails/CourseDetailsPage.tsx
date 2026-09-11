@@ -7,6 +7,7 @@ import { CheckoutModal } from '../../components/payment/CheckoutModal';
 import { Lesson, Exam } from '../../types/api.types';
 import { examsApi } from '../../api/exams.api';
 import { getFriendlyErrorMessage } from '../../utils/errors';
+import { useAuth } from '../../context/AuthContext';
 
 interface CourseDetailsPageProps {
   courseId: string;
@@ -23,6 +24,12 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
   onBackToCourses,
   onNavigateToPackages,
 }) => {
+  const { currentUser } = useAuth();
+  const isSuperAdmin =
+    currentUser?.role === 'superadmin' ||
+    currentUser?.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin';
   const {
     course,
     lessons,
@@ -199,7 +206,7 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {lessons.map((lesson: Lesson, idx: number) => {
-              const isLocked = !isEnrolled || lesson.IsLocked;
+              const isLocked = !isSuperAdmin && (!isEnrolled || lesson.IsLocked);
               return (
                 <div
                   key={lesson._id}
@@ -233,9 +240,16 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                     </div>
 
                     <div>
-                      <strong style={{ fontSize: '0.95rem', color: 'var(--text-bright)', display: 'block', marginBottom: '0.2rem' }}>
-                        {lesson.Title}
-                      </strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: '0.95rem', color: 'var(--text-bright)' }}>
+                          {lesson.Title}
+                        </strong>
+                        {isSuperAdmin && lesson.IsLocked && (
+                          <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.45rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <Lock size={10} /> مقفل للطلاب (متاح لك كمدير)
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                         {(lesson.DurationSeconds || lesson.DurationMinutes) && (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>

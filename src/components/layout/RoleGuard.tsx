@@ -48,6 +48,17 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({
     );
   }
 
+  // SuperAdmin has universal access to any page/view on the platform
+  const isSuperAdmin =
+    currentUser.role === 'superadmin' ||
+    currentUser.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin';
+
+  if (isSuperAdmin) {
+    return <>{children}</>;
+  }
+
   // Logged in but wrong role
   if (!allowedRoles.includes(currentUser.role)) {
     return (

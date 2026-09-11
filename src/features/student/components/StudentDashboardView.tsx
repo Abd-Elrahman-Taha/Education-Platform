@@ -6,7 +6,8 @@ import { AppView } from '../../../types';
 import {
   GraduationCap, BookOpen, Clock, Award, Flame, Calendar,
   TrendingUp, CheckCircle, BarChart3, ArrowLeft, PlayCircle,
-  FileCheck, AlertCircle, RefreshCw, Wallet, Sparkles, Plus
+  FileCheck, AlertCircle, RefreshCw, Wallet, Sparkles, Plus,
+  Crown, Sliders
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -14,6 +15,7 @@ import {
 } from 'recharts';
 import { ScratchCardModal } from '../../../components/payment/ScratchCardModal';
 import { useWalletBalance } from '../../../hooks/useWalletBalance';
+import { useAuth } from '../../../context/AuthContext';
 
 interface Props {
   onNavigateView: (view: AppView, lessonId?: string) => void;
@@ -23,6 +25,14 @@ interface Props {
 const PIE_COLORS = ['#0891B2', ' #ffc800', '#E11D48'];
 
 export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelectCourse }) => {
+  const { currentUser } = useAuth();
+  const isSuperAdmin =
+    currentUser?.role === 'superadmin' ||
+    currentUser?.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin';
+  const isAdminUser = isSuperAdmin || currentUser?.role === 'admin';
+
   const [isScratchModalOpen, setIsScratchModalOpen] = useState(false);
   const { walletBalance, updateBalance } = useWalletBalance();
 
@@ -74,6 +84,38 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
 
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem' }}>
+      {/* SuperAdmin / Admin Mode Quick Banner */}
+      {isAdminUser && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(8, 145, 178, 0.15), rgba(139, 92, 246, 0.15))',
+            border: '1px solid rgba(8, 145, 178, 0.35)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <Crown size={20} color="#F59E0B" />
+            <span style={{ fontSize: '0.9rem', color: 'var(--text-bright)', fontWeight: 700 }}>
+              أنت تتصفح المنصة بصلاحيات <strong>{isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة'}</strong> — وصول كامل ومفتوح لكافة الواجهات والكورسات والتحليلات.
+            </span>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => onNavigateView('view-admin')}
+            style={{ padding: '0.4rem 0.9rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <Sliders size={15} /> فتح لوحة الإدارة العامة
+          </button>
+        </div>
+      )}
+
       {/* ── WELCOME BANNER ─────────────────────────────────── */}
       <div className="glass-card" style={{ padding: '2rem 2.5rem', marginBottom: '2rem', background: 'var(--banner-gradient)', border: '1px solid rgba(8,145,178,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
         <div>

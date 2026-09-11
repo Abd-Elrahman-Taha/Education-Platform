@@ -8,9 +8,10 @@ import {
   BarChart2, Clock, Phone, Copy, Key, Layers,
   Edit3, Zap, ArrowUp, ArrowDown, ListOrdered,
   FileText, CheckSquare, Eye, AlertTriangle, AlertCircle,
-  HelpCircle, RefreshCw, Crown, Lock, Shuffle, Target, RotateCcw, ShieldCheck, Lightbulb
+  HelpCircle, RefreshCw, Crown, Lock, Shuffle, Target, RotateCcw, ShieldCheck, Lightbulb,
+  LayoutDashboard
 } from 'lucide-react';
-import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
+import { AcademicYear, ACADEMIC_YEAR_LABELS, AppView } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { studentsApi } from '../../api/students.api';
@@ -77,7 +78,11 @@ export const EDUCATION_STAGES: { key: EducationStage; label: string; grades: { v
   },
 ];
 
-export const AdminView: React.FC = () => {
+interface AdminViewProps {
+  onNavigateView?: (view: AppView) => void;
+}
+
+export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const { showToast } = useToast();
   const { currentUser } = useAuth();
 
@@ -1255,14 +1260,36 @@ export const AdminView: React.FC = () => {
             }}>
               <Sliders size={28} />
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.35rem' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
                 <span className="gradient-badge">
-                  <Sparkles size={13} /> لوحة تحكم المسؤول (Live Admin Hub)
+                  <Sparkles size={13} /> {isSuperAdmin ? 'لوحة تحكم المدير العام (SuperAdmin)' : 'لوحة تحكم المسؤول (Live Admin Hub)'}
                 </span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   المسؤول: {currentUser?.name}
                 </span>
+                {onNavigateView && (
+                  <div style={{ display: 'inline-flex', gap: '0.5rem', marginRight: 'auto' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                      onClick={() => onNavigateView('view-student-dashboard')}
+                      title="الانتقال للوحة تحليلات الطالب"
+                    >
+                      <LayoutDashboard size={14} color="var(--primary-light)" /> معاينة لوحة الطالب
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                      onClick={() => onNavigateView('view-courses')}
+                      title="تصفح الكورسات والمحاضرات"
+                    >
+                      <BookOpen size={14} color="#10B981" /> تصفح الكورسات
+                    </button>
+                  </div>
+                )}
               </div>
               <h1 style={{ fontSize: '1.85rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
                 إدارة المنظومة التعليمية وقاعدة البيانات الحية

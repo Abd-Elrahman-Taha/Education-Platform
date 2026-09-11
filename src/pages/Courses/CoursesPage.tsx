@@ -20,7 +20,12 @@ interface CoursesPageProps {
 
 export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   const { currentUser } = useAuth();
-  const isAdminOrTeacher = currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.role === 'teacher';
+  const isSuperAdmin =
+    currentUser?.role === 'superadmin' ||
+    currentUser?.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin';
+  const isAdminOrTeacher = isSuperAdmin || currentUser?.role === 'admin' || currentUser?.role === 'teacher';
   const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
   const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || 'third_secondary';
 

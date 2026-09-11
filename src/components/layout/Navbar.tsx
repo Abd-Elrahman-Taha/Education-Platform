@@ -47,13 +47,27 @@ const teacherNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
+  { id: 'view-student-dashboard', label: 'لوحة الطالب', icon: LayoutDashboard },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
   { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
+  { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
   { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
   { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
+];
+
+const superAdminNav: NavItem[] = [
+  { id: 'view-landing',           label: 'الرئيسية', icon: Home },
+  { id: 'view-admin',             label: 'لوحة الإدارة والتحكم', icon: Sliders },
+  { id: 'view-student-dashboard', label: 'لوحة تحليلات الطالب', icon: LayoutDashboard },
+  { id: 'view-courses',           label: 'الكورسات والمحتوى', icon: BookOpen },
+  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
+  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
+  { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
+  { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
 ];
 
 const guestNav: NavItem[] = [
@@ -68,7 +82,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
   student: studentNav,
   parent:  guestNav,
   admin:   adminNav,
-  superadmin: adminNav,
+  superadmin: superAdminNav,
   teacher: teacherNav,
 };
 
@@ -147,8 +161,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     return 'طالب';
   })();
 
+  const isSuperAdmin =
+    currentUser?.role === 'superadmin' ||
+    currentUser?.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin';
+
   const navItems = isAuthenticated && currentUser
-    ? ROLE_NAV[currentUser.role] || guestNav
+    ? (isSuperAdmin ? superAdminNav : (ROLE_NAV[currentUser.role] || guestNav))
     : guestNav;
 
   const handleNavClick = (view: AppView) => {
@@ -212,6 +232,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {isAuthenticated && currentUser ? (
             <>
+              <button
+                className="icon-btn desktop-only-btn"
+                onClick={() => handleNavClick('view-profile')}
+                title="الملف الشخصي وإعدادات الحساب"
+              >
+                <User size={18} />
+              </button>
               <div
                 className="nav-user-badge desktop-only-user"
                 onClick={() => { setTempName(isPlaceholderName(cleanDisplayName) ? '' : cleanDisplayName); setIsEditingName(true); }}
@@ -306,9 +333,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div className="mobile-actions-row">
             {isAuthenticated && currentUser ? (
-              <button className="btn btn-danger" style={{ width: '100%' }} onClick={() => { logout(); setMobileMenuOpen(false); }}>
-                <LogOut size={16} /> تسجيل الخروج
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%' }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => handleNavClick('view-profile')}
+                >
+                  <User size={16} /> الملف الشخصي والحساب
+                </button>
+                <button className="btn btn-danger" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { logout(); setMobileMenuOpen(false); }}>
+                  <LogOut size={16} /> تسجيل الخروج
+                </button>
+              </div>
             ) : (
               <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
                 <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { onOpenAuthModal(); setMobileMenuOpen(false); }}>

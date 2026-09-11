@@ -63,7 +63,13 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
     if (activeLessonId) setSelectedLessonId(activeLessonId);
   }, [activeLessonId]);
 
-  const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.role === 'teacher';
+  const isSuperAdmin =
+    currentUser?.role === 'superadmin' ||
+    currentUser?.isSuperAdmin === true ||
+    (currentUser as any)?.Role === 'SuperAdmin' ||
+    (currentUser as any)?.Role === 'superadmin';
+
+  const isTeacherOrAdmin = isSuperAdmin || currentUser?.role === 'admin' || currentUser?.role === 'teacher';
 
   // Check if current user is authorized to consume protected content
   // Teacher/Admin: always authorized. Authenticated Student with access: authorized. Guest: preview only.
@@ -99,7 +105,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                   academicYear: selectedAcademicYear,
                   videoUrl: l.VideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
                   duration: l.DurationMinutes ? `${l.DurationMinutes} دقيقة` : (l.DurationSeconds ? `${Math.round(l.DurationSeconds / 60)} دقيقة` : '45 دقيقة'),
-                  isLocked: l.IsLocked ?? false,
+                  isLocked: isSuperAdmin ? false : (l.IsLocked ?? false),
                   userExamPassed: false,
                   pdfNotes: {
                     title: `ملزمة ${l.Title}.pdf`,
