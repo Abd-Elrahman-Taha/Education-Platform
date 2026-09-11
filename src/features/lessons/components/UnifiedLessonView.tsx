@@ -13,7 +13,8 @@ import {
   Lock, Unlock, Play, Pause, ShieldCheck, Download, FileText,
   CheckCircle2, Star, Send, Award, Clock, ChevronLeft, ChevronRight,
   ClipboardList, AlertTriangle, PlayCircle, HelpCircle, Check,
-  Layers, Video, LogIn, UserPlus, Sparkles, BookOpen, GraduationCap
+  Layers, Video, LogIn, UserPlus, Sparkles, BookOpen, GraduationCap,
+  Target, FileQuestion, AlertCircle
 } from 'lucide-react';
 
 interface Props {
@@ -160,7 +161,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
       if (res.data.unlockedNextLesson) {
-        showToast(`🎉 مبروك! اجتزت الاختبار بنسبة ${res.data.examRecord.percentage}% وتـم فـتـح الـدرس الـقـادم تلقائياً!`, 'success');
+        showToast(`مبروك! اجتزت الاختبار بنسبة ${res.data.examRecord.percentage}% وتـم فـتـح الـدرس الـقـادم تلقائياً!`, 'success');
       } else if (res.data.examRecord.isPassed) {
         showToast(`أحسنت! اجتزت الاختبار بنسبة ${res.data.examRecord.percentage}%`, 'success');
       } else {
@@ -449,7 +450,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                       key={l.id}
                       onClick={() => {
                         if (isLocked) {
-                          showToast('🔒 هذا الدرس مغلق! يجب عليك تجاوُز امتحان الدرس السابق أولاً لفتحه.', 'warning');
+                          showToast('هذا الدرس مغلق! يجب عليك تجاوُز امتحان الدرس السابق أولاً لفتحه.', 'warning');
                         } else {
                           setSelectedLessonId(l.id);
                           setExamStarted(false);
@@ -800,9 +801,9 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                           {lesson.exam.title}
                         </h3>
                         <div style={{ display: 'flex', gap: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                          <span>⏱ المدة المقررة: {lesson.exam.durationMinutes} دقيقة</span>
-                          <span>🎯 نسبة النجاح: {lesson.exam.passingScorePercentage}%</span>
-                          <span>📝 عدد الأسئلة: {lesson.exam.questions?.length || 0} أسئلة</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Clock size={14} /> المدة المقررة: {lesson.exam.durationMinutes} دقيقة</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Target size={14} /> نسبة النجاح: {lesson.exam.passingScorePercentage}%</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><FileQuestion size={14} /> عدد الأسئلة: {lesson.exam.questions?.length || 0} أسئلة</span>
                         </div>
                       </div>
 
@@ -848,8 +849,8 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                           <span>درجة النجاح: {lesson.exam.passingScorePercentage}%</span>
                           <span>عدد الأسئلة: {lesson.exam.questions.length}</span>
                         </div>
-                        <p style={{ fontSize: '0.82rem', color: '#F59E0B', marginTop: '0.5rem', margin: 0 }}>
-                          ⚠️ النجاح بنسبة 60% في هذا الامتحان يفتح لك الدرس التالي مباشرة.
+                        <p style={{ fontSize: '0.82rem', color: '#F59E0B', marginTop: '0.5rem', margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <AlertCircle size={14} /> النجاح بنسبة 60% في هذا الامتحان يفتح لك الدرس التالي مباشرة.
                         </p>
                       </div>
 
@@ -869,8 +870,8 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                     /* Active Exam Mode inside Lesson */
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
-                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary-light)' }}>
-                          ⏱ المتبقي: {Math.floor(examTimer / 60)}:{String(examTimer % 60).padStart(2, '0')}
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary-light)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Clock size={16} /> المتبقي: {Math.floor(examTimer / 60)}:{String(examTimer % 60).padStart(2, '0')}
                         </span>
                         <button
                           className="btn btn-primary"

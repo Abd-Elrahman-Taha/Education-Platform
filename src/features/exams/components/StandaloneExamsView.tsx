@@ -10,7 +10,8 @@ import { studentsApi } from '../../../api/students.api';
 import {
   Award, CheckCircle, XCircle, Clock, Calendar, BarChart2, Eye, X,
   Sigma, Check, HelpCircle, Users, TrendingUp, AlertTriangle, ArrowUp,
-  GraduationCap, BookOpen, Layers, Lock, LogIn, UserPlus, PlayCircle, ShieldCheck, Sparkles
+  GraduationCap, BookOpen, Layers, Lock, LogIn, UserPlus, PlayCircle, ShieldCheck, Sparkles,
+  Target, RotateCcw, FileQuestion, BarChart3, CheckCircle2
 } from 'lucide-react';
 
 interface StandaloneExamsViewProps {
@@ -163,17 +164,17 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                   </p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem', background: 'var(--bg-subtle)', padding: '0.85rem', borderRadius: '10px' }}>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      ⏱ المدة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.durationMinutes} دقيقة</strong>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Clock size={14} color="var(--primary-light)" /> المدة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.durationMinutes} دقيقة</strong>
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      🎯 درجة النجاح: <strong style={{ color: '#10B981' }}>{item.exam.passingScorePercentage}%</strong>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Target size={14} color="#10B981" /> درجة النجاح: <strong style={{ color: '#10B981' }}>{item.exam.passingScorePercentage}%</strong>
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      📝 عدد الأسئلة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.questions?.length || 5} أسئلة</strong>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <FileQuestion size={14} color="var(--secondary-light)" /> عدد الأسئلة: <strong style={{ color: 'var(--text-bright)' }}>{item.exam.questions?.length || 5} أسئلة</strong>
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      📊 النظام: <strong style={{ color: 'var(--primary-light)' }}>بابل شيت</strong>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <BarChart3 size={14} color="var(--primary-light)" /> النظام: <strong style={{ color: 'var(--primary-light)' }}>بابل شيت</strong>
                     </div>
                   </div>
                 </div>
@@ -457,8 +458,8 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                         متاح للتقديم الآن
                       </span>
                       {exam.IsGated && (
-                        <span style={{ fontSize: '0.72rem', color: '#F59E0B', fontWeight: 600 }}>
-                          مشروط 🔒
+                        <span style={{ fontSize: '0.72rem', color: '#F59E0B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          مشروط <Lock size={11} />
                         </span>
                       )}
                     </div>
@@ -472,9 +473,9 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                         <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {courseTitle}
                       </div>
                       <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                        <span>⏱ المدة: {exam.DurationMinutes} دقيقة</span>
-                        <span>🎯 النجاح: {exam.PassingScore}</span>
-                        <span>🔄 المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> المدة: {exam.DurationMinutes} دقيقة</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Target size={13} /> النجاح: {exam.PassingScore}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><RotateCcw size={13} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
                       </div>
                     </div>
                   </div>
@@ -676,7 +677,13 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
               </div>
               <div>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>الحالة:</span>
-                <strong style={{ display: 'block', fontSize: '0.9rem', color: selectedExamDetail.isPassed ? '#10B981' : '#E11D48' }}>{selectedExamDetail.isPassed ? 'ناجح ✅' : 'راسب ❌'}</strong>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.9rem', color: selectedExamDetail.isPassed ? '#10B981' : '#E11D48' }}>
+                  {selectedExamDetail.isPassed ? (
+                    <><CheckCircle2 size={15} color="#10B981" /> ناجح</>
+                  ) : (
+                    <><XCircle size={15} color="#E11D48" /> راسب</>
+                  )}
+                </strong>
               </div>
             </div>
 
@@ -692,16 +699,20 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                       س{dt.questionId}: {dt.questionText}
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                      <span style={{ color: dt.isCorrect ? '#10B981' : '#E11D48' }}>
-                        إجابتك: ({dt.studentAnswer || 'لم يتم الإجابة'}) {dt.isCorrect ? '✅ صحيح' : '❌ خطأ'}
+                      <span style={{ color: dt.isCorrect ? '#10B981' : '#E11D48', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                        إجابتك: ({dt.studentAnswer || 'لم يتم الإجابة'}) {dt.isCorrect ? (
+                          <><CheckCircle2 size={13} /> صحيح</>
+                        ) : (
+                          <><XCircle size={13} /> خطأ</>
+                        )}
                       </span>
                       <span style={{ color: '#10B981' }}>
                         الإجابة الصحيحة: ({dt.correctAnswer})
                       </span>
                     </div>
                     {dt.explanation && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--bg-subtle-hover)', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-                        💡 الشرح: {dt.explanation}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--bg-subtle-hover)', padding: '0.5rem 0.75rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <HelpCircle size={14} color="#F59E0B" /> الشرح: {dt.explanation}
                       </div>
                     )}
                   </div>

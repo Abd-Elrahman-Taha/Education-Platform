@@ -179,8 +179,8 @@ export const StandaloneAIView: React.FC<Props> = ({ onOpenAuthModal }) => {
       {/* Quick Prompts */}
       {messages.length === 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
-          <p style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            🚀 ابدأ بسؤال سريع:
+          <p style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Sparkles size={16} color="var(--primary-light)" /> ابدأ بسؤال سريع:
           </p>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
             {QUICK_PROMPTS.map((qp) => (

@@ -11,7 +11,8 @@ import {
   Key,
   MessageCircle,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  Star
 } from 'lucide-react';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { paymentApi } from '../../api/payment.api';
@@ -64,7 +65,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
     setIsRedeeming(true);
     try {
       const res = await paymentApi.redeemScratchCard({ code: cardCode.trim() });
-      showToast(`تم شحن ${res.creditedAmount} ج.م بنجاح! الرصيد الجديد: ${res.newWalletBalance || res.creditedAmount} ج.م 🎉`, 'success');
+      showToast(`تم شحن ${res.creditedAmount} ج.م بنجاح! الرصيد الجديد: ${res.newWalletBalance || res.creditedAmount} ج.م`, 'success');
 
       if (onSubscribedSuccess) {
         onSubscribedSuccess();
@@ -166,9 +167,12 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                 padding: '0.15rem 0.65rem',
                 borderRadius: '9999px',
                 whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
               }}
             >
-              ★ الباقة الشاملة الموصى بها
+              <Star size={11} fill="currentColor" /> الباقة الشاملة الموصى بها
             </div>
             <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.5rem 0 0.35rem' }}>
               الباقة الكاملة

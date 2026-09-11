@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { messagesApi } from '../api/messagesApi';
-import { MessageSquare, Send, Paperclip, X, CheckCircle, Image as ImageIcon, User } from 'lucide-react';
+import { MessageSquare, Send, Paperclip, X, CheckCircle, Image as ImageIcon, User, Clock } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 
 interface Props {
@@ -156,8 +156,8 @@ export const AskTeacherSection: React.FC<Props> = ({ lessonId, lessonTitle }) =>
                     </p>
                   </div>
                 ) : (
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: '#F59E0B', fontStyle: 'italic' }}>
-                    ⏳ قيد المراجعة بواسطة المعلم...
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: '#F59E0B', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Clock size={13} /> قيد المراجعة بواسطة المعلم...
                   </div>
                 )}
               </div>

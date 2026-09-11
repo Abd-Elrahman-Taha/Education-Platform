@@ -420,7 +420,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
                   <div>
                     <span className="gradient-badge" style={{ fontSize: '0.75rem', marginBottom: '0.35rem' }}>لوحة تحليلات الطالب الشخصية</span>
-                    <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>مرحباً بك، أحمد طالب 👋</h3>
+                    <h3 style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>مرحباً بك، أحمد طالب</h3>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', padding: '0.4rem 0.85rem', borderRadius: 'var(--radius-md)', color: '#F59E0B', fontWeight: 800 }}>
                     <Flame size={18} fill="#F59E0B" /> 7 أيام متتالية

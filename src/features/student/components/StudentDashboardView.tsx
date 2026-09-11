@@ -83,7 +83,7 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
             </span>
           </div>
           <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
-            مرحباً بك في لوحة تحليلاتك 🎓
+            مرحباً بك في لوحة تحليلاتك
           </h1>
           <p style={{ color: 'var(--text-muted)', marginTop: '0.35rem', fontSize: '0.95rem' }}>
             تابع تقدمك في الكورسات المسجل بها والامتحانات الدورية ومؤشرات أدائك الشاملة.
@@ -243,8 +243,8 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
         <div className="glass-card" style={{ padding: '1.75rem 2rem', marginBottom: '2.5rem', borderLeft: '5px solid var(--primary-light)', background: 'var(--bg-glass-card)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
             <div style={{ flex: 1, minWidth: '280px' }}>
-              <span style={{ color: 'var(--primary-light)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                ▶ متابعة التعلم — أخر درس متبقي
+              <span style={{ color: 'var(--primary-light)', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <PlayCircle size={14} /> متابعة التعلم — أخر درس متبقي
               </span>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0.35rem 0' }}>
                 {dash.continueLearningLesson.title}
@@ -313,7 +313,7 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
               fontWeight: 600,
             }}
           >
-            <Sparkles size={13} color="var(--accent)" /> شحن رصيد كارت السنتر ⚡
+            <Sparkles size={13} color="var(--accent)" /> شحن رصيد كارت السنتر
           </button>
         </div>
 
@@ -404,13 +404,13 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
             <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>سلسلة التعلم النشطة</span>
             <Flame size={20} color="#F59E0B" fill="#F59E0B" />
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#F59E0B' }}>{dash.currentLearningStreak} أيام 🔥</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#F59E0B' }}>{dash.currentLearningStreak} أيام</div>
         </div>
       </div>
 
       {/* ── CHARTS SECTION ─────────────────────────────────── */}
-      <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
-        📊 الرسوم البيانية والتحليلات البصرية
+      <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <BarChart3 size={20} color="var(--primary-light)" /> الرسوم البيانية والتحليلات البصرية
       </h2>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem' }}>

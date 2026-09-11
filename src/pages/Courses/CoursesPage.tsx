@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, BookOpen, ArrowLeft, Filter, Sparkles, GraduationCap, Lock, CheckCircle2, ShieldCheck, CreditCard } from 'lucide-react';
+import { Search, BookOpen, Book, ArrowLeft, Filter, Sparkles, GraduationCap, Lock, CheckCircle2, ShieldCheck, CreditCard } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCourses } from '../../hooks/useCourses';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -58,10 +58,10 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     refetch,
   } = useCourses({ limit: 12, sort: '-createdAt' });
 
-  const yearsList: { key: AcademicYear; title: string; subtitle: string; icon: string }[] = [
-    { key: 'first_secondary', title: 'الصف الأول الثانوي', subtitle: 'الجبر وحساب المثلثات والهندسة المستوية', icon: '📚' },
-    { key: 'second_secondary', title: 'الصف الثاني الثانوي', subtitle: 'الدوال الحقيقية وتأسيس التفاضل والتكامل', icon: '📖' },
-    { key: 'third_secondary', title: 'الصف الثالث الثانوي', subtitle: 'التفاضل والتكامل والهندسة الفراغية التخصصية', icon: '🎓' },
+  const yearsList: { key: AcademicYear; title: string; subtitle: string; icon: React.ElementType }[] = [
+    { key: 'first_secondary', title: 'الصف الأول الثانوي', subtitle: 'الجبر وحساب المثلثات والهندسة المستوية', icon: BookOpen },
+    { key: 'second_secondary', title: 'الصف الثاني الثانوي', subtitle: 'الدوال الحقيقية وتأسيس التفاضل والتكامل', icon: Book },
+    { key: 'third_secondary', title: 'الصف الثالث الثانوي', subtitle: 'التفاضل والتكامل والهندسة الفراغية التخصصية', icon: GraduationCap },
   ];
 
   const handleYearClick = (yearKey: AcademicYear) => {
@@ -141,7 +141,9 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
             >
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '2.2rem' }}>{yr.icon}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(8, 145, 178, 0.15)', color: 'var(--primary-light)' }}>
+                    <yr.icon size={26} />
+                  </span>
                   {isAdminOrTeacher ? (
                     <span className="status-badge status-badge--active" style={{ fontSize: '0.75rem', gap: '0.3rem' }}>
                       <ShieldCheck size={13} /> صلاحية إدارة كاملة
@@ -374,7 +376,11 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
                         borderRadius: 'var(--radius-sm)',
                       }}
                     >
-                      {isEnrolledInCourse ? '✓ مشترك' : (course.Price > 0 ? `${course.Price} ج.م` : 'مجاني')}
+                      {isEnrolledInCourse ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <CheckCircle2 size={12} /> مشترك
+                        </span>
+                      ) : (course.Price > 0 ? `${course.Price} ج.م` : 'مجاني')}
                     </span>
                   </div>
 

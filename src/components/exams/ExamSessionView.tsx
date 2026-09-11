@@ -231,8 +231,8 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
                     className="input-field"
                     style={{ width: '100%', resize: 'vertical', lineHeight: 1.6 }}
                   />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    📝 سؤال مقالي يتطلب إجابة كتابية ويتم تقييمه يدوياً من قِبل المعلم/المشرف.
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <FileText size={13} color="var(--primary-light)" /> سؤال مقالي يتطلب إجابة كتابية ويتم تقييمه يدوياً من قِبل المعلم/المشرف.
                   </span>
                 </div>
               ) : (

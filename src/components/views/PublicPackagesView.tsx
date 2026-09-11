@@ -117,8 +117,9 @@ export const PublicPackagesView: React.FC<Props> = ({ onOpenAuthModal, initialYe
                     color: '#fff', fontSize: '0.75rem', fontWeight: 800,
                     padding: '0.25rem 1rem', borderRadius: '9999px',
                     whiteSpace: 'nowrap',
+                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem'
                   }}>
-                    ⭐ كورس مميز
+                    <Star size={12} fill="currentColor" /> كورس مميز
                   </div>
                 )}
 

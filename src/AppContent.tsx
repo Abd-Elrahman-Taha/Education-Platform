@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FileEdit, FileText, Radio } from 'lucide-react';
 import { AppView, UserRole } from './types';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
@@ -447,8 +448,8 @@ export const AppContent: React.FC = () => {
           >
             <div className="container fade-in-up" style={{ padding: '5rem 1.5rem', textAlign: 'center' }}>
               <div className="glass-card" style={{ padding: '3rem', maxWidth: '600px', margin: '0 auto' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
-                  {currentView === 'view-homework' ? '📝' : currentView === 'view-pdfs' ? '📄' : '📡'}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', color: 'var(--primary-light)' }}>
+                  {currentView === 'view-homework' ? <FileEdit size={48} /> : currentView === 'view-pdfs' ? <FileText size={48} /> : <Radio size={48} />}
                 </div>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.75rem' }}>
                   {currentView === 'view-homework' ? 'الواجبات المنزلية' :

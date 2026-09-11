@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Lock, Play, ArrowRight, ShieldCheck, Award, Clock, AlertCircle } from 'lucide-react';
+import { BookOpen, Lock, Play, ArrowRight, ShieldCheck, Award, Clock, AlertCircle, CheckCircle2, Target, RotateCcw, Star } from 'lucide-react';
 import { useCourseDetails } from '../../hooks/useCourseDetails';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/common/ErrorState';
@@ -98,8 +98,12 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.6rem' }}>
-            <span className={`status-badge ${isEnrolled ? 'status-badge--active' : 'status-badge--blocked'}`}>
-              {isEnrolled ? '✓ أنت مشترك في هذا الكورس' : 'غير مشترك'}
+            <span className={`status-badge ${isEnrolled ? 'status-badge--active' : 'status-badge--blocked'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+              {isEnrolled ? (
+                <>
+                  <CheckCircle2 size={13} /> أنت مشترك في هذا الكورس
+                </>
+              ) : 'غير مشترك'}
             </span>
           </div>
 
@@ -239,8 +243,8 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                           </span>
                         )}
                         {lesson.PrerequisiteExamId && (
-                          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                            ★ يحتوي على اختبار تأهيلي
+                          <span style={{ color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <Star size={13} fill="currentColor" /> يحتوي على اختبار تأهيلي
                           </span>
                         )}
                       </div>
@@ -324,8 +328,8 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                       اختبار متاح
                     </span>
                     {exam.IsGated && (
-                      <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: 600 }}>
-                        مشروط 🔒
+                      <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        مشروط <Lock size={11} />
                       </span>
                     )}
                   </div>
@@ -335,9 +339,9 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
                   </h3>
 
                   <div style={{ display: 'flex', gap: '0.85rem', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                    <span>⏱ {exam.DurationMinutes} دقيقة</span>
-                    <span>🎯 درجة النجاح: {exam.PassingScore}</span>
-                    <span>🔄 المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> {exam.DurationMinutes} دقيقة</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Target size={13} /> درجة النجاح: {exam.PassingScore}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><RotateCcw size={13} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
                   </div>
                 </div>
 

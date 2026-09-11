@@ -930,7 +930,7 @@ export const mockDB = {
 
         this.addNotification({
           userId: 'u_student_demo',
-          title: 'فتح درس جديد! 🔓',
+          title: 'فتح درس جديد!',
           message: `تهانينا! بنجاحك في اختبار "${lesson.title}" تم فتح "${nextLesson.title}".`,
           type: 'lesson_unlock',
           link: nextLesson.id,
@@ -1070,7 +1070,7 @@ export const mockDB = {
 
     this.addNotification({
       userId: msg.studentId,
-      title: 'رد جديد من المعلم 👨‍🏫',
+      title: 'رد جديد من المعلم',
       message: `قام المعلم بالرد على سؤالك في "${msg.lessonTitle}": "${replyText.slice(0, 40)}..."`,
       type: 'teacher_reply',
       link: msg.lessonId,

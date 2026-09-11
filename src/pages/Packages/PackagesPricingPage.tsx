@@ -86,7 +86,7 @@ export const PackagesPricingPage: React.FC<PackagesPricingPageProps> = ({
     {
       id: 'pkg-semester',
       title: 'باقة الترم الشاملة',
-      badge: 'الأكثر طلباً وتوفيراً 🔥',
+      badge: 'الأكثر طلباً وتوفيراً',
       price: 450,
       originalPrice: 750,
       period: 'للترم كاملاً (توفير 40%)',
@@ -104,7 +104,7 @@ export const PackagesPricingPage: React.FC<PackagesPricingPageProps> = ({
     {
       id: 'pkg-vip-center',
       title: 'باقة السنتر VIP + أونلاين',
-      badge: 'النخبة والأوائل 👑',
+      badge: 'النخبة والأوائل',
       price: 650,
       originalPrice: 1000,
       period: 'للترم كاملاً',
@@ -209,7 +209,9 @@ export const PackagesPricingPage: React.FC<PackagesPricingPageProps> = ({
                   boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
                 }}
               >
-                {pkg.badge}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Sparkles size={12} /> {pkg.badge}
+                </span>
               </div>
             )}
 

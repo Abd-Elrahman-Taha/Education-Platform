@@ -94,8 +94,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
         )}
 
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-          🔒 يتم إنشاء مفتاح أمان فريد (Idempotency Key) لكل عملية دفع لمنع التكرار وحماية بياناتك المالية. سيتم توجيهك لبوابة الدفع الآمنة.
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.5, display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+          <ShieldCheck size={16} color="var(--primary-light)" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <span>يتم إنشاء مفتاح أمان فريد (Idempotency Key) لكل عملية دفع لمنع التكرار وحماية بياناتك المالية. سيتم توجيهك لبوابة الدفع الآمنة.</span>
         </div>
 
         <button

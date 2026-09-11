@@ -8,7 +8,7 @@ import {
   BarChart2, Clock, Phone, Copy, Key, Layers,
   Edit3, Zap, ArrowUp, ArrowDown, ListOrdered,
   FileText, CheckSquare, Eye, AlertTriangle, AlertCircle,
-  HelpCircle, RefreshCw
+  HelpCircle, RefreshCw, Crown, Lock, Shuffle, Target, RotateCcw, ShieldCheck, Lightbulb
 } from 'lucide-react';
 import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useToast } from '../../context/ToastContext';
@@ -1397,7 +1397,9 @@ export const AdminView: React.FC = () => {
               <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary-light)', margin: '0.35rem 0' }}>
                 {realStudents.length}
               </h3>
-              <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>✓ متصل بقاعدة بيانات MongoDB</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                <CheckCircle2 size={12} /> متصل بقاعدة بيانات MongoDB
+              </span>
             </div>
 
             <div className="glass-card" style={{ padding: '1.5rem' }}>
@@ -1426,8 +1428,8 @@ export const AdminView: React.FC = () => {
 
             <div className="glass-card" style={{ padding: '1.5rem' }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>حالة المنصة والنظام</span>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--success)', margin: '0.5rem 0' }}>
-                متصل وجاهز ⚡
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--success)', margin: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Zap size={18} color="var(--success)" fill="var(--success)" /> متصل وجاهز
               </h3>
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>المنظومة تعمل بكفاءة</span>
             </div>
@@ -1563,7 +1565,11 @@ export const AdminView: React.FC = () => {
                                 border: `1px solid ${isAdmin ? 'rgba(245, 158, 11, 0.3)' : 'rgba(8, 145, 178, 0.3)'}`,
                               }}
                             >
-                              {isAdmin ? 'مدير 👑' : 'طالب'}
+                              {isAdmin ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  <Crown size={12} color="#F59E0B" /> مدير
+                                </span>
+                              ) : 'طالب'}
                             </span>
                             {!isAdmin ? (
                               <button
@@ -2074,13 +2080,13 @@ export const AdminView: React.FC = () => {
                         </span>
                         <div style={{ display: 'flex', gap: '0.35rem' }}>
                           {exam.IsGated && (
-                            <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', fontWeight: 700 }}>
-                              مشروط 🔒
+                            <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(245,158,11,0.15)', color: '#F59E0B', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                              مشروط <Lock size={10} />
                             </span>
                           )}
                           {exam.IsRandomized && (
-                            <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(139,92,246,0.15)', color: '#8B5CF6', fontWeight: 700 }}>
-                              عشوائي 🔀
+                            <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(139,92,246,0.15)', color: '#8B5CF6', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                              عشوائي <Shuffle size={10} />
                             </span>
                           )}
                         </div>
@@ -2095,9 +2101,9 @@ export const AdminView: React.FC = () => {
                           <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {courseTitle}
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                          <span>⏱ المدة: {exam.DurationMinutes} دقيقة</span>
-                          <span>🎯 درجة النجاح: {exam.PassingScore}</span>
-                          <span>🔄 المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={12} /> المدة: {exam.DurationMinutes} دقيقة</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Target size={12} /> درجة النجاح: {exam.PassingScore}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><RotateCcw size={12} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
                         </div>
                       </div>
                     </div>
@@ -2275,7 +2281,11 @@ export const AdminView: React.FC = () => {
               disabled={isGeneratingCards}
               style={{ width: '100%', padding: '0.75rem', fontSize: '0.92rem' }}
             >
-              {isGeneratingCards ? 'جاري إنشاء وتفعيل الكروت...' : '⚡ توليد دفعة الكروت الآن'}
+              {isGeneratingCards ? 'جاري إنشاء وتفعيل الكروت...' : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Zap size={16} /> توليد دفعة الكروت الآن
+                </span>
+              )}
             </button>
           </form>
 
@@ -2354,7 +2364,9 @@ export const AdminView: React.FC = () => {
             </div>
           ) : realAdmins.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🛡️</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem', color: 'var(--primary-light)' }}>
+                <ShieldCheck size={40} />
+              </div>
               <p style={{ marginBottom: '1rem' }}>لا يوجد مديرون مسجلون في القائمة حالياً.</p>
               <button
                 type="button"
@@ -2386,9 +2398,9 @@ export const AdminView: React.FC = () => {
                         <div style={{
                           width: '44px', height: '44px', borderRadius: '50%',
                           background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem'
+                          display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                          👑
+                          <Crown size={22} color="#F59E0B" />
                         </div>
                         <div>
                           <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
@@ -2984,7 +2996,7 @@ export const AdminView: React.FC = () => {
                   onChange={e => setEditStudentForm({ ...editStudentForm, subscriptionAction: e.target.value })}
                 >
                   <option value="none">بدون تعديل على اشتراكات الكورسات الحالية</option>
-                  <option value="ALL">⭐ تفعيل اشتراك شامل (منح كافة الكورسات المتاحة)</option>
+                  <option value="ALL">تفعيل اشتراك شامل (منح كافة الكورسات المتاحة)</option>
                   {realCourses.map(c => (
                     <option key={c._id} value={c._id}>
                       منح حق الوصول لكورس: {c.Title}
@@ -3067,7 +3079,7 @@ export const AdminView: React.FC = () => {
                   onChange={e => setSelectedEnrollCourseId(e.target.value)}
                   required
                 >
-                  <option value="ALL_COURSES">⭐ اشتراك شامل لكافة الكورسات ({realCourses.length} كورس)</option>
+                  <option value="ALL_COURSES">اشتراك شامل لكافة الكورسات ({realCourses.length} كورس)</option>
                   {realCourses.map(c => (
                     <option key={c._id} value={c._id}>
                       {c.Title} ({c.Price} ج.م)
@@ -3076,8 +3088,8 @@ export const AdminView: React.FC = () => {
                 </select>
               </div>
 
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
-                💡 سيتم تسجيل الطالب فورياً في الكورس بصلاحية نشطة (Active) وطريقة استحواذ إدارية (AdminGift).
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Lightbulb size={15} color="#F59E0B" /> سيتم تسجيل الطالب فورياً في الكورس بصلاحية نشطة (Active) وطريقة استحواذ إدارية (AdminGift).
               </p>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
@@ -3171,7 +3183,11 @@ export const AdminView: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                {isPromoting ? 'جاري الترقية...' : 'تأكيد الترقية لمدير 👑'}
+                {isPromoting ? 'جاري الترقية...' : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Crown size={15} /> تأكيد الترقية لمدير
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -3220,7 +3236,7 @@ export const AdminView: React.FC = () => {
                 <option value="" disabled>-- اختر الحساب المطلوب ترقيته --</option>
                 {realStudents.map(s => (
                   <option key={s._id} value={s._id}>
-                    {s.FullName} ({s.Phone}) {s.Role === 'Admin' ? '👑 مسؤول' : ''}
+                    {s.FullName} ({s.Phone}) {s.Role === 'Admin' ? '[مسؤول]' : ''}
                   </option>
                 ))}
               </select>
@@ -3745,7 +3761,9 @@ export const AdminView: React.FC = () => {
                         checked={questionForm.correctAnswer === 'true'}
                         onChange={() => setQuestionForm({ ...questionForm, correctAnswer: 'true' })}
                       />
-                      <span style={{ color: '#10B981', fontWeight: 700 }}>صحيح (True) ✓</span>
+                      <span style={{ color: '#10B981', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <CheckCircle2 size={13} /> صحيح (True)
+                      </span>
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
                       <input
@@ -3755,7 +3773,9 @@ export const AdminView: React.FC = () => {
                         checked={questionForm.correctAnswer === 'false'}
                         onChange={() => setQuestionForm({ ...questionForm, correctAnswer: 'false' })}
                       />
-                      <span style={{ color: 'var(--danger)', fontWeight: 700 }}>خطأ (False) ✗</span>
+                      <span style={{ color: 'var(--danger)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <XCircle size={13} /> خطأ (False)
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -3924,13 +3944,21 @@ export const AdminView: React.FC = () => {
                                 ? '#10B981'
                                 : 'var(--danger)',
                             }}>
-                              {isPendingReview
-                                ? 'بانتظار تصحيح المقالي ⏳'
-                                : attempt.status === 'Passed'
-                                ? 'ناجح ✓'
-                                : attempt.status === 'Failed'
-                                ? 'راسب ✗'
-                                : attempt.status || 'مكتمل'}
+                              {isPendingReview ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  <Clock size={11} /> بانتظار تصحيح المقالي
+                                </span>
+                              ) : attempt.status === 'Passed' ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  <CheckCircle2 size={11} /> ناجح
+                                </span>
+                              ) : attempt.status === 'Failed' ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  <XCircle size={11} /> راسب
+                                </span>
+                              ) : (
+                                attempt.status || 'مكتمل'
+                              )}
                             </span>
                           </td>
                           <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>

@@ -10,7 +10,9 @@ import {
   Clock,
   AlertCircle,
   QrCode,
-  Sparkles
+  Sparkles,
+  CircleDot,
+  ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -109,7 +111,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
           </div>
 
           <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-bright)', marginBottom: '0.6rem' }}>
-            تم سداد الاشتراك وتفعيله بنجاح! 🎉
+            تم سداد الاشتراك وتفعيله بنجاح!
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '2rem' }}>
             تهانينا! تم تفعيل <strong>{selectedPackage.title}</strong> بنجاح. أصبحت جميع المحاضرات، الفيديوهات المشفرة، والامتحانات متاحة الآن في حسابك.
@@ -160,7 +162,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               gap: '0.5rem',
             }}
           >
-            الانتقال إلى الكورسات والمحاضرات الآن 🚀
+            الانتقال إلى الكورسات والمحاضرات الآن <ArrowLeft size={18} />
           </button>
         </div>
       </div>
@@ -268,7 +270,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               fontWeight: 800,
             }}
           >
-            🟡 فوري باي (Fawry)
+            <CircleDot size={16} color="#F59E0B" /> فوري باي (Fawry)
           </button>
 
           {/* Wallets */}
@@ -286,7 +288,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               fontWeight: 800,
             }}
           >
-            📱 محفظة ذكية (Vodafone Cash)
+            <Smartphone size={16} color="#EF4444" /> محفظة ذكية (Vodafone Cash)
           </button>
 
           {/* InstaPay */}
@@ -304,7 +306,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               fontWeight: 800,
             }}
           >
-            ⚡ إنستاباي (InstaPay)
+            <Zap size={16} color="#8B5CF6" /> إنستاباي (InstaPay)
           </button>
 
           {/* Cards / Meeza */}
@@ -322,7 +324,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               fontWeight: 800,
             }}
           >
-            💳 بطاقة بنكية / ميزة
+            <CreditCard size={16} color="#3B82F6" /> بطاقة بنكية / ميزة
           </button>
         </div>
       </div>
@@ -330,8 +332,10 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       {/* ── METHOD 1: FAWRY PAY ── */}
       {selectedMethod === 'fawry' && (
         <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
-            <span style={{ fontSize: '1.5rem' }}>🟡</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F59E0B' }}>
+              <CircleDot size={20} />
+            </div>
             <div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
                 الدفع عبر منافذ فوري (Fawry Pay)
@@ -402,7 +406,11 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 gap: '0.5rem',
               }}
             >
-              {isProcessing ? 'جاري التحقق من السداد والتفعيل...' : 'لقد قمت بالسداد - تأكيد الاشتراك الفوري ✓'}
+              {isProcessing ? 'جاري التحقق من السداد والتفعيل...' : (
+                <>
+                  <CheckCircle2 size={16} /> لقد قمت بالسداد - تأكيد الاشتراك الفوري
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -502,7 +510,11 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 marginTop: '0.5rem',
               }}
             >
-              {isProcessing ? 'جاري التحقق من التحويل...' : 'تأكيد التحويل وتفعيل الكورس فورياً ✓'}
+              {isProcessing ? 'جاري التحقق من التحويل...' : (
+                <>
+                  <CheckCircle2 size={16} /> تأكيد التحويل وتفعيل الكورس فورياً
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -579,7 +591,11 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 gap: '0.5rem',
               }}
             >
-              {isProcessing ? 'جاري التحقق والتفعيل...' : 'تم التحويل عبر إنستاباي - تفعيل الاشتراك ✓'}
+              {isProcessing ? 'جاري التحقق والتفعيل...' : (
+                <>
+                  <CheckCircle2 size={16} /> تم التحويل عبر إنستاباي - تفعيل الاشتراك
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -678,7 +694,11 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 marginTop: '0.5rem',
               }}
             >
-              {isProcessing ? 'جاري معالجة الدفع البنكي...' : `سداد ${selectedPackage.price} جنيه مصري وتفعيل الاشتراك ✓`}
+              {isProcessing ? 'جاري معالجة الدفع البنكي...' : (
+                <>
+                  <CheckCircle2 size={16} /> {`سداد ${selectedPackage.price} جنيه مصري وتفعيل الاشتراك`}
+                </>
+              )}
             </button>
           </form>
         </div>

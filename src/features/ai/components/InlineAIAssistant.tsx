@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { aiApi } from '../api/aiApi';
-import { Bot, Send, Trash2, Copy, RefreshCw, Sparkles, Check, Code, User } from 'lucide-react';
+import { Bot, Send, Trash2, Copy, RefreshCw, Sparkles, Check, Code, User, Lightbulb } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 
 interface Props {
@@ -132,9 +132,12 @@ export const InlineAIAssistant: React.FC<Props> = ({ lessonId, lessonTitle }) =>
               color: 'var(--primary-light)',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
             }}
           >
-            💡 {q}
+            <Lightbulb size={13} color="#F59E0B" /> {q}
           </button>
         ))}
       </div>
