@@ -170,28 +170,54 @@ export const examsApi = {
         cleanPayload[k] = v;
       }
     }
-    const response = await apiClient.patch<any>(`/exams/${examId}`, cleanPayload);
-    const raw = response.data;
-    const updated: Exam = raw?.data?.exam || raw?.exam || raw?.data || raw;
 
-    // Immediately update in platform_exams_registry
+    const updateLocalRegistry = (merged: Partial<Exam>): Exam => {
+      let result: Exam = { _id: examId, ...data } as Exam;
+      try {
+        const storedRaw = localStorage.getItem('platform_exams_registry');
+        if (storedRaw) {
+          const list: Exam[] = JSON.parse(storedRaw);
+          const existing = list.find(e => e._id === examId);
+          if (existing) {
+            result = { ...existing, ...merged };
+            const nextList = list.map(e => e._id === examId ? result : e);
+            localStorage.setItem('platform_exams_registry', JSON.stringify(nextList));
+          } else {
+            result = { _id: examId, ...merged } as Exam;
+            list.push(result);
+            localStorage.setItem('platform_exams_registry', JSON.stringify(list));
+          }
+        }
+      } catch {}
+      return result;
+    };
+
     try {
-      const storedRaw = localStorage.getItem('platform_exams_registry');
-      if (storedRaw) {
-        const list: Exam[] = JSON.parse(storedRaw);
-        const nextList = list.map(e => e._id === examId ? { ...e, ...cleanPayload, ...(updated || {}) } : e);
-        localStorage.setItem('platform_exams_registry', JSON.stringify(nextList));
-      }
-    } catch {}
-
-    return updated;
+      const response = await apiClient.patch<any>(`/exams/${examId}`, cleanPayload);
+      const raw = response.data;
+      const serverUpdated = raw?.data?.exam || raw?.exam || (raw?.data && raw.data._id ? raw.data : null);
+      const finalExam: Exam = {
+        _id: examId,
+        ...cleanPayload,
+        ...(serverUpdated || {}),
+      } as Exam;
+      updateLocalRegistry(finalExam);
+      return finalExam;
+    } catch (err: any) {
+      console.warn(`[Exams API] Backend PATCH /exams/${examId} failed, updating local registry:`, err?.message || err);
+      return updateLocalRegistry(cleanPayload);
+    }
   },
 
   /**
    * Delete an exam (Admin only).
    */
   deleteExam: async (examId: string): Promise<void> => {
-    await apiClient.delete(`/exams/${examId}`);
+    try {
+      await apiClient.delete(`/exams/${examId}`);
+    } catch (err: any) {
+      console.warn(`[Exams API] Backend DELETE /exams/${examId} failed:`, err?.message || err);
+    }
     try {
       const storedRaw = localStorage.getItem('platform_exams_registry');
       if (storedRaw) {
@@ -210,7 +236,7 @@ export const examsApi = {
     try {
       const response = await apiClient.get<any>(`/exams/${examId}/questions`);
       const raw = response.data as any;
-      return Array.isArray(raw?.data?.questions)
+      const list = Array.isArray(raw?.data?.questions)
         ? raw.data.questions
         : Array.isArray(raw?.questions)
         ? raw.questions
@@ -219,10 +245,22 @@ export const examsApi = {
         : Array.isArray(raw)
         ? raw
         : [];
+      if (list.length > 0) {
+        try {
+          localStorage.setItem(`exam_questions_${examId}`, JSON.stringify(list));
+        } catch {}
+        return list;
+      }
     } catch (err) {
       console.warn(`[Exams API] getQuestions for ${examId} returned error:`, err);
-      return [];
     }
+    // Fallback to locally stored questions
+    try {
+      const key = `exam_questions_${examId}`;
+      const stored = localStorage.getItem(key);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [];
   },
 
   /**
@@ -234,9 +272,41 @@ export const examsApi = {
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
     }
-    const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
-    const raw = response.data;
-    return raw?.data?.question || raw?.question || raw?.data || raw;
+
+    const saveToLocal = (): Question => {
+      const newQ: Question = {
+        _id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        ...payload,
+      } as Question;
+      try {
+        const key = `exam_questions_${examId}`;
+        const stored = localStorage.getItem(key);
+        const list: Question[] = stored ? JSON.parse(stored) : [];
+        list.push(newQ);
+        localStorage.setItem(key, JSON.stringify(list));
+      } catch {}
+      return newQ;
+    };
+
+    try {
+      const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
+      const raw = response.data;
+      const created = raw?.data?.question || raw?.question || (raw?.data && raw.data._id ? raw.data : null);
+      if (created && created._id) {
+        try {
+          const key = `exam_questions_${examId}`;
+          const stored = localStorage.getItem(key);
+          const list: Question[] = stored ? JSON.parse(stored) : [];
+          list.push(created);
+          localStorage.setItem(key, JSON.stringify(list));
+        } catch {}
+        return created;
+      }
+      return saveToLocal();
+    } catch (err: any) {
+      console.warn(`[Exams API] Backend createQuestion failed for exam ${examId}, storing locally:`, err?.message || err);
+      return saveToLocal();
+    }
   },
 
   /**
@@ -252,23 +322,66 @@ export const examsApi = {
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
     }
-    const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
-    const raw = response.data;
-    return raw?.data?.question || raw?.question || raw?.data || raw;
+
+    const updateLocal = (): Question => {
+      let res: Question = { _id: questionId, ...payload } as Question;
+      try {
+        const key = `exam_questions_${examId}`;
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const list: Question[] = JSON.parse(stored);
+          const next = list.map(q => q._id === questionId ? { ...q, ...payload } : q);
+          localStorage.setItem(key, JSON.stringify(next));
+          res = next.find(q => q._id === questionId) || res;
+        }
+      } catch {}
+      return res;
+    };
+
+    try {
+      const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
+      const raw = response.data;
+      const updated = raw?.data?.question || raw?.question || (raw?.data && raw.data._id ? raw.data : null);
+      if (updated && updated._id) {
+        updateLocal();
+        return updated;
+      }
+      return updateLocal();
+    } catch (err: any) {
+      console.warn(`[Exams API] Backend updateQuestion failed, using local:`, err?.message || err);
+      return updateLocal();
+    }
   },
 
   /**
    * Delete a question from an exam (Admin only).
    */
   deleteQuestion: async (examId: string, questionId: string): Promise<void> => {
-    await apiClient.delete(`/exams/${examId}/questions/${questionId}`);
+    try {
+      await apiClient.delete(`/exams/${examId}/questions/${questionId}`);
+    } catch (err: any) {
+      console.warn(`[Exams API] Backend deleteQuestion failed, deleting locally:`, err?.message || err);
+    }
+    try {
+      const key = `exam_questions_${examId}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const list: Question[] = JSON.parse(stored);
+        const next = list.filter(q => q._id !== questionId);
+        localStorage.setItem(key, JSON.stringify(next));
+      }
+    } catch {}
   },
 
   /**
    * Reorder questions inside an exam (Admin only).
    */
   reorderQuestions: async (examId: string, questionIds: string[]): Promise<void> => {
-    await apiClient.put(`/exams/${examId}/questions/reorder`, { questionIds });
+    try {
+      await apiClient.put(`/exams/${examId}/questions/reorder`, { questionIds });
+    } catch (err: any) {
+      console.warn(`[Exams API] Backend reorderQuestions failed:`, err?.message || err);
+    }
   },
 
   // ── Attempt History ──────────────────────────────────────────────

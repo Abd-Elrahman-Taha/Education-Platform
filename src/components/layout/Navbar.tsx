@@ -60,7 +60,6 @@ const adminNav: NavItem[] = [
 const superAdminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-student-dashboard', label: 'لوحة الطالب', icon: LayoutDashboard },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },

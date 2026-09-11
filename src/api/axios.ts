@@ -69,10 +69,8 @@ apiClient.interceptors.response.use(
       (status === 403 &&
         typeof rawErrorMessage === 'string' &&
         (rawErrorMessage.includes('تم تسجيل الدخول من جهاز آخر') ||
-         rawErrorMessage.toLowerCase().includes('device') ||
-         rawErrorMessage.toLowerCase().includes('suspended') ||
-         rawErrorMessage.toLowerCase().includes('jwt') ||
-         rawErrorMessage.toLowerCase().includes('token')));
+         rawErrorMessage.includes('تعدد الأجهزة') ||
+         rawErrorMessage.toLowerCase().includes('suspendedmultidevice')));
 
     if (isMultiDeviceOrSessionRevoked) {
       try {

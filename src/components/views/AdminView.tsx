@@ -28,6 +28,7 @@ import {
   EducationStage,
   Exam,
   ExamStatus,
+  UpdateExamRequest,
   Question,
   QuestionType,
   ExamAttempt,
@@ -1049,8 +1050,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   };
 
   // ── EXAM ACTIONS ────────────────────────────────────────────
-  const handleCreateExam = async (e: React.FormEvent) => {
+  const handleCreateExam = async (e: React.FormEvent, thenAddQuestions: boolean = false) => {
     e.preventDefault();
+    if (!newExamForm.title.trim()) {
+      showToast('يرجى إدخال عنوان الاختبار أولاً', 'error');
+      return;
+    }
     if (!newExamForm.courseId) {
       showToast('يرجى اختيار الكورس المرتبط بالاختبار', 'error');
       return;
@@ -1083,6 +1088,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         isRandomized: true,
         isGated: true,
       });
+
+      // Seamlessly open question manager for this newly created exam and open add question modal
+      if (thenAddQuestions && createdExam && createdExam._id) {
+        setSelectedExamForQuestions(createdExam);
+        setIsQuestionsModalOpen(true);
+        loadQuestions(createdExam._id);
+        setEditingQuestion(null);
+        setQuestionForm({
+          questionType: 'MCQ',
+          questionText: '',
+          points: 5,
+          orderIndex: 1,
+          options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+          correctAnswer: 'الخيار الأول',
+        });
+        setIsAddQuestionOpen(true);
+      }
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء الاختبار، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
@@ -1108,24 +1130,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const handleSaveEditExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingExam) return;
+    const targetId = editingExam._id;
     try {
-      const updatedExam = await examsApi.updateExam(editingExam._id, {
+      const patchData: UpdateExamRequest = {
         Title: editExamForm.title.trim(),
         CourseId: editExamForm.courseId,
-        LessonId: editExamForm.lessonId.trim() || null,
         DurationMinutes: Number(editExamForm.durationMinutes),
         PassingScore: Number(editExamForm.passingScore),
         MaxAttempts: Number(editExamForm.maxAttempts),
         Status: editExamForm.status,
         IsRandomized: editExamForm.isRandomized,
         IsGated: editExamForm.isGated,
-      });
+      };
+      if (editExamForm.lessonId.trim()) {
+        patchData.LessonId = editExamForm.lessonId.trim();
+      }
+
+      const updatedExam = await examsApi.updateExam(targetId, patchData);
       showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
       setIsEditExamOpen(false);
       setEditingExam(null);
-      if (updatedExam && updatedExam._id) {
-        setRealExams(prev => prev.map(e => e._id === updatedExam._id ? { ...e, ...editExamForm, ...updatedExam } : e));
-      }
+      setRealExams(prev => prev.map(ex => ex._id === targetId ? { ...ex, ...patchData, ...(updatedExam || {}) } : ex));
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
     }
@@ -1186,15 +1211,32 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsAddQuestionOpen(true);
   };
 
-  const handleSaveQuestion = async (e: React.FormEvent) => {
+  const handleSaveQuestion = async (e: React.FormEvent, addAnother: boolean = false) => {
     e.preventDefault();
     if (!selectedExamForQuestions) return;
+
+    if (!questionForm.questionText.trim()) {
+      showToast('يرجى كتابة نص السؤال', 'warning');
+      return;
+    }
+    if (questionForm.points === undefined || questionForm.points === null || Number(questionForm.points) <= 0) {
+      showToast('يرجى تحديد نقاط صالحة للسؤال (1 على الأقل)', 'warning');
+      return;
+    }
+    if (
+      (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') &&
+      questionForm.options.filter(o => o.trim()).length < 2
+    ) {
+      showToast('يرجى تحديد خيارين على الأقل', 'warning');
+      return;
+    }
+
     try {
       const payload: any = {
         QuestionType: questionForm.questionType,
         QuestionText: questionForm.questionText.trim(),
         Points: Number(questionForm.points),
-        OrderIndex: Number(questionForm.orderIndex),
+        OrderIndex: Number(questionForm.orderIndex) || (examQuestions.length + 1),
       };
       if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
         payload.Options = questionForm.options.map(o => o.trim()).filter(Boolean);
@@ -1211,9 +1253,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         await examsApi.createQuestion(selectedExamForQuestions._id, payload);
         showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
       }
-      setIsAddQuestionOpen(false);
-      setEditingQuestion(null);
+
       loadQuestions(selectedExamForQuestions._id);
+
+      if (addAnother) {
+        const nextOrder = Number(questionForm.orderIndex || examQuestions.length + 1) + 1;
+        setEditingQuestion(null);
+        setQuestionForm(prev => ({
+          ...prev,
+          questionText: '',
+          orderIndex: nextOrder,
+          options: ['الخيار الأول', 'الخيار الثاني', 'الخيار الثالث', 'الخيار الرابع'],
+          correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : 'الخيار الأول',
+        }));
+      } else {
+        setIsAddQuestionOpen(false);
+        setEditingQuestion(null);
+      }
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من أن الاختبار لم تبدأ عليه محاولات وأن رقم الترتيب فريد.'), 'error');
     }
@@ -3394,7 +3450,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: CREATE EXAM (POST /exams) ────────────────── */}
       {isCreateExamOpen && createPortal(
-        <div className="modal-overlay active" onClick={() => setIsCreateExamOpen(false)} style={{ zIndex: 99999 }}>
+        <div className="modal-overlay active" style={{ zIndex: 99999 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsCreateExamOpen(false)}><X size={18} /></button>
 
@@ -3509,9 +3565,31 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </label>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
-                حفظ وإنشاء الاختبار
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1, minWidth: '90px' }}
+                  onClick={() => setIsCreateExamOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ flex: 1.6, minWidth: '190px' }}
+                  onClick={(e) => handleCreateExam(e, true)}
+                >
+                  حفظ والبدء في إضافة الأسئلة الآن
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-secondary"
+                  style={{ flex: 1.2, minWidth: '130px' }}
+                >
+                  حفظ كمسودة فقط
+                </button>
+              </div>
             </form>
           </div>
         </div>,
@@ -3520,7 +3598,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: EDIT EXAM (PATCH /exams/:id) ──────────────── */}
       {isEditExamOpen && editingExam && createPortal(
-        <div className="modal-overlay active" onClick={() => setIsEditExamOpen(false)} style={{ zIndex: 99999 }}>
+        <div className="modal-overlay active" style={{ zIndex: 99999 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsEditExamOpen(false)}><X size={18} /></button>
 
@@ -3654,7 +3732,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: QUESTION MANAGEMENT (CRUD /exams/:id/questions) ── */}
       {isQuestionsModalOpen && selectedExamForQuestions && createPortal(
-        <div className="modal-overlay active" onClick={() => setIsQuestionsModalOpen(false)} style={{ zIndex: 99999 }}>
+        <div className="modal-overlay active" style={{ zIndex: 99999 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '820px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsQuestionsModalOpen(false)}><X size={18} /></button>
 
@@ -3786,7 +3864,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: ADD / EDIT QUESTION SUB-MODAL ─────────────── */}
       {isAddQuestionOpen && selectedExamForQuestions && createPortal(
-        <div className="modal-overlay active" onClick={() => setIsAddQuestionOpen(false)} style={{ zIndex: 100000 }}>
+        <div className="modal-overlay active" style={{ zIndex: 100000 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsAddQuestionOpen(false)}><X size={18} /></button>
 
@@ -3974,17 +4052,39 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minWidth: '90px' }}
                   onClick={() => setIsAddQuestionOpen(false)}
                 >
                   إلغاء
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
-                  {editingQuestion ? 'حفظ تعديل السؤال' : 'إضافة السؤال للاختبار'}
+                {!editingQuestion && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{
+                      flex: 1.5,
+                      minWidth: '160px',
+                      background: 'rgba(8,145,178,0.12)',
+                      color: 'var(--primary-light)',
+                      borderColor: 'var(--primary-light)',
+                      fontWeight: 600,
+                    }}
+                    onClick={(e) => handleSaveQuestion(e, true)}
+                  >
+                    حفظ وإضافة سؤال آخر
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ flex: 1.5, minWidth: '130px' }}
+                  onClick={(e) => handleSaveQuestion(e, false)}
+                >
+                  {editingQuestion ? 'حفظ تعديل السؤال' : 'حفظ وإغلاق'}
                 </button>
               </div>
             </form>
@@ -3995,7 +4095,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: EXAM ATTEMPTS (GET /exams/:id/attempts) ───── */}
       {isAttemptsModalOpen && selectedExamForAttempts && createPortal(
-        <div className="modal-overlay active" onClick={() => setIsAttemptsModalOpen(false)} style={{ zIndex: 99999 }}>
+        <div className="modal-overlay active" style={{ zIndex: 99999 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '750px', maxHeight: '85vh', overflowY: 'auto', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsAttemptsModalOpen(false)}><X size={18} /></button>
 
@@ -4137,7 +4237,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: ESSAY GRADING (POST /exams/:id/attempts/:attemptId/grade) ── */}
       {isGradeModalOpen && gradingAttempt && selectedExamForAttempts && createPortal(
-        <div className="modal-overlay active" onClick={() => setIsGradeModalOpen(false)} style={{ zIndex: 100000 }}>
+        <div className="modal-overlay active" style={{ zIndex: 100000 }}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem' }}>
             <button className="modal-close" onClick={() => setIsGradeModalOpen(false)}><X size={18} /></button>
 
