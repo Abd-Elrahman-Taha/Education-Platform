@@ -8,6 +8,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { coursesApi } from '../../../api/courses.api';
 import { studentsApi } from '../../../api/students.api';
 import { enrollmentsApi } from '../../../api/enrollments.api';
+import { lessonsApi } from '../../../api/lessons.api';
+import { matchesAcademicYear } from '../../../utils/courseFilter';
 import {
   Award, CheckCircle, XCircle, Clock, Calendar, BarChart2, Eye, X,
   Sigma, Check, HelpCircle, Users, TrendingUp, AlertTriangle, ArrowUp,
@@ -40,7 +42,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
   // Fetch student's enrolled courses
   const { data: myEnrollments = [], isLoading: isEnrollmentsLoading } = useQuery({
     queryKey: ['myEnrollmentsForExams'],
-    queryFn: () => enrollmentsApi.getMyCourses({ limit: 100 }),
+    queryFn: () => enrollmentsApi.getMyCourses(),
     enabled: isAuthenticated && !isTeacherOrAdmin,
   });
 
@@ -51,10 +53,17 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
       const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
       if (cid) ids.add(cid);
     });
-    // If student has full subscription, also consider matching academic year courses
-    if (currentUser?.isSubscribed && allCourses.length > 0) {
+
+    // If student has full subscription, automatically enroll in all courses matching their academic year
+    const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
+    const userSubscribedYear: string =
+      (currentUser?.subscribedYear as string) ||
+      (currentUser?.subscription?.year as string) ||
+      'all';
+
+    if (isStudentSubscribed && allCourses.length > 0) {
       allCourses.forEach(c => {
-        if (currentUser.subscribedYear && (c as any).academicYear === currentUser.subscribedYear) {
+        if (userSubscribedYear === 'all' || matchesAcademicYear(c, userSubscribedYear)) {
           ids.add(c._id);
         }
       });
@@ -87,46 +96,62 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
   const { data: publishedExamsRes = [], isLoading: isPublishedExamsLoading } = useQuery({
     queryKey: ['availablePublishedExams', enrolledCourseIdsKey],
     queryFn: async () => {
-      const promises: Promise<Exam[]>[] = [];
+      const examMap = new Map<string, Exam>();
 
-      // 1. General published exams query
-      promises.push(
-        backendExamsApi.getExams({ limit: 100 })
-          .then(r => r.exams || [])
-          .catch(err => {
-            console.warn('[Exams] General getExams returned:', err?.message || err);
-            return [];
+      // 1. General published exams query from /exams
+      try {
+        const res = await backendExamsApi.getExams();
+        const list = res.exams || [];
+        list.forEach(e => {
+          if (e && e._id) {
+            examMap.set(e._id, e);
+          }
+        });
+      } catch (err: any) {
+        console.warn('[Exams] General getExams returned:', err?.message || err);
+      }
+
+      // 2. Discover lesson-linked prerequisite exams for all enrolled courses
+      const courseIdList = Array.from(enrolledCourseIds);
+      if (courseIdList.length > 0) {
+        await Promise.all(
+          courseIdList.map(async courseId => {
+            try {
+              const lessons = await lessonsApi.getCourseLessons(courseId);
+              if (Array.isArray(lessons)) {
+                for (const lesson of lessons) {
+                  if (lesson.PrerequisiteExamId && !examMap.has(lesson.PrerequisiteExamId)) {
+                    examMap.set(lesson.PrerequisiteExamId, {
+                      _id: lesson.PrerequisiteExamId,
+                      Title: `امتحان: ${lesson.Title || 'المحاضرة'}`,
+                      CourseId: courseId,
+                      LessonId: lesson._id,
+                      DurationMinutes: lesson.DurationMinutes || (lesson.DurationSeconds ? Math.round(lesson.DurationSeconds / 60) : 20),
+                      PassingScore: 10,
+                      MaxAttempts: 0,
+                      Status: 'Published',
+                      IsRandomized: true,
+                      IsGated: false,
+                    } as Exam);
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn(`[Exams] getCourseLessons for ${courseId} returned:`, err);
+            }
           })
-      );
-
-      // 2. Explicitly query exams for EVERY enrolled course
-      enrolledCourseIds.forEach(courseId => {
-        promises.push(
-          backendExamsApi.getExams({ CourseId: courseId, limit: 50 })
-            .then(r => r.exams || [])
-            .catch(err => {
-              console.warn(`[Exams] getExams for enrolled course ${courseId} returned:`, err?.message || err);
-              return [];
-            })
         );
-      });
+      }
 
-      const results = await Promise.all(promises);
-      const combined = results.flat();
-
-      const uniqueMap = new Map<string, Exam>();
-      combined.forEach(e => {
-        if (e && e._id) {
-          uniqueMap.set(e._id, e);
-        }
-      });
-
-      return Array.from(uniqueMap.values());
+      return Array.from(examMap.values());
     },
   });
 
   const allRawExams: Exam[] = publishedExamsRes || [];
-  const availableExams = allRawExams.filter(e => e.Status === 'Published' || !e.Status || isTeacherOrAdmin);
+  const availableExams = allRawExams.filter(e => {
+    const s = (e.Status || '').toLowerCase();
+    return s === 'published' || !e.Status || isTeacherOrAdmin;
+  });
 
   // Split into enrolled course exams vs other exams
   const { enrolledExams, otherExams } = useMemo(() => {

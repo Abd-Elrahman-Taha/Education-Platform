@@ -32,42 +32,52 @@ export const examsApi = {
    * List all exams with optional filters (CourseId, Status, search, pagination).
    */
   getExams: async (params?: ExamQueryParams): Promise<{ exams: Exam[]; total: number; totalPages: number }> => {
-    const response = await apiClient.get<ExamsListResponse>('/exams', { params });
-    const raw = response.data as any;
+    try {
+      // Backend /exams endpoint returns all exams reliably when called cleanly without query strings
+      const response = await apiClient.get<ExamsListResponse>('/exams');
+      const raw = response.data as any;
 
-    let examsList: Exam[] = Array.isArray(raw?.data?.exams)
-      ? raw.data.exams
-      : Array.isArray(raw?.data)
-      ? raw.data
-      : Array.isArray(raw?.exams)
-      ? raw.exams
-      : Array.isArray(raw)
-      ? raw
-      : [];
+      let examsList: Exam[] = Array.isArray(raw?.data?.exams)
+        ? raw.data.exams
+        : Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw?.exams)
+        ? raw.exams
+        : Array.isArray(raw)
+        ? raw
+        : [];
 
-    if (params) {
-      if (params.CourseId && params.CourseId !== 'all') {
-        examsList = examsList.filter(e => {
-          const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
-          return cid === params.CourseId;
-        });
+      if (params) {
+        if (params.CourseId && params.CourseId !== 'all') {
+          examsList = examsList.filter(e => {
+            const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+            return cid === params.CourseId;
+          });
+        }
+        if (params.Status && params.Status !== 'all') {
+          const reqStatus = params.Status.toLowerCase();
+          examsList = examsList.filter(e => (e.Status || '').toLowerCase() === reqStatus);
+        }
+        if (params.search && params.search.trim()) {
+          const s = params.search.trim().toLowerCase();
+          examsList = examsList.filter(e => (e.Title || '').toLowerCase().includes(s));
+        }
+        if (params.limit && params.limit > 0 && examsList.length > params.limit) {
+          examsList = examsList.slice(0, params.limit);
+        }
       }
-      if (params.Status && params.Status !== 'all') {
-        examsList = examsList.filter(e => e.Status === params.Status);
-      }
-      if (params.search && params.search.trim()) {
-        const s = params.search.trim().toLowerCase();
-        examsList = examsList.filter(e => (e.Title || '').toLowerCase().includes(s));
-      }
+
+      const pagination = raw?.pagination || { total: examsList.length, totalPages: 1, page: 1, limit: 50 };
+
+      return {
+        exams: examsList,
+        total: pagination.total || examsList.length,
+        totalPages: pagination.totalPages || 1,
+      };
+    } catch (err: any) {
+      console.warn('[Exams API] getExams error:', err?.message || err);
+      return { exams: [], total: 0, totalPages: 1 };
     }
-
-    const pagination = raw?.pagination || { total: examsList.length, totalPages: 1, page: 1, limit: 50 };
-
-    return {
-      exams: examsList,
-      total: pagination.total || examsList.length,
-      totalPages: pagination.totalPages || 1,
-    };
   },
 
   /**
