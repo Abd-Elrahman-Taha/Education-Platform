@@ -1075,7 +1075,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           questionType: 'MCQ',
           questionText: '',
           points: 5,
-          orderIndex: 1,
+          orderIndex: wantsPublished ? 2 : 1,
           options: ['', '', '', ''],
           correctOptionIndex: 0,
           correctAnswer: '',
@@ -1294,9 +1294,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     });
   };
 
-  const handleOpenAddQuestion = () => {
+  const handleOpenAddQuestion = async () => {
     setEditingQuestion(null);
-    const existingOrders = examQuestions.map(q => Number(q.OrderIndex) || 0);
+    let currentQuestions = examQuestions;
+    if (selectedExamForQuestions && (!currentQuestions || currentQuestions.length === 0)) {
+      try {
+        currentQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
+        setExamQuestions(currentQuestions);
+      } catch {}
+    }
+    const existingOrders = (currentQuestions || []).map(q => Number(q.OrderIndex) || 0);
     const nextOrder = existingOrders.length > 0 ? Math.max(0, ...existingOrders) + 1 : 1;
     const initialOptions = ['', '', '', ''];
     setQuestionForm({
@@ -1342,25 +1349,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
 
     // Determine unique OrderIndex to avoid backend duplicate key conflict
-    // Re-read from current state to avoid stale closures
-    const existingOrders = examQuestions
-      .filter(q => !editingQuestion || q._id !== editingQuestion._id)
-      .map(q => Number(q.OrderIndex) || 0);
+    // Query latest questions directly from server to eliminate stale React closures
+    let existingOrders: number[] = [];
+    try {
+      const freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
+      setExamQuestions(freshQuestions);
+      existingOrders = freshQuestions
+        .filter(q => !editingQuestion || q._id !== editingQuestion._id)
+        .map(q => Number(q.OrderIndex) || 0);
+    } catch {
+      existingOrders = examQuestions
+        .filter(q => !editingQuestion || q._id !== editingQuestion._id)
+        .map(q => Number(q.OrderIndex) || 0);
+    }
 
     let chosenOrder = Number(questionForm.orderIndex);
-    if (!chosenOrder || chosenOrder <= 0) {
-      // No order set → auto-assign next
-      chosenOrder = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
-    } else if (!editingQuestion && existingOrders.includes(chosenOrder)) {
-      // User picked an order that collides with an existing question → warn & auto-fix
-      const nextSafe = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
-      showToast(
-        `الترتيب ${chosenOrder} مستخدم بالفعل — تم تعيين الترتيب ${nextSafe} تلقائياً. يمكنك تغييره يدوياً قبل الحفظ.`,
-        'warning'
-      );
-      // Update form so user can see/correct the resolved value
-      setQuestionForm(prev => ({ ...prev, orderIndex: nextSafe }));
+    if (!chosenOrder || chosenOrder <= 0 || (!editingQuestion && existingOrders.includes(chosenOrder))) {
+      // Find next strictly available order number
+      let nextSafe = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
+      while (existingOrders.includes(nextSafe)) {
+        nextSafe++;
+      }
       chosenOrder = nextSafe;
+      setQuestionForm(prev => ({ ...prev, orderIndex: nextSafe }));
     }
 
     const payload: any = {
@@ -1416,7 +1427,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       loadQuestions(selectedExamForQuestions._id);
 
       if (addAnother) {
-        const nextOrder = chosenOrder + 1;
+        const nextOrder = (savedQuestion?.OrderIndex || chosenOrder) + 1;
         setEditingQuestion(null);
         setQuestionForm(prev => ({
           ...prev,
@@ -1431,16 +1442,35 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         setEditingQuestion(null);
       }
     } catch (err: any) {
-      const errMsg = (err?.response?.data?.message || err?.message || '').toLowerCase();
+      const rawErr =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.response?.data?.msg ||
+        (typeof err?.response?.data === 'string' ? err?.response?.data : '') ||
+        err?.message ||
+        '';
+      const errMsg = String(rawErr).toLowerCase();
+
       if (errMsg.includes('attempt') || errMsg.includes('محاولات') || errMsg.includes('has attempts')) {
         showToast('لا يمكن إضافة أو تعديل أسئلة الاختبار بعد وجود محاولات طلاب مسجلة. قم بإنشاء اختبار جديد بدلاً من ذلك.', 'error');
-      } else if (errMsg.includes('duplicate') || errMsg.includes('orderindex') || errMsg.includes('already exists')) {
-        // Auto-retry with a fresh OrderIndex to handle race conditions
-        showToast('تعارض في ترتيب الأسئلة — جاري إعادة المحاولة تلقائياً...', 'warning');
+      } else if (
+        errMsg.includes('duplicate') ||
+        errMsg.includes('orderindex') ||
+        errMsg.includes('e11000') ||
+        errMsg.includes('already exists') ||
+        errMsg.includes('مكرر')
+      ) {
+        // Auto-retry with a guaranteed fresh OrderIndex to handle race conditions
         try {
           const freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-          const freshOrders = freshQuestions.map(q => Number(q.OrderIndex) || 0);
-          payload.OrderIndex = (freshOrders.length > 0 ? Math.max(0, ...freshOrders) : 0) + 1;
+          const freshOrders = freshQuestions
+            .filter(q => !editingQuestion || q._id !== editingQuestion._id)
+            .map(q => Number(q.OrderIndex) || 0);
+          let safeOrder = (freshOrders.length > 0 ? Math.max(0, ...freshOrders) : 0) + 1;
+          while (freshOrders.includes(safeOrder)) {
+            safeOrder++;
+          }
+          payload.OrderIndex = safeOrder;
           const retried = editingQuestion
             ? await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload)
             : await examsApi.createQuestion(selectedExamForQuestions._id, payload);
@@ -1451,9 +1481,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               return [...prev, retried];
             });
           }
-          showToast('تمت إضافة السؤال بنجاح!', 'success');
+          showToast(editingQuestion ? 'تم تحديث السؤال بنجاح!' : 'تمت إضافة السؤال للاختبار بنجاح!', 'success');
           loadQuestions(selectedExamForQuestions._id);
-          if (!addAnother) {
+          if (addAnother) {
+            setEditingQuestion(null);
+            setQuestionForm(prev => ({
+              ...prev,
+              questionText: '',
+              orderIndex: safeOrder + 1,
+              options: ['', '', '', ''],
+              correctOptionIndex: 0,
+              correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : '',
+            }));
+          } else {
             setIsAddQuestionOpen(false);
             setEditingQuestion(null);
           }
