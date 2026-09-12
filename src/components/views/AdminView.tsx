@@ -1570,10 +1570,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 6rem' }}>
       {/* ── HEADER CARD ────────────────────────────────────── */}
+      {/* ── HEADER CARD ────────────────────────────────────── */}
       <div className="glass-card admin-header-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%' }}>
+            <div className="admin-header-icon" style={{
               width: '56px', height: '56px',
               borderRadius: 'var(--radius-md)',
               background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
@@ -1610,48 +1611,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               </h1>
             </div>
           </div>
-
-          {/* Academic Year Selector */}
-          <div className="year-selector-wrap">
-            <span className="year-selector-label">
-              <GraduationCap size={15} /> العام الدراسي:
-            </span>
-            <div className="year-pill-group">
-              <button
-                type="button"
-                className={`year-pill-btn ${selectedYear === 'all' ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedYear('all');
-                  setCourseStageFilter('all');
-                  setCourseGradeFilter('all');
-                }}
-              >
-                {selectedYear === 'all' && <Check size={13} />}
-                كافة السنوات
-              </button>
-              {(['first_secondary', 'second_secondary', 'third_secondary'] as AcademicYear[]).map(yearKey => (
-                <button
-                  key={yearKey}
-                  type="button"
-                  className={`year-pill-btn ${selectedYear === yearKey ? 'active' : ''}`}
-                  onClick={() => {
-                    const next = selectedYear === yearKey ? 'all' : yearKey;
-                    setSelectedYear(next);
-                    if (next === 'all') {
-                      setCourseStageFilter('all');
-                      setCourseGradeFilter('all');
-                    } else {
-                      setCourseStageFilter('Secondary');
-                      setCourseGradeFilter(next === 'first_secondary' ? '1' : next === 'second_secondary' ? '2' : '3');
-                    }
-                  }}
-                >
-                  {selectedYear === yearKey && <Check size={13} />}
-                  {ACADEMIC_YEAR_LABELS[yearKey]}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -1662,7 +1621,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('overview')}
           >
             <BarChart2 size={16} />
-            <span>نظرة عامة والتحليلات</span>
+            <span className="admin-tab-label-desktop">نظرة عامة والتحليلات</span>
+            <span className="admin-tab-label-mobile">التحليلات</span>
           </button>
 
           <button
@@ -1671,7 +1631,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('students')}
           >
             <Users size={16} />
-            <span>إدارة الطلاب الحية</span>
+            <span className="admin-tab-label-desktop">إدارة الطلاب الحية</span>
+            <span className="admin-tab-label-mobile">الطلاب</span>
             <span className="admin-tab-badge">{allStudents.length || realStudents.length}</span>
           </button>
 
@@ -1681,7 +1642,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('courses')}
           >
             <BookOpen size={16} />
-            <span>إدارة الكورسات (CRUD)</span>
+            <span className="admin-tab-label-desktop">إدارة الكورسات (CRUD)</span>
+            <span className="admin-tab-label-mobile">الكورسات</span>
             <span className="admin-tab-badge">{realCourses.length}</span>
           </button>
 
@@ -1691,7 +1653,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('lessons')}
           >
             <Layers size={16} />
-            <span>إدارة المحاضرات (Lessons)</span>
+            <span className="admin-tab-label-desktop">إدارة المحاضرات (Lessons)</span>
+            <span className="admin-tab-label-mobile">المحاضرات</span>
           </button>
 
           <button
@@ -1700,7 +1663,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('exams')}
           >
             <Award size={16} />
-            <span>إدارة الامتحانات والتقييمات</span>
+            <span className="admin-tab-label-desktop">إدارة الامتحانات والتقييمات</span>
+            <span className="admin-tab-label-mobile">الامتحانات</span>
             <span className="admin-tab-badge">{realExams.length}</span>
           </button>
 
@@ -1710,13 +1674,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             onClick={() => setActiveTab('scratch-cards')}
           >
             <Key size={16} />
-            <span>شحن الأكواد وكروت الشحن</span>
+            <span className="admin-tab-label-desktop">شحن الأكواد وكروت الشحن</span>
+            <span className="admin-tab-label-mobile">كروت الشحن</span>
           </button>
 
           {isSuperAdmin && (
             <button
               type="button"
-              className={`admin-tab-btn ${activeTab === 'admins' ? 'active' : ''}`}
+              className={`admin-tab-btn admin-tab-btn--full ${activeTab === 'admins' ? 'active' : ''}`}
               onClick={() => setActiveTab('admins')}
               style={{
                 background: activeTab === 'admins' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.35))' : undefined,
@@ -1725,7 +1690,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               }}
             >
               <Crown size={16} color="#F59E0B" />
-              <span>إدارة المسؤولين (SuperAdmin)</span>
+              <span className="admin-tab-label-desktop">إدارة المسؤولين (SuperAdmin)</span>
+              <span className="admin-tab-label-mobile">المسؤولين</span>
               <span className="admin-tab-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                 {realAdmins.length}
               </span>
@@ -1786,7 +1752,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       {/* ── TAB 2: STUDENTS MANAGEMENT (LIVE GET /users/students) ── */}
       {activeTab === 'students' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
                 الطلاب المسجلون في المنظومة ({displayedStudents.length}{(searchStudent.trim() || studentStatusFilter !== 'all') && (allStudents.length > 0 || realStudents.length > 0) ? ` من ${allStudents.length || realStudents.length}` : ''})
@@ -2031,7 +1997,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
         return (
           <div className="glass-card" style={{ padding: '1.75rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
                   إدارة الكورسات والمناهج ({filteredCourses.length}{selectedYear !== 'all' || courseStageFilter !== 'all' ? ` من ${realCourses.length}` : ''})
@@ -2041,7 +2007,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <div className="admin-btn-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -2256,7 +2222,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       {/* ── TAB 4: LESSONS MANAGEMENT (POST, DELETE /courses/{id}/lessons) ── */}
       {activeTab === 'lessons' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
                 إدارة المحاضرات والدروس ({realLessons.length})
@@ -2266,7 +2232,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <div className="admin-btn-group" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
               <select
                 className="input-field"
                 style={{ fontSize: '0.85rem' }}
@@ -2325,10 +2291,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         </div>
       )}
 
-      {/* ── TAB 5: EXAMS MANAGEMENT (CRUD /exams) ─────────────── */}
+      {/* ── TAB 5: EXAMS MANAGEMENT (CRUD GET, POST, DELETE /exams) ── */}
       {activeTab === 'exams' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
                 إدارة الاختبارات والتقييمات ({realExams.length})
@@ -2338,7 +2304,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="admin-btn-group" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -2746,7 +2712,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       {/* ── TAB 6: ADMINS MANAGEMENT (Strictly SuperAdmin Only) ── */}
       {isSuperAdmin && activeTab === 'admins' && (
         <div className="glass-card" style={{ padding: '1.75rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                 <span className="gradient-badge">
@@ -2762,7 +2728,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+            <div className="admin-btn-group" style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn btn-primary"

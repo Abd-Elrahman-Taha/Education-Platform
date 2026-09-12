@@ -402,25 +402,31 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
         {/* Navigation Tabs (Segmented Control Pill Group) */}
         <div className="lms-segmented-bar">
           <button
+            type="button"
             className={`lms-tab-btn ${mainTab === 'lessons' ? 'active' : ''}`}
             onClick={() => setMainTab('lessons')}
           >
             <Video size={17} />
-            <span>الدروس والمحاضرات</span>
+            <span className="lms-tab-text-desktop">الدروس والمحاضرات</span>
+            <span className="lms-tab-text-mobile">المحاضرات</span>
           </button>
           <button
+            type="button"
             className={`lms-tab-btn ${mainTab === 'packages' ? 'active' : ''}`}
             onClick={() => setMainTab('packages')}
           >
             <Layers size={17} />
-            <span>باقات الاشتراك</span>
+            <span className="lms-tab-text-desktop">باقات الاشتراك</span>
+            <span className="lms-tab-text-mobile">الاشتراكات</span>
           </button>
           <button
+            type="button"
             className={`lms-tab-btn ${mainTab === 'faq' ? 'active' : ''}`}
             onClick={() => setMainTab('faq')}
           >
             <HelpCircle size={17} />
-            <span>الأسئلة الشائعة</span>
+            <span className="lms-tab-text-desktop">الأسئلة الشائعة</span>
+            <span className="lms-tab-text-mobile">الأسئلة</span>
           </button>
         </div>
       </div>

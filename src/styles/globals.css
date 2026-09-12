@@ -1538,6 +1538,14 @@ button.footer-link {
   color: #FFFFFF;
 }
 
+.admin-tab-label-desktop {
+  display: inline;
+}
+
+.admin-tab-label-mobile {
+  display: none;
+}
+
 .admin-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2206,6 +2214,45 @@ button.footer-link {
     padding-top: 0.5rem;
     border-top: 1px solid var(--border-glass);
   }
+
+  /* Admin Dashboard Mobile Adjustments */
+  .admin-header-card {
+    padding: 1.25rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+  .admin-header-card h1 {
+    font-size: 1.3rem !important;
+    line-height: 1.35;
+  }
+  .admin-header-icon {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .admin-tab-bar {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+    padding: 0.45rem !important;
+    border-radius: var(--radius-lg) !important;
+    margin-top: 1rem !important;
+  }
+  .admin-tab-label-desktop {
+    display: none !important;
+  }
+  .admin-tab-label-mobile {
+    display: inline !important;
+  }
+  .admin-tab-btn {
+    padding: 0.6rem 0.45rem !important;
+    font-size: 0.8rem !important;
+    border-radius: var(--radius-md) !important;
+    justify-content: center !important;
+    width: 100% !important;
+    gap: 0.35rem !important;
+  }
+  .admin-tab-btn.admin-tab-btn--full {
+    grid-column: span 2 !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2221,6 +2268,105 @@ button.footer-link {
   .ai-chat-window { width: calc(100vw - 4rem); }
   .admin-stats-grid { grid-template-columns: 1fr 1fr; }
   .exam-lobby { padding: 1.5rem; }
+
+  /* Admin Section Headers and Action Buttons on Phones */
+  .admin-section-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.85rem !important;
+  }
+  .admin-section-header > div {
+    width: 100% !important;
+  }
+  .admin-section-header .admin-btn-group {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+  .admin-section-header .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.65rem 1rem !important;
+  }
+
+  /* LMS Lessons / Subscriptions / Questions Segmented Bar on Phones */
+  .lms-main-tabs-wrapper {
+    padding: 1rem 1.15rem !important;
+    gap: 1rem !important;
+    border-radius: var(--radius-lg) !important;
+  }
+  .lms-main-tabs-wrapper h1 {
+    font-size: 1.15rem !important;
+  }
+
+  .lms-segmented-bar {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    width: 100% !important;
+    padding: 0.25rem !important;
+    gap: 0.25rem !important;
+    border-radius: var(--radius-lg) !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+    border: 1px solid var(--border-glass-hover) !important;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  .lms-tab-text-desktop {
+    display: none !important;
+  }
+  .lms-tab-text-mobile {
+    display: inline !important;
+  }
+
+  .lms-tab-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+    padding: 0.65rem 0.2rem !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    border-radius: var(--radius-md) !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    width: 100% !important;
+  }
+
+  .lms-tab-btn svg {
+    width: 15px !important;
+    height: 15px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .lms-tab-btn.active {
+    box-shadow: 0 3px 12px var(--primary-glow) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-tab-btn {
+    font-size: 0.74rem !important;
+    padding: 0.5rem 0.25rem !important;
+    gap: 0.25rem !important;
+  }
+  .admin-tab-btn svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  .admin-tab-badge {
+    padding: 0.05rem 0.35rem !important;
+    font-size: 0.64rem !important;
+  }
+  .lms-tab-btn {
+    font-size: 0.72rem !important;
+    padding: 0.55rem 0.15rem !important;
+    gap: 0.25rem !important;
+  }
+  .lms-tab-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
 }
 
 /* ==========================================================================
@@ -2334,6 +2480,14 @@ button.footer-link {
   color: #FFFFFF !important;
   box-shadow: 0 4px 18px var(--primary-glow);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+.lms-tab-text-desktop {
+  display: inline;
+}
+
+.lms-tab-text-mobile {
+  display: none;
 }
 
 /* ── Academic Year Selector Cards (السنة الدراسية المستهدفة) ── */
