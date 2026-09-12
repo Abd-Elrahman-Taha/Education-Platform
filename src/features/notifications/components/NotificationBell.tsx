@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationsApi } from '../api/notificationsApi';
 import { useAuth } from '../../../context/AuthContext';
@@ -13,6 +13,18 @@ export const NotificationBell: React.FC<Props> = ({ onNavigateView }) => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   const userId = currentUser?.id;
 
@@ -54,7 +66,7 @@ export const NotificationBell: React.FC<Props> = ({ onNavigateView }) => {
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={dropdownRef} style={{ position: 'relative' }}>
       <button
         className="icon-btn"
         onClick={() => setIsOpen(!isOpen)}

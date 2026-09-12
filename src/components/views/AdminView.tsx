@@ -1655,7 +1655,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="admin-tab-bar" style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', borderTop: '1px solid var(--border-glass)', paddingTop: '1rem', flexWrap: 'wrap' }}>
+        <div className="admin-tab-bar">
           <button
             type="button"
             className={`admin-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}

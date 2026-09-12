@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
   BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
@@ -109,6 +109,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
+  const navHeaderRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (navHeaderRef.current && !navHeaderRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mobileMenuOpen]);
 
   const cleanDisplayName = (() => {
     if (!currentUser) return '';
@@ -161,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="navbar">
+    <header ref={navHeaderRef} className="navbar">
       <div className="container nav-container">
         {/* Brand Logo */}
         <a
