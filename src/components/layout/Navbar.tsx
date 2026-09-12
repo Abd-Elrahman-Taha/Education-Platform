@@ -28,20 +28,20 @@ const studentNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
-  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
-  { id: 'view-assessment',        label: 'سجل الامتحانات', icon: FileSignature },
-  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
-  { id: 'view-community',         label: 'مجتمع الطلاب', icon: MessageSquare },
+  { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
+  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-drm-player',        label: 'الدروس والمحاضرات', icon: Video },
-  { id: 'view-assessment',        label: 'تحليلات الامتحانات', icon: FileSignature },
-  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
-  { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
+  { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
+  { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
+  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
 ];
 
@@ -52,8 +52,8 @@ const adminNav: NavItem[] = [
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
-  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
-  { id: 'view-community',         label: 'مجتمع الرياضيات', icon: MessageSquare },
+  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
+  { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
 const superAdminNav: NavItem[] = [
@@ -77,7 +77,7 @@ const parentLoggedInNav: NavItem[] = [
 const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-ai',                label: 'المعلم الذكي AI', icon: Bot },
+  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
 ];
@@ -255,8 +255,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {isSuperAdmin && (
                   <Crown size={13} fill="#F59E0B" color="#F59E0B" style={{ flexShrink: 0 }} />
                 )}
-                <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800, color: 'var(--text-bright)' }}>
-                  {cleanDisplayName.split(' ').slice(0, 3).join(' ')}
+                <span className="nav-user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800, color: 'var(--text-bright)' }}>
+                  {cleanDisplayName.split(' ').slice(0, 2).join(' ')}
                 </span>
                 <Edit3 size={11} color="var(--primary-light)" style={{ opacity: 0.7 }} />
                 <span className={`role-badge role-badge--${currentUser.role}`} style={{ padding: '0.12rem 0.55rem', fontSize: '0.72rem' }}>

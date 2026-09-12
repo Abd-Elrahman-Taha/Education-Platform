@@ -290,12 +290,16 @@ select.input-field { cursor: pointer; }
   width: 100%;
 }
 
+.navbar .nav-container {
+  max-width: 100%;
+  padding: 0 1.5rem;
+}
+
 .nav-container {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  flex-wrap: nowrap;
   width: 100%;
 }
 
@@ -326,19 +330,15 @@ select.input-field { cursor: pointer; }
 .module-switcher {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
   background: rgba(0, 0, 0, 0.25);
-  padding: 0.25rem;
+  padding: 0.25rem 0.4rem;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-glass);
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none; /* Hide scrollbar for clean look */
-  -ms-overflow-style: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  overflow: visible;
   max-width: 100%;
-}
-.module-switcher::-webkit-scrollbar {
-  display: none;
 }
 
 .module-switcher--superadmin {
@@ -357,7 +357,7 @@ select.input-field { cursor: pointer; }
 }
 
 .module-btn {
-  padding: 0.35rem 0.75rem;
+  padding: 0.35rem 0.65rem;
   border-radius: var(--radius-full);
   font-size: 0.78rem;
   font-weight: 600;
@@ -424,6 +424,11 @@ select.input-field { cursor: pointer; }
   color: var(--primary-light);
   cursor: pointer;
   transition: all var(--transition-fast);
+}
+
+.nav-user-name {
+  max-width: 120px;
+  display: inline-block;
 }
 
 .nav-user-badge:hover { background: rgba(8, 145, 178, 0.22); }
@@ -1439,12 +1444,7 @@ button.footer-link {
   border-radius: var(--radius-full);
   border: 1px solid var(--border-glass);
   max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.year-pill-group::-webkit-scrollbar {
-  display: none;
+  flex-wrap: wrap;
 }
 
 [data-theme="light"] .year-pill-group {
@@ -1485,17 +1485,11 @@ button.footer-link {
   gap: 0.35rem;
   background: rgba(0, 0, 0, 0.25);
   padding: 0.35rem;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-glass);
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  flex-wrap: wrap;
   margin-top: 1.5rem;
   max-width: 100%;
-}
-.admin-tab-bar::-webkit-scrollbar {
-  display: none;
 }
 
 [data-theme="light"] .admin-tab-bar {
@@ -1858,8 +1852,8 @@ button.footer-link {
 .notification-dropdown-panel {
   position: absolute;
   top: calc(100% + 10px);
-  left: 0;
-  right: auto;
+  right: 0;
+  left: auto;
   width: 360px;
   max-width: min(360px, calc(100vw - 2rem));
   background: var(--bg-surface);
@@ -1873,8 +1867,8 @@ button.footer-link {
 }
 
 [dir="rtl"] .notification-dropdown-panel {
-  left: auto;
-  right: 0;
+  left: 0;
+  right: auto;
 }
 
 [data-theme="light"] .notification-dropdown-panel {
@@ -2116,6 +2110,44 @@ button.footer-link {
   .experience-grid { grid-template-columns: 1fr; }
   .academic-years-grid { grid-template-columns: 1fr; }
 
+  .desktop-only-btn { display: none !important; }
+  .nav-user-badge .role-badge { display: none !important; }
+  .nav-user-badge span:not(.role-badge) { max-width: 90px !important; }
+  .module-btn {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.74rem;
+    gap: 0.25rem;
+  }
+
+  .hero-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  .hero-visual-wrapper {
+    display: block;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    order: 0;
+  }
+  .hero-teacher-image {
+    max-height: 380px;
+  }
+  .floating-card-1 {
+    top: -12px;
+    left: -10px;
+    padding: 0.6rem 0.9rem;
+  }
+  .floating-card-2 {
+    bottom: -15px;
+    right: -10px;
+    padding: 0.6rem 0.9rem;
+  }
+  .features-grid { grid-template-columns: 1fr 1fr; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 500px; margin: 0 auto; }
+  .pricing-card.popular { transform: none; }
+  .bubble-sheet-layout { grid-template-columns: 1fr; }
+  .subjects-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
   .desktop-only-nav { display: none !important; }
   .desktop-only-user { display: none !important; }
   .desktop-only-btn { display: none !important; }
@@ -2174,33 +2206,6 @@ button.footer-link {
     padding-top: 0.5rem;
     border-top: 1px solid var(--border-glass);
   }
-
-  .hero-grid { grid-template-columns: 1fr; gap: 2.5rem; }
-  .hero-visual-wrapper {
-    display: block;
-    width: 100%;
-    max-width: 480px;
-    margin: 0 auto;
-    order: 0;
-  }
-  .hero-teacher-image {
-    max-height: 380px;
-  }
-  .floating-card-1 {
-    top: -12px;
-    left: -10px;
-    padding: 0.6rem 0.9rem;
-  }
-  .floating-card-2 {
-    bottom: -15px;
-    right: -10px;
-    padding: 0.6rem 0.9rem;
-  }
-  .features-grid { grid-template-columns: 1fr 1fr; }
-  .pricing-grid { grid-template-columns: 1fr; max-width: 500px; margin: 0 auto; }
-  .pricing-card.popular { transform: none; }
-  .bubble-sheet-layout { grid-template-columns: 1fr; }
-  .subjects-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
