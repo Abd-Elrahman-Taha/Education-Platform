@@ -410,7 +410,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsExamsLoading(true);
     try {
       const res = await examsApi.getExams();
-      setRealExams(res.exams || []);
+      const list = res.exams || [];
+      setRealExams(list);
+      if (list.length > 0) {
+        try {
+          localStorage.setItem('cached_platform_exams', JSON.stringify(list));
+        } catch {}
+      }
     } catch (err: any) {
       console.warn('[API INFO] Exams list status:', err?.message || err);
       setRealExams([]);

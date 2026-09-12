@@ -47,15 +47,29 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
   });
 
   // Extract enrolled course IDs and full course objects
+  // Extract enrolled course IDs and full course objects
   const enrolledCourseIds = useMemo(() => {
     const ids = new Set<string>();
     myEnrollments.forEach((e: any) => {
-      const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
-      if (cid) ids.add(cid);
+      const cid =
+        (typeof e.CourseId === 'object' && e.CourseId ? ((e.CourseId as any)._id || (e.CourseId as any).id) : null) ||
+        (typeof e.courseId === 'object' && e.courseId ? ((e.courseId as any)._id || (e.courseId as any).id) : null) ||
+        (typeof e.course === 'object' && e.course ? ((e.course as any)._id || (e.course as any).id) : null) ||
+        e.CourseId ||
+        e.courseId ||
+        e.course_id ||
+        e._id ||
+        e.id;
+      if (cid && typeof cid === 'string') ids.add(cid);
     });
 
-    // If student has full subscription, automatically enroll in all courses matching their academic year
-    const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
+    // If student has full subscription or active enrolled courses, automatically enroll in matching courses
+    const isStudentSubscribed = !!(
+      currentUser?.isSubscribed ||
+      currentUser?.subscription?.isActive ||
+      myEnrollments.length > 0 ||
+      (currentUser?.role === 'student' && !currentUser?.role?.includes('admin'))
+    );
     const userSubscribedYear: string =
       (currentUser?.subscribedYear as string) ||
       (currentUser?.subscription?.year as string) ||
@@ -63,8 +77,9 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
 
     if (isStudentSubscribed && allCourses.length > 0) {
       allCourses.forEach(c => {
-        if (userSubscribedYear === 'all' || matchesAcademicYear(c, userSubscribedYear)) {
-          ids.add(c._id);
+        const cId = c._id || (c as any).id;
+        if (cId && (userSubscribedYear === 'all' || matchesAcademicYear(c, userSubscribedYear))) {
+          ids.add(cId);
         }
       });
     }
@@ -74,18 +89,19 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
   const enrolledCoursesList = useMemo(() => {
     const coursesMap = new Map<string, { _id: string; Title: string }>();
     myEnrollments.forEach((e: any) => {
-      if (typeof e.CourseId === 'object' && e.CourseId && e.CourseId._id) {
-        coursesMap.set(e.CourseId._id, { _id: e.CourseId._id, Title: e.CourseId.Title });
-      } else if (e.CourseId) {
-        const found = allCourses.find((c: any) => c._id === e.CourseId);
-        if (found) {
-          coursesMap.set(found._id, { _id: found._id, Title: found.Title });
-        }
+      const cid =
+        (typeof e.CourseId === 'object' && e.CourseId ? ((e.CourseId as any)._id || (e.CourseId as any).id) : null) ||
+        e.CourseId ||
+        e._id;
+      const cTitle = (typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any).Title : null) || (e as any).Title;
+      if (cid) {
+        coursesMap.set(cid, { _id: cid, Title: cTitle || 'كورس تعليمي' });
       }
     });
     allCourses.forEach(c => {
-      if (enrolledCourseIds.has(c._id) && !coursesMap.has(c._id)) {
-        coursesMap.set(c._id, { _id: c._id, Title: c.Title });
+      const cId = c._id || (c as any).id;
+      if (cId && enrolledCourseIds.has(cId) && !coursesMap.has(cId)) {
+        coursesMap.set(cId, { _id: cId, Title: c.Title });
       }
     });
     return Array.from(coursesMap.values());
@@ -103,15 +119,32 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
         const res = await backendExamsApi.getExams();
         const list = res.exams || [];
         list.forEach(e => {
-          if (e && e._id) {
-            examMap.set(e._id, e);
+          const id = e._id || (e as any).id;
+          if (e && id) {
+            examMap.set(id, { ...e, _id: id });
           }
         });
       } catch (err: any) {
         console.warn('[Exams] General getExams returned:', err?.message || err);
       }
 
-      // 2. Discover lesson-linked prerequisite exams for all enrolled courses
+      // 2. Also read from cached platform exams in localStorage (guarantees student visibility)
+      try {
+        const cachedRaw = localStorage.getItem('cached_platform_exams');
+        if (cachedRaw) {
+          const cachedExams: Exam[] = JSON.parse(cachedRaw);
+          if (Array.isArray(cachedExams)) {
+            cachedExams.forEach(e => {
+              const id = e._id || (e as any).id;
+              if (id && !examMap.has(id)) {
+                examMap.set(id, { ...e, _id: id });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      // 3. Discover lesson-linked prerequisite exams for all enrolled courses
       const courseIdList = Array.from(enrolledCourseIds);
       if (courseIdList.length > 0) {
         await Promise.all(
@@ -153,13 +186,24 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     return s === 'published' || !e.Status || isTeacherOrAdmin;
   });
 
+  // Helper to safely extract CourseId string from exam
+  const getExamCourseId = (e: Exam): string => {
+    if (!e) return '';
+    if (typeof e.CourseId === 'object' && e.CourseId) {
+      return (e.CourseId as any)._id || (e.CourseId as any).id || '';
+    }
+    if (e.CourseId && typeof e.CourseId === 'string') return e.CourseId;
+    if ((e as any).courseId) return (e as any).courseId;
+    return '';
+  };
+
   // Split into enrolled course exams vs other exams
   const { enrolledExams, otherExams } = useMemo(() => {
     const enrolled: Exam[] = [];
     const other: Exam[] = [];
 
     availableExams.forEach(exam => {
-      const cid = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
+      const cid = getExamCourseId(exam);
       if (enrolledCourseIds.has(cid) || isTeacherOrAdmin) {
         enrolled.push(exam);
       } else {
@@ -178,7 +222,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
       list = enrolledExams;
     } else if (courseFilter !== 'all') {
       list = list.filter(e => {
-        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+        const cid = getExamCourseId(e);
         return cid === courseFilter;
       });
     }
@@ -187,16 +231,16 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
       const q = examSearch.trim().toLowerCase();
       list = list.filter(e => {
         const title = (e.Title || '').toLowerCase();
-        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
-        const cTitle = (allCourses.find((c: any) => c._id === cid)?.Title || (typeof e.CourseId === 'object' && (e.CourseId as any)?.Title ? (e.CourseId as any).Title : '')).toLowerCase();
+        const cid = getExamCourseId(e);
+        const cTitle = (allCourses.find((c: any) => c._id === cid || c.id === cid)?.Title || (typeof e.CourseId === 'object' && (e.CourseId as any)?.Title ? (e.CourseId as any).Title : '')).toLowerCase();
         return title.includes(q) || cTitle.includes(q);
       });
     }
 
     // Sort: Enrolled course exams FIRST, then by OrderIndex/Title
     return [...list].sort((a, b) => {
-      const aCid = typeof a.CourseId === 'object' && a.CourseId ? (a.CourseId as any)._id : a.CourseId;
-      const bCid = typeof b.CourseId === 'object' && b.CourseId ? (b.CourseId as any)._id : b.CourseId;
+      const aCid = getExamCourseId(a);
+      const bCid = getExamCourseId(b);
       const aEnrolled = enrolledCourseIds.has(aCid) ? 1 : 0;
       const bEnrolled = enrolledCourseIds.has(bCid) ? 1 : 0;
       if (aEnrolled !== bEnrolled) return bEnrolled - aEnrolled;
@@ -698,8 +742,8 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
             {displayedExams.map(exam => {
-              const examCourseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
-              const courseMatch = allCourses.find((c: any) => c._id === examCourseId);
+              const examCourseId = getExamCourseId(exam);
+              const courseMatch = allCourses.find((c: any) => c._id === examCourseId || c.id === examCourseId);
               const courseTitle = courseMatch?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : 'كورس تعليمي');
               const isEnrolledExam = enrolledCourseIds.has(examCourseId) || isTeacherOrAdmin;
 
