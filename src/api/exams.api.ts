@@ -162,6 +162,27 @@ export const examsApi = {
       delete payload.Options;
     }
 
+    // Always resolve a guaranteed-unique OrderIndex BEFORE the first attempt
+    // to avoid the round-trip cost and UI error of collision-then-retry.
+    if (payload.OrderIndex !== undefined) {
+      try {
+        const freshQuestions = await examsApi.getQuestions(examId);
+        const existingOrders = new Set(
+          freshQuestions.map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0)).filter(n => n > 0)
+        );
+        if (existingOrders.has(payload.OrderIndex)) {
+          // Collision detected pre-flight — pick next safe number
+          console.warn(`[Exams API] OrderIndex collision detected on exam ${examId}. Auto-resolving OrderIndex...`);
+          let safeOrder = existingOrders.size > 0 ? Math.max(...Array.from(existingOrders)) + 1 : 1;
+          while (existingOrders.has(safeOrder)) safeOrder++;
+          payload.OrderIndex = safeOrder;
+        }
+      } catch {
+        // If fetch fails, use a timestamp-based unique fallback
+        payload.OrderIndex = Math.floor(Date.now() / 1000) % 100000 + 100;
+      }
+    }
+
     try {
       const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
       const raw = response.data;
@@ -184,30 +205,15 @@ export const examsApi = {
         errMsg.includes('مكرر');
 
       if (isDuplicateOrder) {
-        console.warn(`[Exams API] OrderIndex collision detected on exam ${examId}. Auto-resolving OrderIndex...`);
+        // Last-resort: use timestamp to guarantee uniqueness
+        console.warn(`[Exams API] Post-flight OrderIndex collision on exam ${examId}. Using timestamp fallback...`);
         try {
-          const freshQuestions = await examsApi.getQuestions(examId);
-          const existingOrders = new Set(
-            freshQuestions.map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
-          );
-          let safeOrder = Math.max(0, ...Array.from(existingOrders)) + 1;
-          while (existingOrders.has(safeOrder)) {
-            safeOrder++;
-          }
-          payload.OrderIndex = safeOrder;
+          payload.OrderIndex = Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
           const retryResponse = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
           const retryRaw = retryResponse.data;
           return retryRaw?.data?.question || retryRaw?.question || retryRaw?.data || retryRaw;
         } catch (retryErr: any) {
-          // Last resort fallback: unique timestamp integer
-          try {
-            payload.OrderIndex = Math.floor(Date.now() / 1000) % 100000 + 100;
-            const fallbackResponse = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
-            const fallbackRaw = fallbackResponse.data;
-            return fallbackRaw?.data?.question || fallbackRaw?.question || fallbackRaw?.data || fallbackRaw;
-          } catch {
-            throw retryErr;
-          }
+          throw retryErr;
         }
       }
 

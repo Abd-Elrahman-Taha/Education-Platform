@@ -1295,23 +1295,30 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   };
 
   const handleOpenAddQuestion = async () => {
+    if (!selectedExamForQuestions) return;
     setEditingQuestion(null);
-    let currentQuestions = examQuestions;
-    if (selectedExamForQuestions && (!currentQuestions || currentQuestions.length === 0)) {
-      try {
-        currentQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-        setExamQuestions(currentQuestions);
-      } catch {}
+
+    // Always fetch the freshest question list from the server so we never
+    // compute an OrderIndex that conflicts with a question already in the DB
+    // (e.g. the auto-created starter question that may not yet be in local state).
+    let freshQuestions = examQuestions;
+    try {
+      freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
+      setExamQuestions(freshQuestions);  // keep UI in sync
+    } catch {
+      // fall back to whatever is in state
+      freshQuestions = examQuestions;
     }
-    const existingOrders = (currentQuestions || []).map(q => Number(q.OrderIndex) || 0);
-    const nextOrder = existingOrders.length > 0 ? Math.max(0, ...existingOrders) + 1 : 1;
-    const initialOptions = ['', '', '', ''];
+
+    const existingOrders = freshQuestions.map(q => Number(q.OrderIndex) || 0).filter(n => n > 0);
+    const nextOrder = existingOrders.length > 0 ? Math.max(...existingOrders) + 1 : 1;
+
     setQuestionForm({
       questionType: 'MCQ',
       questionText: '',
       points: 5,
       orderIndex: nextOrder,
-      options: initialOptions,
+      options: ['', '', '', ''],
       correctOptionIndex: 0,
       correctAnswer: '',
     });
