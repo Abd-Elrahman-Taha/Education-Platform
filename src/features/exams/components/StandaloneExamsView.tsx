@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { examsApi } from '../api/examsApi';
 import { examsApi as backendExamsApi } from '../../../api/exams.api';
@@ -7,11 +7,12 @@ import { Exam } from '../../../types/api.types';
 import { useAuth } from '../../../context/AuthContext';
 import { coursesApi } from '../../../api/courses.api';
 import { studentsApi } from '../../../api/students.api';
+import { enrollmentsApi } from '../../../api/enrollments.api';
 import {
   Award, CheckCircle, XCircle, Clock, Calendar, BarChart2, Eye, X,
   Sigma, Check, HelpCircle, Users, TrendingUp, AlertTriangle, ArrowUp,
   GraduationCap, BookOpen, Layers, Lock, LogIn, UserPlus, PlayCircle, ShieldCheck, Sparkles,
-  Target, RotateCcw, FileQuestion, BarChart3, CheckCircle2
+  Target, RotateCcw, FileQuestion, BarChart3, CheckCircle2, Search, Filter
 } from 'lucide-react';
 
 interface StandaloneExamsViewProps {
@@ -27,19 +28,156 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
   const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'failed' | 'completed'>('all');
   const [selectedExamDetail, setSelectedExamDetail] = useState<ExamRecord | null>(null);
   const [guestYear, setGuestYear] = useState<AcademicYear>('third_secondary');
-
-  const { data: publishedExamsRes, isLoading: isPublishedExamsLoading } = useQuery({
-    queryKey: ['availablePublishedExams'],
-    queryFn: () => backendExamsApi.getExams(),
-  });
-  const allRawExams: Exam[] = publishedExamsRes?.exams || [];
-  const availableExams = allRawExams.filter(e => e.Status === 'Published' || !e.Status);
+  const [courseFilter, setCourseFilter] = useState<'all' | 'enrolled_only' | string>('all');
+  const [examSearch, setExamSearch] = useState('');
 
   const { data: allCoursesData } = useQuery({
     queryKey: ['allCoursesForExamCards'],
     queryFn: () => coursesApi.getCourses(),
   });
   const allCourses = allCoursesData?.courses || [];
+
+  // Fetch student's enrolled courses
+  const { data: myEnrollments = [], isLoading: isEnrollmentsLoading } = useQuery({
+    queryKey: ['myEnrollmentsForExams'],
+    queryFn: () => enrollmentsApi.getMyCourses({ limit: 100 }),
+    enabled: isAuthenticated && !isTeacherOrAdmin,
+  });
+
+  // Extract enrolled course IDs and full course objects
+  const enrolledCourseIds = useMemo(() => {
+    const ids = new Set<string>();
+    myEnrollments.forEach((e: any) => {
+      const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+      if (cid) ids.add(cid);
+    });
+    // If student has full subscription, also consider matching academic year courses
+    if (currentUser?.isSubscribed && allCourses.length > 0) {
+      allCourses.forEach(c => {
+        if (currentUser.subscribedYear && (c as any).academicYear === currentUser.subscribedYear) {
+          ids.add(c._id);
+        }
+      });
+    }
+    return ids;
+  }, [myEnrollments, currentUser, allCourses]);
+
+  const enrolledCoursesList = useMemo(() => {
+    const coursesMap = new Map<string, { _id: string; Title: string }>();
+    myEnrollments.forEach((e: any) => {
+      if (typeof e.CourseId === 'object' && e.CourseId && e.CourseId._id) {
+        coursesMap.set(e.CourseId._id, { _id: e.CourseId._id, Title: e.CourseId.Title });
+      } else if (e.CourseId) {
+        const found = allCourses.find((c: any) => c._id === e.CourseId);
+        if (found) {
+          coursesMap.set(found._id, { _id: found._id, Title: found.Title });
+        }
+      }
+    });
+    allCourses.forEach(c => {
+      if (enrolledCourseIds.has(c._id) && !coursesMap.has(c._id)) {
+        coursesMap.set(c._id, { _id: c._id, Title: c.Title });
+      }
+    });
+    return Array.from(coursesMap.values());
+  }, [myEnrollments, allCourses, enrolledCourseIds]);
+
+  // Fetch exams for all enrolled courses AND general published exams
+  const enrolledCourseIdsKey = Array.from(enrolledCourseIds).sort().join(',');
+  const { data: publishedExamsRes = [], isLoading: isPublishedExamsLoading } = useQuery({
+    queryKey: ['availablePublishedExams', enrolledCourseIdsKey],
+    queryFn: async () => {
+      const promises: Promise<Exam[]>[] = [];
+
+      // 1. General published exams query
+      promises.push(
+        backendExamsApi.getExams({ limit: 100 })
+          .then(r => r.exams || [])
+          .catch(err => {
+            console.warn('[Exams] General getExams returned:', err?.message || err);
+            return [];
+          })
+      );
+
+      // 2. Explicitly query exams for EVERY enrolled course
+      enrolledCourseIds.forEach(courseId => {
+        promises.push(
+          backendExamsApi.getExams({ CourseId: courseId, limit: 50 })
+            .then(r => r.exams || [])
+            .catch(err => {
+              console.warn(`[Exams] getExams for enrolled course ${courseId} returned:`, err?.message || err);
+              return [];
+            })
+        );
+      });
+
+      const results = await Promise.all(promises);
+      const combined = results.flat();
+
+      const uniqueMap = new Map<string, Exam>();
+      combined.forEach(e => {
+        if (e && e._id) {
+          uniqueMap.set(e._id, e);
+        }
+      });
+
+      return Array.from(uniqueMap.values());
+    },
+  });
+
+  const allRawExams: Exam[] = publishedExamsRes || [];
+  const availableExams = allRawExams.filter(e => e.Status === 'Published' || !e.Status || isTeacherOrAdmin);
+
+  // Split into enrolled course exams vs other exams
+  const { enrolledExams, otherExams } = useMemo(() => {
+    const enrolled: Exam[] = [];
+    const other: Exam[] = [];
+
+    availableExams.forEach(exam => {
+      const cid = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
+      if (enrolledCourseIds.has(cid) || isTeacherOrAdmin) {
+        enrolled.push(exam);
+      } else {
+        other.push(exam);
+      }
+    });
+
+    return { enrolledExams: enrolled, otherExams: other };
+  }, [availableExams, enrolledCourseIds, isTeacherOrAdmin]);
+
+  // Instant in-memory filter and search
+  const displayedExams = useMemo(() => {
+    let list = availableExams;
+
+    if (courseFilter === 'enrolled_only') {
+      list = enrolledExams;
+    } else if (courseFilter !== 'all') {
+      list = list.filter(e => {
+        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+        return cid === courseFilter;
+      });
+    }
+
+    if (examSearch.trim()) {
+      const q = examSearch.trim().toLowerCase();
+      list = list.filter(e => {
+        const title = (e.Title || '').toLowerCase();
+        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+        const cTitle = (allCourses.find((c: any) => c._id === cid)?.Title || (typeof e.CourseId === 'object' && (e.CourseId as any)?.Title ? (e.CourseId as any).Title : '')).toLowerCase();
+        return title.includes(q) || cTitle.includes(q);
+      });
+    }
+
+    // Sort: Enrolled course exams FIRST, then by OrderIndex/Title
+    return [...list].sort((a, b) => {
+      const aCid = typeof a.CourseId === 'object' && a.CourseId ? (a.CourseId as any)._id : a.CourseId;
+      const bCid = typeof b.CourseId === 'object' && b.CourseId ? (b.CourseId as any)._id : b.CourseId;
+      const aEnrolled = enrolledCourseIds.has(aCid) ? 1 : 0;
+      const bEnrolled = enrolledCourseIds.has(bCid) ? 1 : 0;
+      if (aEnrolled !== bEnrolled) return bEnrolled - aEnrolled;
+      return (a.Title || '').localeCompare(b.Title || '');
+    });
+  }, [availableExams, enrolledExams, courseFilter, examSearch, allCourses, enrolledCourseIds]);
 
   const { data: historyRes, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['examHistory'],
@@ -407,7 +545,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
 
       {/* ── AVAILABLE INTERACTIVE EXAMS CATALOG ─────────────── */}
       <div className="glass-card" style={{ padding: '2rem', marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <span className="gradient-badge">
@@ -416,25 +554,129 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>نظام البابل شيت والتصحيح الفوري</span>
             </div>
             <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-              الاختبارات التفاعلية المتاحة ({availableExams.length})
+              امتحانات الكورسات والتقييمات المتاحة ({displayedExams.length})
             </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem', marginBottom: 0 }}>
+              يتم إظهار كافة اختبارات الكورسات المشترك بها تلقائياً للبدء فوراً بدون الحاجة للبحث داخل كل كورس.
+            </p>
+          </div>
+
+          {enrolledExams.length > 0 && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.45rem 0.9rem',
+              borderRadius: '9999px',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              color: '#10B981',
+              fontSize: '0.82rem',
+              fontWeight: 700
+            }}>
+              <CheckCircle2 size={15} /> {enrolledExams.length} اختبار من كورساتك المشترك بها جاهز للتقديم
+            </div>
+          )}
+        </div>
+
+        {/* Filter & Search Toolbar */}
+        <div style={{
+          display: 'flex',
+          gap: '1rem',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          marginBottom: '1.5rem',
+          padding: '0.85rem 1rem',
+          background: 'var(--bg-subtle)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-glass)'
+        }}>
+          {/* Quick Filter Pills */}
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center', flex: 1 }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.25rem' }}>
+              <Filter size={13} /> التصفية:
+            </span>
+
+            <button
+              type="button"
+              className={`btn ${courseFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem' }}
+              onClick={() => setCourseFilter('all')}
+            >
+              كافة الامتحانات ({availableExams.length})
+            </button>
+
+            {enrolledExams.length > 0 && (
+              <button
+                type="button"
+                className={`btn ${courseFilter === 'enrolled_only' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  padding: '0.3rem 0.75rem',
+                  fontSize: '0.78rem',
+                  borderColor: courseFilter === 'enrolled_only' ? undefined : 'rgba(16, 185, 129, 0.4)',
+                  color: courseFilter === 'enrolled_only' ? undefined : '#10B981',
+                  background: courseFilter === 'enrolled_only' ? undefined : 'rgba(16, 185, 129, 0.08)',
+                }}
+                onClick={() => setCourseFilter('enrolled_only')}
+              >
+                <CheckCircle2 size={13} /> كورساتي المشترك بها ({enrolledExams.length})
+              </button>
+            )}
+
+            {enrolledCoursesList.map(c => (
+              <button
+                key={c._id}
+                type="button"
+                className={`btn ${courseFilter === c._id ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem' }}
+                onClick={() => setCourseFilter(c._id)}
+              >
+                <BookOpen size={12} /> {c.Title}
+              </button>
+            ))}
+          </div>
+
+          {/* Instant Search Bar */}
+          <div style={{ position: 'relative', minWidth: '220px', flex: '0 1 280px' }}>
+            <Search size={14} style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              className="input-field"
+              value={examSearch}
+              onChange={e => setExamSearch(e.target.value)}
+              placeholder="ابحث باسم الامتحان أو الكورس..."
+              style={{ paddingRight: '2.25rem', paddingLeft: '0.75rem', fontSize: '0.82rem', paddingBlock: '0.35rem' }}
+            />
           </div>
         </div>
 
-        {isPublishedExamsLoading ? (
-          <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            جاري تحميل الاختبارات المتاحة...
+        {isPublishedExamsLoading || isEnrollmentsLoading ? (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            جاري مزامنة وجلب اختبارات الكورسات المشترك بها...
           </div>
-        ) : availableExams.length === 0 ? (
-          <div style={{ padding: '2.5rem', textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            لا توجد اختبارات تفاعلية منشورة حالياً. يرجى متابعة التحديثات مع المعلم.
+        ) : displayedExams.length === 0 ? (
+          <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: '10px', color: 'var(--text-muted)' }}>
+            <BookOpen size={36} style={{ margin: '0 auto 0.75rem', opacity: 0.4 }} />
+            <p style={{ margin: '0 0 0.5rem', fontWeight: 600, color: 'var(--text-bright)' }}>
+              {courseFilter === 'enrolled_only'
+                ? 'لا توجد اختبارات مضافة في الكورسات المشترك بها حالياً.'
+                : examSearch
+                ? 'لا توجد نتائج مطابقة لبحثك.'
+                : 'لا توجد اختبارات تفاعلية منشورة حالياً.'}
+            </p>
+            <p style={{ margin: 0, fontSize: '0.85rem' }}>
+              {courseFilter === 'enrolled_only'
+                ? 'تابع التحديثات مع المعلم حيث سيتم إظهار أي امتحان جديد هنا تلقائياً فور نشره.'
+                : 'يرجى مراجعة الكورسات أو متابعة التحديثات مع المعلم.'}
+            </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' }}>
-            {availableExams.map(exam => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+            {displayedExams.map(exam => {
               const examCourseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
               const courseMatch = allCourses.find((c: any) => c._id === examCourseId);
               const courseTitle = courseMatch?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : 'كورس تعليمي');
+              const isEnrolledExam = enrolledCourseIds.has(examCourseId) || isTeacherOrAdmin;
 
               return (
                 <div
@@ -445,18 +687,41 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    border: '1px solid var(--border-glass)',
-                    background: 'rgba(255, 255, 255, 0.02)'
+                    border: isEnrolledExam ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)',
+                    background: isEnrolledExam ? 'rgba(16, 185, 129, 0.03)' : 'rgba(255, 255, 255, 0.02)',
+                    position: 'relative'
                   }}
                 >
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <span style={{
-                        fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.6rem',
-                        borderRadius: '9999px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981'
-                      }}>
-                        متاح للتقديم الآن
-                      </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {isEnrolledExam ? (
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          padding: '0.2rem 0.65rem',
+                          borderRadius: '9999px',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10B981',
+                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}>
+                          <CheckCircle2 size={13} /> كورس مشترك به (مفتوح لك)
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '9999px',
+                          background: 'rgba(8, 145, 178, 0.15)',
+                          color: 'var(--primary-light)'
+                        }}>
+                          اختبار متاح
+                        </span>
+                      )}
+
                       {exam.IsGated && (
                         <span style={{ fontSize: '0.72rem', color: '#F59E0B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                           مشروط <Lock size={11} />
@@ -468,14 +733,21 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                       {exam.Title}
                     </h3>
 
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      <div>
-                        <strong style={{ color: 'var(--text-bright)' }}>الكورس:</strong> {courseTitle}
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-light)', fontWeight: 700 }}>
+                        <BookOpen size={14} />
+                        <span>الكورس: {courseTitle}</span>
                       </div>
                       <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> المدة: {exam.DurationMinutes} دقيقة</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Target size={13} /> النجاح: {exam.PassingScore}</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><RotateCcw size={13} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <Clock size={13} /> المدة: {exam.DurationMinutes} دقيقة
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <Target size={13} /> درجة النجاح: {exam.PassingScore}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <RotateCcw size={13} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -483,7 +755,19 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                   <button
                     type="button"
                     className="btn btn-primary"
-                    style={{ width: '100%', padding: '0.6rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', marginTop: '0.5rem' }}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.45rem',
+                      marginTop: '0.5rem',
+                      background: isEnrolledExam ? 'linear-gradient(135deg, #10B981, #059669)' : undefined,
+                      borderColor: isEnrolledExam ? '#10B981' : undefined
+                    }}
                     onClick={() => {
                       if (onSelectExam) {
                         onSelectExam(exam._id);
