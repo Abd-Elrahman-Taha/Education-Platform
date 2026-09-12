@@ -215,10 +215,14 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
   if (
     lowerMsg.includes('orderindex') ||
     lowerMsg.includes('order index') ||
-    lowerMsg.includes('duplicate key') ||
-    lowerMsg.includes('e11000')
+    ((lowerMsg.includes('duplicate key') || lowerMsg.includes('e11000')) &&
+      (lowerMsg.includes('order') || lowerMsg.includes('question')))
   ) {
     return 'رقم ترتيب السؤال مكرر داخل هذا الاختبار، يرجى اختيار رقم ترتيب فريد.';
+  }
+
+  if (lowerMsg.includes('duplicate key') || lowerMsg.includes('e11000')) {
+    return 'يوجد بيان مكرر مسجل مسبقاً في النظام، يرجى التحقق من الحقول الفريدة.';
   }
 
   if (

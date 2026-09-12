@@ -159,12 +159,21 @@ export const examsApi = {
    * List all questions belonging to an exam.
    */
   getQuestions: async (examId: string): Promise<Question[]> => {
+    if (!examId) return [];
     const response = await apiClient.get<any>(`/exams/${examId}/questions`);
     const raw = response.data as any;
     const list = Array.isArray(raw?.data?.questions)
       ? raw.data.questions
       : Array.isArray(raw?.questions)
       ? raw.questions
+      : Array.isArray(raw?.data?.exam?.questions)
+      ? raw.data.exam.questions
+      : Array.isArray(raw?.exam?.questions)
+      ? raw.exam.questions
+      : Array.isArray(raw?.data?.items)
+      ? raw.data.items
+      : Array.isArray(raw?.items)
+      ? raw.items
       : Array.isArray(raw?.data)
       ? raw.data
       : Array.isArray(raw)

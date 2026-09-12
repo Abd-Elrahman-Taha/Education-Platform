@@ -1298,17 +1298,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (!selectedExamForQuestions) return;
     setEditingQuestion(null);
 
-    // Fetch the current questions from the server to calculate the next available logical OrderIndex
+    const examId = selectedExamForQuestions._id || (selectedExamForQuestions as any).id;
     let currentQuestions = examQuestions;
     try {
-      currentQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-      setExamQuestions(currentQuestions);
+      const fetched = await examsApi.getQuestions(examId);
+      if (Array.isArray(fetched) && fetched.length > 0) {
+        currentQuestions = fetched;
+        setExamQuestions(fetched);
+      }
     } catch {
       currentQuestions = examQuestions;
     }
 
-    // Calculate next available logical OrderIndex: max(existing OrderIndex) + 1
-    const nextOrder = calculateNextOrderIndex(currentQuestions);
+    const allQuestions = [...currentQuestions, ...examQuestions];
+    const existingOrders = new Set(
+      allQuestions
+        .map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
+        .filter(n => n > 0 && !isNaN(n))
+    );
+
+    let nextOrder = calculateNextOrderIndex(allQuestions);
+    while (existingOrders.has(nextOrder)) {
+      nextOrder++;
+    }
 
     setQuestionForm({
       questionType: 'MCQ',
@@ -1352,32 +1364,48 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       return;
     }
 
+    const examId = selectedExamForQuestions._id || (selectedExamForQuestions as any).id;
+
     // Immediately disable submit buttons to prevent double click / duplicate requests
     setIsSubmittingQuestion(true);
     let payload: any = null;
+    let currentQuestions: Question[] = examQuestions;
 
     try {
       // 1. Fetch current questions using GET /api/v1/exams/:id/questions
-      let currentQuestions: Question[] = [];
       try {
-        currentQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-        setExamQuestions(currentQuestions);
+        const fetched = await examsApi.getQuestions(examId);
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          currentQuestions = fetched;
+          setExamQuestions(fetched);
+        }
       } catch {
         currentQuestions = examQuestions;
       }
+
+      // Combine all known questions to ensure comprehensive uniqueness
+      const allKnownQuestions = [...currentQuestions, ...examQuestions];
+      const existingOrders = new Set(
+        allKnownQuestions
+          .map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
+          .filter(n => n > 0 && !isNaN(n))
+      );
 
       // 2. Calculate next available logical OrderIndex: max(existing OrderIndex) + 1
       let chosenOrder: number;
       if (editingQuestion) {
         chosenOrder = Number(questionForm.orderIndex) || editingQuestion.OrderIndex || 1;
       } else {
-        const nextLogicalOrder = calculateNextOrderIndex(currentQuestions);
+        const nextLogicalOrder = calculateNextOrderIndex(allKnownQuestions);
         const userEnteredOrder = Number(questionForm.orderIndex);
-        const isConflicting = currentQuestions.some(q => Number(q.OrderIndex) === userEnteredOrder);
-        if (!userEnteredOrder || userEnteredOrder <= 0 || isConflicting) {
+        if (!userEnteredOrder || userEnteredOrder <= 0 || existingOrders.has(userEnteredOrder)) {
           chosenOrder = nextLogicalOrder;
         } else {
           chosenOrder = userEnteredOrder;
+        }
+        // Strictly guarantee that chosenOrder is unique
+        while (existingOrders.has(chosenOrder)) {
+          chosenOrder++;
         }
       }
 
@@ -1461,28 +1489,45 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       // Determine if error is specifically an OrderIndex collision:
       // 1. HTTP 409 Conflict indicates duplicate unique key
-      // 2. Or message specifically contains orderindex / order index
-      // 3. E11000 duplicate key error specifically referencing OrderIndex (not other unique indexes)
+      // 2. Or message specifically contains orderindex / order index / duplicate key
       const isOrderIndexCollision =
         status === 409 ||
         lowerMsg.includes('orderindex') ||
         lowerMsg.includes('order index') ||
-        (lowerMsg.includes('e11000') && lowerMsg.includes('orderindex'));
+        lowerMsg.includes('duplicate key') ||
+        lowerMsg.includes('e11000');
 
       if (isOrderIndexCollision && !editingQuestion) {
-        // Display appropriate Arabic message explaining that another question already uses the order index,
-        // and that the application is retrying with the latest available index.
         showToast('رقم ترتيب السؤال مستخدم بالفعل في هذا الاختبار، جاري إعادة المحاولة تلقائياً بأحدث ترتيب متاح...', 'warning');
 
         try {
           // 1. Refetch questions using GET /api/v1/exams/:id/questions
-          const freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-          // 2. Recalculate max(OrderIndex) + 1
-          const nextOrder = calculateNextOrderIndex(freshQuestions);
+          let freshQuestions: Question[] = [];
+          try {
+            freshQuestions = await examsApi.getQuestions(examId);
+          } catch {
+            freshQuestions = [];
+          }
+          const allQuestions = [...freshQuestions, ...currentQuestions, ...examQuestions];
+          const freshOrders = new Set(
+            allQuestions
+              .map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
+              .filter(n => n > 0 && !isNaN(n))
+          );
+
+          // 2. The previous payload.OrderIndex collided. The next order MUST be strictly greater than previous payload.OrderIndex
+          // and must not exist in freshOrders!
+          let nextOrder = Math.max(
+            (Number(payload?.OrderIndex) || 0) + 1,
+            calculateNextOrderIndex(allQuestions)
+          );
+          while (freshOrders.has(nextOrder) || nextOrder <= (Number(payload?.OrderIndex) || 0)) {
+            nextOrder++;
+          }
           payload.OrderIndex = nextOrder;
 
-          // 3. Retry the create request ONCE with the new OrderIndex
-          const retriedQuestion = await examsApi.createQuestion(selectedExamForQuestions._id, payload);
+          // 3. Retry the create request ONCE with the guaranteed-unique OrderIndex
+          const retriedQuestion = await examsApi.createQuestion(examId, payload);
 
           if (retriedQuestion) {
             setExamQuestions(prev => {
@@ -1493,7 +1538,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           }
 
           showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
-          await loadQuestions(selectedExamForQuestions._id);
+          await loadQuestions(examId);
 
           if (addAnother) {
             setEditingQuestion(null);
