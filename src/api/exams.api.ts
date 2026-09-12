@@ -26,6 +26,26 @@ export interface ExamQueryParams {
   search?: string;
 }
 
+/**
+ * Calculates the next available logical OrderIndex for an exam's questions.
+ * Formula: max(existing OrderIndex) + 1 (NOT questions.length + 1).
+ * If no valid questions/OrderIndex exist, defaults to 1.
+ * Non-numeric and invalid values are safely ignored.
+ */
+export function calculateNextOrderIndex(questions?: Array<{ OrderIndex?: any; orderIndex?: any }>): number {
+  if (!questions || !Array.isArray(questions) || questions.length === 0) {
+    return 1;
+  }
+  const validOrders = questions
+    .map(q => Number(q.OrderIndex ?? (q as any).orderIndex))
+    .filter(n => typeof n === 'number' && !isNaN(n) && isFinite(n) && n > 0);
+
+  if (validOrders.length === 0) {
+    return 1;
+  }
+  return Math.max(...validOrders) + 1;
+}
+
 export const examsApi = {
   // ── Admin Exam CRUD ──────────────────────────────────────────────
   /**
@@ -161,7 +181,6 @@ export const examsApi = {
   /**
    * Create a question inside an exam (Admin only).
    * Note: CorrectAnswer is NEVER sent for Essay questions.
-   * Includes automated collision resolution for OrderIndex duplicate key errors.
    */
   createQuestion: async (examId: string, data: CreateQuestionRequest): Promise<Question> => {
     const payload = { ...data };
@@ -172,63 +191,9 @@ export const examsApi = {
       delete payload.Options;
     }
 
-    // Always resolve a guaranteed-unique OrderIndex BEFORE the first attempt
-    // to avoid the round-trip cost and UI error of collision-then-retry.
-    if (payload.OrderIndex !== undefined) {
-      try {
-        const freshQuestions = await examsApi.getQuestions(examId);
-        const existingOrders = new Set(
-          freshQuestions.map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0)).filter(n => n > 0)
-        );
-        if (existingOrders.has(payload.OrderIndex)) {
-          // Collision detected pre-flight — pick next safe number
-          console.warn(`[Exams API] OrderIndex collision detected on exam ${examId}. Auto-resolving OrderIndex...`);
-          let safeOrder = existingOrders.size > 0 ? Math.max(...Array.from(existingOrders)) + 1 : 1;
-          while (existingOrders.has(safeOrder)) safeOrder++;
-          payload.OrderIndex = safeOrder;
-        }
-      } catch {
-        // If fetch fails, use a timestamp-based unique fallback
-        payload.OrderIndex = Math.floor(Date.now() / 1000) % 100000 + 100;
-      }
-    }
-
-    try {
-      const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
-      const raw = response.data;
-      return raw?.data?.question || raw?.question || raw?.data || raw;
-    } catch (err: any) {
-      const rawErr =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        err?.response?.data?.msg ||
-        (typeof err?.response?.data === 'string' ? err?.response?.data : '') ||
-        err?.message ||
-        '';
-      const errMsg = String(rawErr).toLowerCase();
-
-      const isDuplicateOrder =
-        errMsg.includes('orderindex') ||
-        errMsg.includes('duplicate key') ||
-        errMsg.includes('e11000') ||
-        errMsg.includes('already exists') ||
-        errMsg.includes('مكرر');
-
-      if (isDuplicateOrder) {
-        // Last-resort: use timestamp to guarantee uniqueness
-        console.warn(`[Exams API] Post-flight OrderIndex collision on exam ${examId}. Using timestamp fallback...`);
-        try {
-          payload.OrderIndex = Math.floor(Date.now() / 1000) % 100000 + Math.floor(Math.random() * 100);
-          const retryResponse = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
-          const retryRaw = retryResponse.data;
-          return retryRaw?.data?.question || retryRaw?.question || retryRaw?.data || retryRaw;
-        } catch (retryErr: any) {
-          throw retryErr;
-        }
-      }
-
-      throw err;
-    }
+    const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
+    const raw = response.data;
+    return raw?.data?.question || raw?.question || raw?.data || raw;
   },
 
   /**
@@ -247,49 +212,10 @@ export const examsApi = {
     } else if (payload.QuestionType === 'TrueFalse' || payload.QuestionType === 'FillInBlank') {
       delete payload.Options;
     }
-    try {
-      const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
-      const raw = response.data;
-      return raw?.data?.question || raw?.question || raw?.data || raw;
-    } catch (err: any) {
-      const rawErr =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        err?.response?.data?.msg ||
-        (typeof err?.response?.data === 'string' ? err?.response?.data : '') ||
-        err?.message ||
-        '';
-      const errMsg = String(rawErr).toLowerCase();
 
-      const isDuplicateOrder =
-        errMsg.includes('orderindex') ||
-        errMsg.includes('duplicate key') ||
-        errMsg.includes('e11000') ||
-        errMsg.includes('already exists') ||
-        errMsg.includes('مكرر');
-
-      if (isDuplicateOrder && payload.OrderIndex !== undefined) {
-        try {
-          const freshQuestions = await examsApi.getQuestions(examId);
-          const existingOrders = new Set(
-            freshQuestions
-              .filter(q => q._id !== questionId)
-              .map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
-          );
-          let safeOrder = Math.max(0, ...Array.from(existingOrders)) + 1;
-          while (existingOrders.has(safeOrder)) {
-            safeOrder++;
-          }
-          payload.OrderIndex = safeOrder;
-          const retryResponse = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
-          const retryRaw = retryResponse.data;
-          return retryRaw?.data?.question || retryRaw?.question || retryRaw?.data || retryRaw;
-        } catch {
-          throw err;
-        }
-      }
-      throw err;
-    }
+    const response = await apiClient.patch<any>(`/exams/${examId}/questions/${questionId}`, payload);
+    const raw = response.data;
+    return raw?.data?.question || raw?.question || raw?.data || raw;
   },
 
   /**

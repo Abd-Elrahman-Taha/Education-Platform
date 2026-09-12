@@ -18,7 +18,7 @@ import { studentsApi } from '../../api/students.api';
 import { coursesApi } from '../../api/courses.api';
 import { lessonsApi } from '../../api/lessons.api';
 import { paymentApi } from '../../api/payment.api';
-import { examsApi } from '../../api/exams.api';
+import { examsApi, calculateNextOrderIndex } from '../../api/exams.api';
 import { enrollmentsApi } from '../../api/enrollments.api';
 import {
   AdminStudent,
@@ -1298,20 +1298,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (!selectedExamForQuestions) return;
     setEditingQuestion(null);
 
-    // Always fetch the freshest question list from the server so we never
-    // compute an OrderIndex that conflicts with a question already in the DB
-    // (e.g. the auto-created starter question that may not yet be in local state).
-    let freshQuestions = examQuestions;
+    // Fetch the current questions from the server to calculate the next available logical OrderIndex
+    let currentQuestions = examQuestions;
     try {
-      freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-      setExamQuestions(freshQuestions);  // keep UI in sync
+      currentQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
+      setExamQuestions(currentQuestions);
     } catch {
-      // fall back to whatever is in state
-      freshQuestions = examQuestions;
+      currentQuestions = examQuestions;
     }
 
-    const existingOrders = freshQuestions.map(q => Number(q.OrderIndex) || 0).filter(n => n > 0);
-    const nextOrder = existingOrders.length > 0 ? Math.max(...existingOrders) + 1 : 1;
+    // Calculate next available logical OrderIndex: max(existing OrderIndex) + 1
+    const nextOrder = calculateNextOrderIndex(currentQuestions);
 
     setQuestionForm({
       questionType: 'MCQ',
@@ -1355,61 +1352,64 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       return;
     }
 
-    // Determine unique OrderIndex to avoid backend duplicate key conflict
-    // Query latest questions directly from server to eliminate stale React closures
-    let existingOrders: number[] = [];
-    try {
-      const freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-      setExamQuestions(freshQuestions);
-      existingOrders = freshQuestions
-        .filter(q => !editingQuestion || q._id !== editingQuestion._id)
-        .map(q => Number(q.OrderIndex) || 0);
-    } catch {
-      existingOrders = examQuestions
-        .filter(q => !editingQuestion || q._id !== editingQuestion._id)
-        .map(q => Number(q.OrderIndex) || 0);
-    }
-
-    let chosenOrder = Number(questionForm.orderIndex);
-    if (!chosenOrder || chosenOrder <= 0 || (!editingQuestion && existingOrders.includes(chosenOrder))) {
-      // Find next strictly available order number
-      let nextSafe = (existingOrders.length > 0 ? Math.max(0, ...existingOrders) : 0) + 1;
-      while (existingOrders.includes(nextSafe)) {
-        nextSafe++;
-      }
-      chosenOrder = nextSafe;
-      setQuestionForm(prev => ({ ...prev, orderIndex: nextSafe }));
-    }
-
-    const payload: any = {
-      QuestionType: questionForm.questionType,
-      QuestionText: questionForm.questionText.trim(),
-      Points: Number(questionForm.points),
-      OrderIndex: chosenOrder,
-    };
-
-    if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
-      const rawCorrectText = (questionForm.options[questionForm.correctOptionIndex] || questionForm.correctAnswer || '').trim();
-      const cleanedOpts = questionForm.options.map(o => o.trim()).filter(Boolean);
-      if (cleanedOpts.length < 2) {
-        showToast('يرجى كتابة خيارين على الأقل للاختيار من متعدد', 'warning');
-        return;
-      }
-      payload.Options = cleanedOpts;
-      const correct = cleanedOpts.find(o => o === rawCorrectText) || cleanedOpts[0];
-      payload.CorrectAnswer = correct;
-    } else if (questionForm.questionType === 'TrueFalse') {
-      payload.CorrectAnswer = String(questionForm.correctAnswer).toLowerCase() === 'true' ? 'true' : 'false';
-    } else if (questionForm.questionType === 'FillInBlank') {
-      if (!questionForm.correctAnswer?.trim()) {
-        showToast('يرجى تحديد الإجابة النموذجية الصحيحة', 'warning');
-        return;
-      }
-      payload.CorrectAnswer = questionForm.correctAnswer.trim();
-    }
-
+    // Immediately disable submit buttons to prevent double click / duplicate requests
     setIsSubmittingQuestion(true);
+    let payload: any = null;
+
     try {
+      // 1. Fetch current questions using GET /api/v1/exams/:id/questions
+      let currentQuestions: Question[] = [];
+      try {
+        currentQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
+        setExamQuestions(currentQuestions);
+      } catch {
+        currentQuestions = examQuestions;
+      }
+
+      // 2. Calculate next available logical OrderIndex: max(existing OrderIndex) + 1
+      let chosenOrder: number;
+      if (editingQuestion) {
+        chosenOrder = Number(questionForm.orderIndex) || editingQuestion.OrderIndex || 1;
+      } else {
+        const nextLogicalOrder = calculateNextOrderIndex(currentQuestions);
+        const userEnteredOrder = Number(questionForm.orderIndex);
+        const isConflicting = currentQuestions.some(q => Number(q.OrderIndex) === userEnteredOrder);
+        if (!userEnteredOrder || userEnteredOrder <= 0 || isConflicting) {
+          chosenOrder = nextLogicalOrder;
+        } else {
+          chosenOrder = userEnteredOrder;
+        }
+      }
+
+      payload = {
+        QuestionType: questionForm.questionType,
+        QuestionText: questionForm.questionText.trim(),
+        Points: Number(questionForm.points),
+        OrderIndex: chosenOrder,
+      };
+
+      if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
+        const rawCorrectText = (questionForm.options[questionForm.correctOptionIndex] || questionForm.correctAnswer || '').trim();
+        const cleanedOpts = questionForm.options.map(o => o.trim()).filter(Boolean);
+        if (cleanedOpts.length < 2) {
+          setIsSubmittingQuestion(false);
+          showToast('يرجى كتابة خيارين على الأقل للاختيار من متعدد', 'warning');
+          return;
+        }
+        payload.Options = cleanedOpts;
+        const correct = cleanedOpts.find(o => o === rawCorrectText) || cleanedOpts[0];
+        payload.CorrectAnswer = correct;
+      } else if (questionForm.questionType === 'TrueFalse') {
+        payload.CorrectAnswer = String(questionForm.correctAnswer).toLowerCase() === 'true' ? 'true' : 'false';
+      } else if (questionForm.questionType === 'FillInBlank') {
+        if (!questionForm.correctAnswer?.trim()) {
+          setIsSubmittingQuestion(false);
+          showToast('يرجى تحديد الإجابة النموذجية الصحيحة', 'warning');
+          return;
+        }
+        payload.CorrectAnswer = questionForm.correctAnswer.trim();
+      }
+
       let savedQuestion: Question | null = null;
       if (editingQuestion) {
         savedQuestion = await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload);
@@ -1419,7 +1419,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
       }
 
-      // Immediately reflect in state
+      // Update state
       if (savedQuestion) {
         setExamQuestions(prev => {
           const exists = prev.some(q => q._id === savedQuestion!._id);
@@ -1430,8 +1430,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         });
       }
 
-      // Refresh from server to ensure OrderIndex is in sync
-      loadQuestions(selectedExamForQuestions._id);
+      // Refresh authoritative questions list from server
+      await loadQuestions(selectedExamForQuestions._id);
 
       if (addAnother) {
         const nextOrder = (savedQuestion?.OrderIndex || chosenOrder) + 1;
@@ -1449,53 +1449,58 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         setEditingQuestion(null);
       }
     } catch (err: any) {
-      const rawErr =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        err?.response?.data?.msg ||
-        (typeof err?.response?.data === 'string' ? err?.response?.data : '') ||
-        err?.message ||
-        '';
-      const errMsg = String(rawErr).toLowerCase();
+      const status = err?.response?.status || err?.status;
+      const errData = err?.response?.data;
+      const rawMsg = errData?.message || errData?.error || errData?.msg || err?.message || '';
+      const lowerMsg = String(rawMsg).toLowerCase();
 
-      if (errMsg.includes('attempt') || errMsg.includes('محاولات') || errMsg.includes('has attempts')) {
+      if (lowerMsg.includes('attempt') || lowerMsg.includes('محاولات') || lowerMsg.includes('has attempts')) {
         showToast('لا يمكن إضافة أو تعديل أسئلة الاختبار بعد وجود محاولات طلاب مسجلة. قم بإنشاء اختبار جديد بدلاً من ذلك.', 'error');
-      } else if (
-        errMsg.includes('duplicate') ||
-        errMsg.includes('orderindex') ||
-        errMsg.includes('e11000') ||
-        errMsg.includes('already exists') ||
-        errMsg.includes('مكرر')
-      ) {
-        // Auto-retry with a guaranteed fresh OrderIndex to handle race conditions
+        return;
+      }
+
+      // Determine if error is specifically an OrderIndex collision:
+      // 1. HTTP 409 Conflict indicates duplicate unique key
+      // 2. Or message specifically contains orderindex / order index
+      // 3. E11000 duplicate key error specifically referencing OrderIndex (not other unique indexes)
+      const isOrderIndexCollision =
+        status === 409 ||
+        lowerMsg.includes('orderindex') ||
+        lowerMsg.includes('order index') ||
+        (lowerMsg.includes('e11000') && lowerMsg.includes('orderindex'));
+
+      if (isOrderIndexCollision && !editingQuestion) {
+        // Display appropriate Arabic message explaining that another question already uses the order index,
+        // and that the application is retrying with the latest available index.
+        showToast('رقم ترتيب السؤال مستخدم بالفعل في هذا الاختبار، جاري إعادة المحاولة تلقائياً بأحدث ترتيب متاح...', 'warning');
+
         try {
+          // 1. Refetch questions using GET /api/v1/exams/:id/questions
           const freshQuestions = await examsApi.getQuestions(selectedExamForQuestions._id);
-          const freshOrders = freshQuestions
-            .filter(q => !editingQuestion || q._id !== editingQuestion._id)
-            .map(q => Number(q.OrderIndex) || 0);
-          let safeOrder = (freshOrders.length > 0 ? Math.max(0, ...freshOrders) : 0) + 1;
-          while (freshOrders.includes(safeOrder)) {
-            safeOrder++;
-          }
-          payload.OrderIndex = safeOrder;
-          const retried = editingQuestion
-            ? await examsApi.updateQuestion(selectedExamForQuestions._id, editingQuestion._id, payload)
-            : await examsApi.createQuestion(selectedExamForQuestions._id, payload);
-          if (retried) {
+          // 2. Recalculate max(OrderIndex) + 1
+          const nextOrder = calculateNextOrderIndex(freshQuestions);
+          payload.OrderIndex = nextOrder;
+
+          // 3. Retry the create request ONCE with the new OrderIndex
+          const retriedQuestion = await examsApi.createQuestion(selectedExamForQuestions._id, payload);
+
+          if (retriedQuestion) {
             setExamQuestions(prev => {
-              const exists = prev.some(q => q._id === retried._id);
-              if (exists) return prev.map(q => q._id === retried._id ? { ...q, ...payload, ...retried } : q);
-              return [...prev, retried];
+              const exists = prev.some(q => q._id === retriedQuestion._id);
+              if (exists) return prev.map(q => q._id === retriedQuestion._id ? { ...q, ...payload, ...retriedQuestion } : q);
+              return [...prev, retriedQuestion];
             });
           }
-          showToast(editingQuestion ? 'تم تحديث السؤال بنجاح!' : 'تمت إضافة السؤال للاختبار بنجاح!', 'success');
-          loadQuestions(selectedExamForQuestions._id);
+
+          showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
+          await loadQuestions(selectedExamForQuestions._id);
+
           if (addAnother) {
             setEditingQuestion(null);
             setQuestionForm(prev => ({
               ...prev,
               questionText: '',
-              orderIndex: safeOrder + 1,
+              orderIndex: nextOrder + 1,
               options: ['', '', '', ''],
               correctOptionIndex: 0,
               correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : '',
@@ -1505,9 +1510,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             setEditingQuestion(null);
           }
         } catch (retryErr: any) {
+          // 4. If the retry also fails, stop and show the real backend error to the user
           showToast(getFriendlyErrorMessage(retryErr, 'تعذر حفظ السؤال بعد إعادة المحاولة.'), 'error');
         }
       } else {
+        // Show the real backend error to the user
         showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من إدخال البيانات بشكل صحيح.'), 'error');
       }
     } finally {
@@ -1548,6 +1555,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         examQuestions.map(q => q._id)
       );
       showToast('تم حفظ الترتيب الجديد للأسئلة بنجاح!', 'success');
+      // After a successful reorder, refetch the questions so the frontend state reflects the backend's authoritative order
+      await loadQuestions(selectedExamForQuestions._id);
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ ترتيب الأسئلة في الخادم'), 'error');
     }
