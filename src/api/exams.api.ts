@@ -73,12 +73,6 @@ export const examsApi = {
         _id: e._id || (e as any).id,
       }));
 
-      if (examsList.length > 0) {
-        try {
-          localStorage.setItem('cached_platform_exams', JSON.stringify(examsList));
-        } catch {}
-      }
-
       if (params) {
         if (params.CourseId && params.CourseId !== 'all') {
           examsList = examsList.filter(e => {
@@ -108,33 +102,65 @@ export const examsApi = {
       };
     } catch (err: any) {
       console.warn('[Exams API] getExams error:', err?.message || err);
-      // Seamless fallback: Retrieve cached published exams for students
+
+      // Student database fallback: Directly query real database for enrolled courses and their lesson exams
       try {
-        const cachedRaw = localStorage.getItem('cached_platform_exams');
-        if (cachedRaw) {
-          let cachedList: Exam[] = JSON.parse(cachedRaw);
-          if (params) {
-            if (params.CourseId && params.CourseId !== 'all') {
-              cachedList = cachedList.filter(e => {
-                const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : (e.CourseId || (e as any).courseId);
-                return cid === params.CourseId;
-              });
-            }
-            if (params.Status && params.Status !== 'all') {
-              const reqStatus = params.Status.toLowerCase();
-              cachedList = cachedList.filter(e => (e.Status || (e as any).status || '').toLowerCase() === reqStatus);
-            }
-            if (params.search && params.search.trim()) {
-              const s = params.search.trim().toLowerCase();
-              cachedList = cachedList.filter(e => (e.Title || '').toLowerCase().includes(s));
-            }
-            if (params.limit && params.limit > 0 && cachedList.length > params.limit) {
-              cachedList = cachedList.slice(0, params.limit);
-            }
-          }
-          return { exams: cachedList, total: cachedList.length, totalPages: 1 };
+        const foundExams: Exam[] = [];
+        const seenIds = new Set<string>();
+
+        let targetCourseIds: string[] = [];
+        if (params?.CourseId && params.CourseId !== 'all') {
+          targetCourseIds = [params.CourseId];
+        } else {
+          // Fetch student's enrolled courses from the database
+          const enrollRes = await apiClient.get<any>('/enrollments/my-courses');
+          const enrollList = Array.isArray(enrollRes.data?.data?.enrollments)
+            ? enrollRes.data.data.enrollments
+            : (Array.isArray(enrollRes.data?.enrollments) ? enrollRes.data.enrollments : []);
+          targetCourseIds = enrollList.map((e: any) =>
+            typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId._id || e.CourseId.id) : (e.CourseId || e.courseId)
+          ).filter(Boolean);
         }
-      } catch {}
+
+        // For each course from the database, query its lessons from the database
+        await Promise.all(
+          targetCourseIds.map(async (cid) => {
+            try {
+              const lessonsRes = await apiClient.get<any>(`/courses/${cid}/lessons`);
+              const lessons = Array.isArray(lessonsRes.data?.data?.lessons)
+                ? lessonsRes.data.data.lessons
+                : (Array.isArray(lessonsRes.data?.lessons) ? lessonsRes.data.lessons : []);
+
+              for (const l of lessons) {
+                if (l.PrerequisiteExamId && !seenIds.has(l.PrerequisiteExamId)) {
+                  seenIds.add(l.PrerequisiteExamId);
+                  foundExams.push({
+                    _id: l.PrerequisiteExamId,
+                    Title: `امتحان: ${l.Title || 'المحاضرة'}`,
+                    CourseId: cid,
+                    LessonId: l._id,
+                    DurationMinutes: (l as any).DurationMinutes || (l.DurationSeconds ? Math.round(l.DurationSeconds / 60) : 20),
+                    PassingScore: 10,
+                    MaxAttempts: 0,
+                    Status: 'Published',
+                    IsRandomized: true,
+                    IsGated: false,
+                  } as Exam);
+                }
+              }
+            } catch {}
+          })
+        );
+
+        return {
+          exams: foundExams,
+          total: foundExams.length,
+          totalPages: 1,
+        };
+      } catch (fallbackErr) {
+        console.warn('[Exams API] Database fallback failed:', fallbackErr);
+      }
+
       return { exams: [], total: 0, totalPages: 1 };
     }
   },

@@ -424,15 +424,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         return;
       }
 
-      // If no specific lessonId, check lessons of this course to attach to available lesson
+      // If no specific lessonId, check lessons of this course to attach to available lesson in the database
       const lessons = await lessonsApi.getCourseLessons(courseId);
-      if (Array.isArray(lessons) && lessons.length > 0) {
-        const alreadyLinked = lessons.find(l => l.PrerequisiteExamId === exam._id);
-        if (!alreadyLinked) {
-          const target = lessons.find(l => !l.PrerequisiteExamId) || lessons[0];
-          if (target && target._id) {
-            await lessonsApi.updateLesson(courseId, target._id, { PrerequisiteExamId: exam._id });
+      if (Array.isArray(lessons)) {
+        if (lessons.length > 0) {
+          const alreadyLinked = lessons.find(l => l.PrerequisiteExamId === exam._id);
+          if (!alreadyLinked) {
+            const target = lessons.find(l => !l.PrerequisiteExamId) || lessons[0];
+            if (target && target._id) {
+              await lessonsApi.updateLesson(courseId, target._id, { PrerequisiteExamId: exam._id });
+            }
           }
+        } else {
+          // If course has no lessons in database, create an assessment lesson in the database so enrolled students can take the exam
+          await lessonsApi.createLesson(courseId, {
+            Title: exam.Title || 'امتحان التقييم الإلكتروني',
+            VideoStoragePath: 'videos/exam-intro.mp4',
+            DurationSeconds: (Number(exam.DurationMinutes) || 30) * 60,
+            OrderIndex: 1,
+            MaxAllowedViews: 10,
+            PrerequisiteExamId: exam._id,
+          });
         }
       }
     } catch (err) {
@@ -447,11 +459,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       const list = res.exams || [];
       setRealExams(list);
       if (list.length > 0) {
-        try {
-          localStorage.setItem('cached_platform_exams', JSON.stringify(list));
-        } catch {}
-
-        // Auto-heal / repair: ensure all published exams are linked to lessons on backend
+        // Auto-heal / repair: ensure all published exams are linked to lessons in the database
         list.filter(e => e.Status === 'Published').forEach(pubExam => {
           ensureExamLinkedToCourseLessons(pubExam);
         });
@@ -1098,13 +1106,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           } catch {}
         }
 
-        setRealExams(prev => {
-          const next = [createdExam, ...prev.filter(e => e._id !== createdExam._id)];
-          try {
-            localStorage.setItem('cached_platform_exams', JSON.stringify(next));
-          } catch {}
-          return next;
-        });
+        setRealExams(prev => [createdExam, ...prev.filter(e => e._id !== createdExam._id)]);
       }
 
       showToast(wantsPublished ? 'تم إنشاء الاختبار ونشره بنجاح وبات متاحاً للطلاب!' : 'تم إنشاء الاختبار بنجاح!', 'success');
@@ -1330,13 +1332,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         Closed: 'تم إغلاق الاختبار بنجاح (لم يعد يستقبل محاولات)',
       };
       showToast(statusLabels[newStatus] || 'تم تحديث حالة الاختبار بنجاح!', 'success');
-      setRealExams(prev => {
-        const next = prev.map(e => e._id === exam._id ? { ...e, Status: newStatus, PassingScore: exam.PassingScore } : e);
-        try {
-          localStorage.setItem('cached_platform_exams', JSON.stringify(next));
-        } catch {}
-        return next;
-      });
+      setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: newStatus, PassingScore: exam.PassingScore } : e));
       if (selectedExamForQuestions && selectedExamForQuestions._id === exam._id) {
         setSelectedExamForQuestions(prev => prev ? { ...prev, Status: newStatus, PassingScore: exam.PassingScore } : null);
       }

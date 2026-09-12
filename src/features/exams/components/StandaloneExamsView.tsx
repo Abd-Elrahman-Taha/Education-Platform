@@ -128,27 +128,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
         console.warn('[Exams] General getExams returned:', err?.message || err);
       }
 
-      // 2. Also read from cached platform exams in localStorage (guarantees student visibility)
-      const cachedMap = new Map<string, Exam>();
-      try {
-        const cachedRaw = localStorage.getItem('cached_platform_exams');
-        if (cachedRaw) {
-          const cachedExams: Exam[] = JSON.parse(cachedRaw);
-          if (Array.isArray(cachedExams)) {
-            cachedExams.forEach(e => {
-              const id = e._id || (e as any).id;
-              if (id) {
-                cachedMap.set(id, { ...e, _id: id });
-                if (!examMap.has(id)) {
-                  examMap.set(id, { ...e, _id: id });
-                }
-              }
-            });
-          }
-        }
-      } catch {}
-
-      // 3. Discover lesson-linked prerequisite exams for all enrolled and available courses
+      // 2. Discover lesson-linked prerequisite exams for all enrolled and available courses directly from database
       const allCourseIds = (allCourses || []).map((c: any) => c._id || c.id).filter(Boolean);
       const courseIdList = Array.from(new Set([...Array.from(enrolledCourseIds), ...allCourseIds]));
       if (courseIdList.length > 0) {
@@ -159,18 +139,17 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
               if (Array.isArray(lessons)) {
                 for (const lesson of lessons) {
                   if (lesson.PrerequisiteExamId && !examMap.has(lesson.PrerequisiteExamId)) {
-                    const cached = cachedMap.get(lesson.PrerequisiteExamId);
                     examMap.set(lesson.PrerequisiteExamId, {
                       _id: lesson.PrerequisiteExamId,
-                      Title: cached?.Title || `امتحان: ${lesson.Title || 'المحاضرة'}`,
+                      Title: `امتحان: ${lesson.Title || 'المحاضرة'}`,
                       CourseId: courseId,
                       LessonId: lesson._id,
-                      DurationMinutes: cached?.DurationMinutes || lesson.DurationMinutes || (lesson.DurationSeconds ? Math.round(lesson.DurationSeconds / 60) : 20),
-                      PassingScore: cached?.PassingScore ?? 10,
-                      MaxAttempts: cached?.MaxAttempts ?? 0,
-                      Status: cached?.Status || 'Published',
-                      IsRandomized: cached?.IsRandomized ?? true,
-                      IsGated: cached?.IsGated ?? false,
+                      DurationMinutes: lesson.DurationMinutes || (lesson.DurationSeconds ? Math.round(lesson.DurationSeconds / 60) : 20),
+                      PassingScore: 10,
+                      MaxAttempts: 0,
+                      Status: 'Published',
+                      IsRandomized: true,
+                      IsGated: false,
                     } as Exam);
                   }
                 }
