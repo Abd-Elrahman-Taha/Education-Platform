@@ -34,8 +34,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
   };
 
   return (
-    <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 6rem', maxWidth: '680px' }}>
-      <div className="glass-card" style={{ padding: '2rem' }}>
+    <div className="container fade-in-up" style={{ padding: '3.5rem 1.5rem 8rem', maxWidth: '720px', minHeight: 'calc(100vh - 350px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div className="glass-card" style={{ padding: '2.25rem', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}>
           <img

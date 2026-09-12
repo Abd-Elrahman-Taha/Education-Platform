@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useCheckout } from '../../hooks/useCheckout';
 
@@ -39,8 +40,8 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({
     onClose();
   };
 
-  return (
-    <div className="modal-overlay active" onClick={handleClose} style={{ zIndex: 99999 }}>
+  return createPortal(
+    <div className="modal-overlay active" onClick={handleClose} style={{ zIndex: 100000 }}>
       <div
         className="modal-box"
         onClick={(e) => e.stopPropagation()}
@@ -67,10 +68,10 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({
             <Sparkles size={28} />
           </div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-            شحن رصيد كارت السنتر
+            شحن كارت السنتر
           </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.25rem' }}>
-            أدخل كود الكارت المكون من الأرقام لشحن رصيد المحفظة فوراً
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+            أدخل كود الشحن المطبوع على الكارت لشحن رصيد محفظتك فورياً
           </p>
         </div>
 
@@ -78,51 +79,56 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({
           <div style={{ textAlign: 'center', padding: '1rem 0' }}>
             <div
               style={{
-                width: '48px',
-                height: '48px',
+                width: '64px',
+                height: '64px',
                 borderRadius: '50%',
                 background: 'rgba(16, 185, 129, 0.15)',
                 color: 'var(--success)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 0.75rem',
+                margin: '0 auto 1rem',
               }}
             >
-              <CheckCircle2 size={30} />
+              <CheckCircle2 size={36} />
             </div>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#10B981', margin: '0 0 0.5rem' }}>
-              تم الشحن بنجاح!
-            </h3>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-bright)', margin: '0 0 0.25rem' }}>
               تمت إضافة <strong>+{redeemSuccess.creditedAmount} ج.م</strong> إلى محفظتك.
             </p>
-            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '1.5rem' }}>
               رصيدك الحالي: {redeemSuccess.newWalletBalance} ج.م
             </span>
-
             <button
+              type="button"
               className="btn btn-primary"
               onClick={handleClose}
-              style={{ width: '100%', marginTop: '1.5rem', padding: '0.65rem' }}
+              style={{ width: '100%', padding: '0.75rem' }}
             >
-              إتمام وإغلاق
+              تم
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem', fontWeight: 600 }}>
-                كود كارت الشحن (Scratch Card Code)
+              <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
+                كود كارت الشحن (16 رقماً أو رمزاً)
               </label>
               <input
                 type="text"
                 required
-                placeholder="مثال: CARD-8942-X781"
+                placeholder="أدخل كود الكارت هنا..."
                 className="input-field"
-                style={{ width: '100%', fontSize: '0.95rem', letterSpacing: '1px', textAlign: 'center', fontFamily: 'monospace' }}
+                style={{
+                  width: '100%',
+                  fontSize: '1.1rem',
+                  fontFamily: 'monospace',
+                  letterSpacing: '2px',
+                  textAlign: 'center',
+                  padding: '0.85rem',
+                }}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                autoFocus
               />
             </div>
 
@@ -155,6 +161,7 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
