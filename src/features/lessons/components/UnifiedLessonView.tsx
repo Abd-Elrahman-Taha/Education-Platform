@@ -1050,9 +1050,14 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                         className="btn btn-primary"
                         style={{ padding: '0.85rem 1.75rem', fontSize: '0.95rem' }}
                         onClick={() => {
-                          setExamStarted(true);
-                          setExamTimer((lesson.exam?.durationMinutes || 15) * 60);
-                          showToast('بدأ امتحان الدرس — بالتوفيق!', 'success');
+                          const examId = (lesson as any).PrerequisiteExamId || lesson.exam?.id;
+                          if (examId && onNavigateView) {
+                            onNavigateView('view-exam-session', examId);
+                          } else {
+                            setExamStarted(true);
+                            setExamTimer((lesson.exam?.durationMinutes || 15) * 60);
+                            showToast('بدأ امتحان الدرس — بالتوفيق!', 'success');
+                          }
                         }}
                       >
                         <PlayCircle size={20} /> ابدأ الامتحان الآن

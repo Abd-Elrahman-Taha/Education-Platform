@@ -48,22 +48,55 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
   useEffect(() => {
     let isMounted = true;
     setIsExamsLoading(true);
+
+    const resolveExams = (backendExams: Exam[] = []) => {
+      const examMap = new Map<string, Exam>();
+
+      // 1. Matched exams from getExams (if admin or cache available)
+      backendExams.forEach(e => {
+        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+        if (cid === courseId && (e.Status === 'Published' || !e.Status)) {
+          examMap.set(e._id, e);
+        }
+      });
+
+      // 2. Discover from course lessons with PrerequisiteExamId (works reliably for students)
+      if (Array.isArray(lessons)) {
+        lessons.forEach(l => {
+          if (l.PrerequisiteExamId && !examMap.has(l.PrerequisiteExamId)) {
+            examMap.set(l.PrerequisiteExamId, {
+              _id: l.PrerequisiteExamId,
+              Title: `امتحان: ${l.Title || 'المحاضرة'}`,
+              CourseId: courseId,
+              LessonId: l._id,
+              DurationMinutes: (l as any).DurationMinutes || (l.DurationSeconds ? Math.round(l.DurationSeconds / 60) : 20),
+              PassingScore: 10,
+              MaxAttempts: 0,
+              Status: 'Published',
+              IsRandomized: true,
+              IsGated: false,
+            } as Exam);
+          }
+        });
+      }
+
+      return Array.from(examMap.values());
+    };
+
     examsApi.getExams({ CourseId: courseId })
       .then(res => {
         if (!isMounted) return;
-        const all = res.exams || [];
-        const matched = all.filter(e => {
-          const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
-          return cid === courseId && (e.Status === 'Published' || !e.Status);
-        });
-        setCourseExams(matched);
+        setCourseExams(resolveExams(res.exams || []));
       })
-      .catch(err => console.error('Failed to load course exams:', err))
+      .catch(() => {
+        if (!isMounted) return;
+        setCourseExams(resolveExams([]));
+      })
       .finally(() => {
         if (isMounted) setIsExamsLoading(false);
       });
     return () => { isMounted = false; };
-  }, [courseId]);
+  }, [courseId, lessons]);
 
   if (isLoading) {
     return <LoadingSpinner message="جاري تحميل بيانات الكورس والمحاضرات..." size="lg" />;

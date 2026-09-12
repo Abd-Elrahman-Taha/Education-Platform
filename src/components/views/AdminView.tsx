@@ -406,6 +406,40 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
   };
 
+  const ensureExamLinkedToCourseLessons = async (exam: Exam, shouldUnlink: boolean = false) => {
+    try {
+      const courseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
+      if (!courseId) return;
+      const lessonId = typeof exam.LessonId === 'object' && exam.LessonId ? (exam.LessonId as any)._id : (exam.LessonId || '');
+
+      if (shouldUnlink) {
+        if (lessonId) {
+          await lessonsApi.updateLesson(courseId, lessonId, { PrerequisiteExamId: null });
+        }
+        return;
+      }
+
+      if (lessonId) {
+        await lessonsApi.updateLesson(courseId, lessonId, { PrerequisiteExamId: exam._id });
+        return;
+      }
+
+      // If no specific lessonId, check lessons of this course to attach to available lesson
+      const lessons = await lessonsApi.getCourseLessons(courseId);
+      if (Array.isArray(lessons) && lessons.length > 0) {
+        const alreadyLinked = lessons.find(l => l.PrerequisiteExamId === exam._id);
+        if (!alreadyLinked) {
+          const target = lessons.find(l => !l.PrerequisiteExamId) || lessons[0];
+          if (target && target._id) {
+            await lessonsApi.updateLesson(courseId, target._id, { PrerequisiteExamId: exam._id });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Admin] Failed to sync exam with course lessons:', err);
+    }
+  };
+
   const loadExams = async () => {
     setIsExamsLoading(true);
     try {
@@ -416,6 +450,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         try {
           localStorage.setItem('cached_platform_exams', JSON.stringify(list));
         } catch {}
+
+        // Auto-heal / repair: ensure all published exams are linked to lessons on backend
+        list.filter(e => e.Status === 'Published').forEach(pubExam => {
+          ensureExamLinkedToCourseLessons(pubExam);
+        });
       }
     } catch (err: any) {
       console.warn('[API INFO] Exams list status:', err?.message || err);
@@ -1052,12 +1091,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           } catch {
             // Keep as draft if starter question creation fails
           }
+          await ensureExamLinkedToCourseLessons(createdExam);
+        } else if (newExamForm.lessonId) {
+          try {
+            await lessonsApi.updateLesson(newExamForm.courseId, newExamForm.lessonId, { PrerequisiteExamId: createdExam._id });
+          } catch {}
         }
 
-        setRealExams(prev => [createdExam, ...prev.filter(e => e._id !== createdExam._id)]);
+        setRealExams(prev => {
+          const next = [createdExam, ...prev.filter(e => e._id !== createdExam._id)];
+          try {
+            localStorage.setItem('cached_platform_exams', JSON.stringify(next));
+          } catch {}
+          return next;
+        });
       }
 
-      showToast(wantsPublished ? 'تم إنشاء الاختبار ونشره بنجاح!' : 'تم إنشاء الاختبار بنجاح!', 'success');
+      showToast(wantsPublished ? 'تم إنشاء الاختبار ونشره بنجاح وبات متاحاً للطلاب!' : 'تم إنشاء الاختبار بنجاح!', 'success');
       setIsCreateExamOpen(false);
       setNewExamForm({
         title: '',
@@ -1266,13 +1316,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       }
 
       await examsApi.updateExam(exam._id, { Status: newStatus });
+
+      // Automatically link to course lessons when Published, or unlink when Draft/Closed
+      if (newStatus === 'Published') {
+        await ensureExamLinkedToCourseLessons(exam);
+      } else {
+        await ensureExamLinkedToCourseLessons(exam, true);
+      }
+
       const statusLabels: Record<ExamStatus, string> = {
         Published: 'تم نشر الاختبار بنجاح وبات متاحاً للطلاب!',
         Draft: 'تم تحويل الاختبار إلى مسودة (غير متاح للطلاب)',
         Closed: 'تم إغلاق الاختبار بنجاح (لم يعد يستقبل محاولات)',
       };
       showToast(statusLabels[newStatus] || 'تم تحديث حالة الاختبار بنجاح!', 'success');
-      setRealExams(prev => prev.map(e => e._id === exam._id ? { ...e, Status: newStatus, PassingScore: exam.PassingScore } : e));
+      setRealExams(prev => {
+        const next = prev.map(e => e._id === exam._id ? { ...e, Status: newStatus, PassingScore: exam.PassingScore } : e);
+        try {
+          localStorage.setItem('cached_platform_exams', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       if (selectedExamForQuestions && selectedExamForQuestions._id === exam._id) {
         setSelectedExamForQuestions(prev => prev ? { ...prev, Status: newStatus, PassingScore: exam.PassingScore } : null);
       }
