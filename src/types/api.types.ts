@@ -350,7 +350,7 @@ export interface CreateQuestionRequest {
   QuestionType: QuestionType;
   QuestionText: string;
   Points: number;
-  OrderIndex: number;
+  OrderIndex?: number;
   Options?: string[];
   CorrectAnswer?: any; // NEVER sent for Essay questions
 }

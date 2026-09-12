@@ -232,12 +232,17 @@ export const examsApi = {
    */
   createQuestion: async (examId: string, data: CreateQuestionRequest): Promise<Question> => {
     const payload = { ...data };
+    // As requested: do not send OrderIndex with the request, the backend handles it by default
+    delete payload.OrderIndex;
+
     if (payload.QuestionType === 'Essay') {
       delete payload.CorrectAnswer;
       delete payload.Options;
     } else if (payload.QuestionType === 'TrueFalse' || payload.QuestionType === 'FillInBlank') {
       delete payload.Options;
     }
+
+    console.log('[Exams API] Sending POST /exams/' + examId + '/questions with payload:', JSON.stringify(payload, null, 2));
 
     const response = await apiClient.post<any>(`/exams/${examId}/questions`, payload);
     const raw = response.data;

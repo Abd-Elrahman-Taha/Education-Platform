@@ -1375,52 +1375,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     // Immediately disable submit buttons to prevent double click / duplicate requests
     setIsSubmittingQuestion(true);
     let payload: any = null;
-    let currentQuestions: Question[] = examQuestions;
 
     try {
-      // 1. Fetch current questions using GET /api/v1/exams/:id/questions
-      try {
-        const fetched = await examsApi.getQuestions(examId);
-        if (Array.isArray(fetched) && fetched.length > 0) {
-          currentQuestions = fetched;
-          setExamQuestions(fetched);
-        }
-      } catch {
-        currentQuestions = examQuestions;
-      }
-
-      // Combine all known questions to ensure comprehensive uniqueness
-      const allKnownQuestions = [...currentQuestions, ...examQuestions];
-      const existingOrders = new Set(
-        allKnownQuestions
-          .map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
-          .filter(n => n > 0 && !isNaN(n))
-      );
-
-      // 2. Calculate next available logical OrderIndex: max(existing OrderIndex) + 1
-      let chosenOrder: number;
-      if (editingQuestion) {
-        chosenOrder = Number(questionForm.orderIndex) || editingQuestion.OrderIndex || 1;
-      } else {
-        const nextLogicalOrder = calculateNextOrderIndex(allKnownQuestions);
-        const userEnteredOrder = Number(questionForm.orderIndex);
-        if (!userEnteredOrder || userEnteredOrder <= 0 || existingOrders.has(userEnteredOrder)) {
-          chosenOrder = nextLogicalOrder;
-        } else {
-          chosenOrder = userEnteredOrder;
-        }
-        // Strictly guarantee that chosenOrder is unique
-        while (existingOrders.has(chosenOrder)) {
-          chosenOrder++;
-        }
-      }
-
       payload = {
         QuestionType: questionForm.questionType,
         QuestionText: questionForm.questionText.trim(),
         Points: Number(questionForm.points),
-        OrderIndex: chosenOrder,
       };
+
+      // Only send OrderIndex when editing an existing question if specified
+      if (editingQuestion && questionForm.orderIndex) {
+        payload.OrderIndex = Number(questionForm.orderIndex);
+      }
 
       if (questionForm.questionType === 'MCQ' || questionForm.questionType === 'DragDrop') {
         const rawCorrectText = (questionForm.options[questionForm.correctOptionIndex] || questionForm.correctAnswer || '').trim();
@@ -1468,12 +1434,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       await loadQuestions(selectedExamForQuestions._id);
 
       if (addAnother) {
-        const nextOrder = (savedQuestion?.OrderIndex || chosenOrder) + 1;
         setEditingQuestion(null);
         setQuestionForm(prev => ({
           ...prev,
           questionText: '',
-          orderIndex: nextOrder,
+          orderIndex: (savedQuestion?.OrderIndex || prev.orderIndex) + 1,
           options: ['', '', '', ''],
           correctOptionIndex: 0,
           correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : '',
@@ -1483,7 +1448,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         setEditingQuestion(null);
       }
     } catch (err: any) {
-      const status = err?.response?.status || err?.status;
       const errData = err?.response?.data;
       const rawMsg = errData?.message || errData?.error || errData?.msg || err?.message || '';
       const lowerMsg = String(rawMsg).toLowerCase();
@@ -1493,81 +1457,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         return;
       }
 
-      // Determine if error is specifically an OrderIndex collision:
-      // 1. HTTP 409 Conflict indicates duplicate unique key
-      // 2. Or message specifically contains orderindex / order index / duplicate key
-      const isOrderIndexCollision =
-        status === 409 ||
-        lowerMsg.includes('orderindex') ||
-        lowerMsg.includes('order index') ||
-        lowerMsg.includes('duplicate key') ||
-        lowerMsg.includes('e11000');
-
-      if (isOrderIndexCollision && !editingQuestion) {
-        showToast('رقم ترتيب السؤال مستخدم بالفعل في هذا الاختبار، جاري إعادة المحاولة تلقائياً بأحدث ترتيب متاح...', 'warning');
-
-        try {
-          // 1. Refetch questions using GET /api/v1/exams/:id/questions
-          let freshQuestions: Question[] = [];
-          try {
-            freshQuestions = await examsApi.getQuestions(examId);
-          } catch {
-            freshQuestions = [];
-          }
-          const allQuestions = [...freshQuestions, ...currentQuestions, ...examQuestions];
-          const freshOrders = new Set(
-            allQuestions
-              .map(q => Number(q.OrderIndex ?? (q as any).orderIndex ?? 0))
-              .filter(n => n > 0 && !isNaN(n))
-          );
-
-          // 2. The previous payload.OrderIndex collided. The next order MUST be strictly greater than previous payload.OrderIndex
-          // and must not exist in freshOrders!
-          let nextOrder = Math.max(
-            (Number(payload?.OrderIndex) || 0) + 1,
-            calculateNextOrderIndex(allQuestions)
-          );
-          while (freshOrders.has(nextOrder) || nextOrder <= (Number(payload?.OrderIndex) || 0)) {
-            nextOrder++;
-          }
-          payload.OrderIndex = nextOrder;
-
-          // 3. Retry the create request ONCE with the guaranteed-unique OrderIndex
-          const retriedQuestion = await examsApi.createQuestion(examId, payload);
-
-          if (retriedQuestion) {
-            setExamQuestions(prev => {
-              const exists = prev.some(q => q._id === retriedQuestion._id);
-              if (exists) return prev.map(q => q._id === retriedQuestion._id ? { ...q, ...payload, ...retriedQuestion } : q);
-              return [...prev, retriedQuestion];
-            });
-          }
-
-          showToast('تمت إضافة السؤال للاختبار بنجاح!', 'success');
-          await loadQuestions(examId);
-
-          if (addAnother) {
-            setEditingQuestion(null);
-            setQuestionForm(prev => ({
-              ...prev,
-              questionText: '',
-              orderIndex: nextOrder + 1,
-              options: ['', '', '', ''],
-              correctOptionIndex: 0,
-              correctAnswer: prev.questionType === 'TrueFalse' ? 'true' : '',
-            }));
-          } else {
-            setIsAddQuestionOpen(false);
-            setEditingQuestion(null);
-          }
-        } catch (retryErr: any) {
-          // 4. If the retry also fails, stop and show the real backend error to the user
-          showToast(getFriendlyErrorMessage(retryErr, 'تعذر حفظ السؤال بعد إعادة المحاولة.'), 'error');
-        }
-      } else {
-        // Show the real backend error to the user
-        showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من إدخال البيانات بشكل صحيح.'), 'error');
-      }
+      // Show friendly error directly from backend
+      showToast(getFriendlyErrorMessage(err, 'تعذر حفظ السؤال. تأكد من إدخال البيانات بشكل صحيح.'), 'error');
     } finally {
       setIsSubmittingQuestion(false);
     }
@@ -4308,21 +4199,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   />
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                    ترتيب السؤال
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    className="input-field"
-                    style={{ width: '100%' }}
-                    title="رقم ترتيب السؤال في الاختبار — يمكنك تغييره يدوياً"
-                    value={questionForm.orderIndex}
-                    onChange={e => setQuestionForm({ ...questionForm, orderIndex: Number(e.target.value) })}
-                  />
-                </div>
+                {editingQuestion && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                      ترتيب السؤال
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                      title="رقم ترتيب السؤال في الاختبار"
+                      value={questionForm.orderIndex}
+                      onChange={e => setQuestionForm({ ...questionForm, orderIndex: Number(e.target.value) })}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
