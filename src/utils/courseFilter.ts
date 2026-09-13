@@ -205,9 +205,22 @@ export function matchesCourseForStudent(
       return courseStage === studentStage && courseGrade === studentGrade;
     }
 
-    // 2. If course only has stage
+    // 2. If course only has stage without explicit grade
     if (courseStage && !courseGrade) {
-      return courseStage === studentStage;
+      if (courseStage !== studentStage) return false;
+      const text = `${course.Title || ''} ${course.Description || ''}`.toLowerCase();
+      if (studentStage === 'Secondary') {
+        const mentionsGrade1 = text.includes('أول') || text.includes('اول') || text.includes('1 ثانوي') || text.includes('1ث') || text.includes('sec1') || text.includes('sec 1');
+        const mentionsGrade2 = text.includes('ثاني') || text.includes('تاني') || text.includes('2 ثانوي') || text.includes('2ث') || text.includes('sec2') || text.includes('sec 2');
+        const mentionsGrade3 = text.includes('ثالث') || text.includes('تالت') || text.includes('3 ثانوي') || text.includes('3ث') || text.includes('sec3') || text.includes('sec 3');
+        if (mentionsGrade1 || mentionsGrade2 || mentionsGrade3) {
+          if (studentGrade === '1') return mentionsGrade1;
+          if (studentGrade === '2') return mentionsGrade2;
+          if (studentGrade === '3') return mentionsGrade3;
+          return false;
+        }
+      }
+      return true;
     }
 
     // 3. If student is Secondary stage, test against academicYear matcher

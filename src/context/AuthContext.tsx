@@ -215,15 +215,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
 
         const resolvedName = (dbUser.FullName || dbUser.name || payload.FullName || 'حساب المستخدم').trim();
-        const resolvedAcademicYear = dbUser.AcademicYear || dbUser.academicYear || payload.AcademicYear || 'third_secondary';
-        const resolvedEducationStage = dbUser.EducationStage || dbUser.educationStage || payload.EducationStage || payload.educationStage;
-        const resolvedGrade = dbUser.Grade !== undefined && dbUser.Grade !== null
+        const rawAcademicYear = dbUser.AcademicYear || dbUser.academicYear || payload.AcademicYear;
+        const rawEducationStage = dbUser.EducationStage || dbUser.educationStage || payload.EducationStage || payload.educationStage;
+        const rawGrade = dbUser.Grade !== undefined && dbUser.Grade !== null
           ? String(dbUser.Grade)
           : (dbUser.grade !== undefined && dbUser.grade !== null
             ? String(dbUser.grade)
             : (payload.Grade !== undefined && payload.Grade !== null
               ? String(payload.Grade)
               : (payload.grade !== undefined ? String(payload.grade) : undefined)));
+
+        let resolvedEducationStage = rawEducationStage;
+        let resolvedGrade = rawGrade;
+        let resolvedAcademicYear = rawAcademicYear;
+
+        // Auto infer stage & grade from academicYear if missing
+        if (!resolvedEducationStage && resolvedAcademicYear) {
+          if (resolvedAcademicYear === 'first_secondary') { resolvedEducationStage = 'Secondary'; resolvedGrade = '1'; }
+          else if (resolvedAcademicYear === 'second_secondary') { resolvedEducationStage = 'Secondary'; resolvedGrade = '2'; }
+          else if (resolvedAcademicYear === 'third_secondary') { resolvedEducationStage = 'Secondary'; resolvedGrade = '3'; }
+        } else if (!resolvedAcademicYear && resolvedEducationStage === 'Secondary' && resolvedGrade) {
+          if (resolvedGrade === '1') resolvedAcademicYear = 'first_secondary';
+          else if (resolvedGrade === '2') resolvedAcademicYear = 'second_secondary';
+          else if (resolvedGrade === '3') resolvedAcademicYear = 'third_secondary';
+        }
+
+        if (!resolvedAcademicYear) {
+          resolvedAcademicYear = 'third_secondary';
+        }
 
         const updatedUser: User = {
           id: dbUser._id || dbUser.id || payload.userId || payload.sub || `usr-${Date.now()}`,
@@ -267,10 +286,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isSuperAdmin = roleLower === 'superadmin' || roleRaw === 'SuperAdmin';
       const isAdmin = roleLower === 'admin' || isSuperAdmin;
       const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
-      const fallbackEducationStage = payload.EducationStage || payload.educationStage;
-      const fallbackGrade = payload.Grade !== undefined && payload.Grade !== null
+      let fallbackEducationStage = payload.EducationStage || payload.educationStage;
+      let fallbackGrade = payload.Grade !== undefined && payload.Grade !== null
         ? String(payload.Grade)
         : (payload.grade !== undefined ? String(payload.grade) : undefined);
+      let fallbackAcademicYear = payload.AcademicYear;
+
+      if (!fallbackEducationStage && fallbackAcademicYear) {
+        if (fallbackAcademicYear === 'first_secondary') { fallbackEducationStage = 'Secondary'; fallbackGrade = '1'; }
+        else if (fallbackAcademicYear === 'second_secondary') { fallbackEducationStage = 'Secondary'; fallbackGrade = '2'; }
+        else if (fallbackAcademicYear === 'third_secondary') { fallbackEducationStage = 'Secondary'; fallbackGrade = '3'; }
+      } else if (!fallbackAcademicYear && fallbackEducationStage === 'Secondary' && fallbackGrade) {
+        if (fallbackGrade === '1') fallbackAcademicYear = 'first_secondary';
+        else if (fallbackGrade === '2') fallbackAcademicYear = 'second_secondary';
+        else if (fallbackGrade === '3') fallbackAcademicYear = 'third_secondary';
+      }
+
+      if (!fallbackAcademicYear) {
+        fallbackAcademicYear = 'third_secondary';
+      }
 
       const fallbackUser: User = {
         id: payload.userId || payload.sub,
@@ -283,14 +317,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: 'active',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
         registrationDate: new Date().toISOString().slice(0, 10),
-        academicYear: (payload.AcademicYear || 'third_secondary') as any,
-        subscribedYear: payload.AcademicYear || 'third_secondary',
+        academicYear: fallbackAcademicYear as any,
+        subscribedYear: fallbackAcademicYear,
         educationStage: fallbackEducationStage,
         grade: fallbackGrade,
         isSubscribed: false,
         subscription: {
           isActive: false,
-          year: payload.AcademicYear || 'third_secondary',
+          year: fallbackAcademicYear,
           plan: 'باقة التفوق',
         },
       } as any;

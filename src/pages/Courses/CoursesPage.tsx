@@ -11,9 +11,10 @@ import { AcademicYear, ACADEMIC_YEAR_LABELS } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { enrollmentsApi } from '../../api/enrollments.api';
 import { SubscriptionPlansModal } from '../../components/payment/SubscriptionPlansModal';
+import { CheckoutModal } from '../../components/payment/CheckoutModal';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 import { matchesAcademicYear, matchesCourseForStudent } from '../../utils/courseFilter';
-import { getStageLabel, getGradeLabel } from '../../constants/education';
+import { getStageLabel, getGradeLabel, mapStageGradeToAcademicYear } from '../../constants/education';
 
 interface CoursesPageProps {
   onSelectCourse: (courseId: string) => void;
@@ -30,7 +31,10 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
   const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || (currentUser?.academicYear as AcademicYear) || 'third_secondary';
 
-  const studentAcademicYear = currentUser?.academicYear || (currentUser as any)?.AcademicYear;
+  const studentAcademicYear =
+    currentUser?.academicYear ||
+    (currentUser as any)?.AcademicYear ||
+    mapStageGradeToAcademicYear(currentUser?.educationStage, currentUser?.grade);
 
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>(
     (studentAcademicYear as AcademicYear) || 'all'
@@ -44,6 +48,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
 
   const [modalYear, setModalYear] = useState<AcademicYear>('third_secondary');
   const [isPlansModalOpen, setIsPlansModalOpen] = useState(false);
+  const [selectedCourseForCheckout, setSelectedCourseForCheckout] = useState<Course | null>(null);
   const [searchInput, setSearchInput] = useState('');
 
   // Live query for current student's enrolled courses from backend
@@ -73,7 +78,7 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     handleSearchChange,
     handleSortChange,
     refetch,
-  } = useCourses({ limit: 12, sort: '-createdAt' });
+  } = useCourses({ limit: 100, sort: '-createdAt' });
 
   const yearsList: { key: AcademicYear; title: string; subtitle: string; icon: React.ElementType }[] = [
     { key: 'first_secondary', title: 'الصف الأول الثانوي', subtitle: 'الجبر وحساب المثلثات والهندسة المستوية', icon: BookOpen },
@@ -504,21 +509,49 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
                         marginTop: 'auto',
                         paddingTop: '0.85rem',
                         borderTop: '1px solid var(--border-glass)',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
                       }}
                     >
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                        {course.LessonsCount ? `${course.LessonsCount} محاضرة` : 'عرض التفاصيل'}
+                        {course.LessonsCount ? `${course.LessonsCount} محاضرة` : 'كورس متكامل'}
                       </span>
-                      <button
-                        className={`btn ${isEnrolledInCourse ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCourseClick(course);
-                        }}
-                      >
-                        {isEnrolledInCourse ? 'دخول المحاضرات' : 'عرض التفاصيل'} <ArrowLeft size={14} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {!isEnrolledInCourse && (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              fontSize: '0.78rem',
+                              background: 'linear-gradient(135deg, #0891b2 0%, #4f46e5 100%)',
+                              border: 'none',
+                              color: '#fff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCourseForCheckout(course);
+                            }}
+                          >
+                            <CreditCard size={13} />
+                            اشترك الآن {course.Price > 0 ? `(${course.Price} ج.م)` : '(مجاناً)'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={`btn ${isEnrolledInCourse ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCourseClick(course);
+                          }}
+                        >
+                          {isEnrolledInCourse ? 'دخول المحاضرات' : 'التفاصيل'} <ArrowLeft size={13} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -529,6 +562,19 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
           {/* Backend-driven Pagination */}
           <Pagination pagination={pagination} onPageChange={handlePageChange} />
         </>
+      )}
+
+      {/* Course Direct Checkout & Subscription Modal */}
+      {selectedCourseForCheckout && (
+        <CheckoutModal
+          isOpen={!!selectedCourseForCheckout}
+          course={selectedCourseForCheckout}
+          onClose={() => setSelectedCourseForCheckout(null)}
+          onSuccess={() => {
+            setSelectedCourseForCheckout(null);
+            refetch();
+          }}
+        />
       )}
     </div>
   );
