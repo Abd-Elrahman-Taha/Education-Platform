@@ -12,7 +12,15 @@ interface AuthContextType {
   login: (user: User, token?: string) => void;
   logout: () => Promise<void>;
   signinApi: (phone: string, password: string) => Promise<UserRole>;
-  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<any>;
+  signupApi: (
+    fullName: string,
+    nationalId: string,
+    phone: string,
+    parentPhone: string,
+    password: string,
+    educationStage?: string,
+    grade?: string
+  ) => Promise<any>;
   changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
   updateUserName: (newName: string) => void;
   refreshUser: () => Promise<void>;
@@ -208,6 +216,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const resolvedName = (dbUser.FullName || dbUser.name || payload.FullName || 'حساب المستخدم').trim();
         const resolvedAcademicYear = dbUser.AcademicYear || dbUser.academicYear || payload.AcademicYear || 'third_secondary';
+        const resolvedEducationStage = dbUser.EducationStage || dbUser.educationStage || payload.EducationStage || payload.educationStage;
+        const resolvedGrade = dbUser.Grade !== undefined && dbUser.Grade !== null
+          ? String(dbUser.Grade)
+          : (dbUser.grade !== undefined && dbUser.grade !== null
+            ? String(dbUser.grade)
+            : (payload.Grade !== undefined && payload.Grade !== null
+              ? String(payload.Grade)
+              : (payload.grade !== undefined ? String(payload.grade) : undefined)));
 
         const updatedUser: User = {
           id: dbUser._id || dbUser.id || payload.userId || payload.sub || `usr-${Date.now()}`,
@@ -222,6 +238,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           registrationDate: dbUser.createdAt ? dbUser.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
           academicYear: resolvedAcademicYear as any,
           subscribedYear: resolvedAcademicYear,
+          educationStage: resolvedEducationStage,
+          grade: resolvedGrade,
           isSubscribed: false,
           subscription: {
             isActive: false,
@@ -249,6 +267,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isSuperAdmin = roleLower === 'superadmin' || roleRaw === 'SuperAdmin';
       const isAdmin = roleLower === 'admin' || isSuperAdmin;
       const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
+      const fallbackEducationStage = payload.EducationStage || payload.educationStage;
+      const fallbackGrade = payload.Grade !== undefined && payload.Grade !== null
+        ? String(payload.Grade)
+        : (payload.grade !== undefined ? String(payload.grade) : undefined);
 
       const fallbackUser: User = {
         id: payload.userId || payload.sub,
@@ -263,6 +285,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registrationDate: new Date().toISOString().slice(0, 10),
         academicYear: (payload.AcademicYear || 'third_secondary') as any,
         subscribedYear: payload.AcademicYear || 'third_secondary',
+        educationStage: fallbackEducationStage,
+        grade: fallbackGrade,
         isSubscribed: false,
         subscription: {
           isActive: false,
@@ -369,15 +393,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     nationalId: string,
     phone: string,
     parentPhone: string,
-    password: string
+    password: string,
+    educationStage?: string,
+    grade?: string
   ): Promise<any> => {
-    const res = await authApi.signup({
+    const payload: any = {
       FullName: fullName.trim(),
       NationalId: nationalId.trim(),
       Phone: phone.trim(),
       ParentPhone: parentPhone.trim(),
       password,
-    });
+    };
+    if (educationStage) {
+      payload.EducationStage = educationStage;
+    }
+    if (grade !== undefined && grade !== null && grade !== '') {
+      payload.Grade = String(grade);
+    }
+    // Also attach AcademicYear if secondary for backward compatibility
+    if (educationStage === 'Secondary' && grade) {
+      if (grade === '1') payload.AcademicYear = 'first_secondary';
+      else if (grade === '2') payload.AcademicYear = 'second_secondary';
+      else if (grade === '3') payload.AcademicYear = 'third_secondary';
+    }
+    const res = await authApi.signup(payload);
     return res;
   };
 

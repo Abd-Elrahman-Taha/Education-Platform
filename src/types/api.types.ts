@@ -27,6 +27,8 @@ export interface SignupRequest {
   ParentPhone: string;
   password: string;
   AcademicYear?: string;
+  EducationStage?: EducationStage | string;
+  Grade?: string;
 }
 
 export interface SigninRequest {
@@ -47,6 +49,8 @@ export interface AuthResponse {
     Role?: 'Student' | 'Admin' | string;
     role?: 'Student' | 'Admin' | string;
     AcademicYear?: string;
+    EducationStage?: EducationStage | string;
+    Grade?: string;
     WalletBalance?: number;
   };
 }
@@ -56,6 +60,8 @@ export interface UpdateMeRequest {
   Phone?: string;
   ParentPhone?: string;
   AcademicYear?: string;
+  EducationStage?: EducationStage | string;
+  Grade?: string;
 }
 
 export interface UserProfileResponse {
@@ -70,6 +76,8 @@ export interface UserProfileResponse {
       Role: string;
       Status?: string;
       AcademicYear?: string;
+      EducationStage?: EducationStage | string;
+      Grade?: string;
       WalletBalance?: number;
       createdAt?: string;
       updatedAt?: string;
@@ -280,6 +288,9 @@ export interface CreateStudentRequest {
   Phone: string;
   ParentPhone: string;
   password: string;
+  EducationStage?: EducationStage | string;
+  Grade?: string;
+  AcademicYear?: string;
 }
 
 export interface UpdateStudentRequest {

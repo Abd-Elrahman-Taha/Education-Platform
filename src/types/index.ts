@@ -75,6 +75,8 @@ export interface User {
   registrationDate: string;
   academicYear?: AcademicYear;
   subscribedYear?: AcademicYear | string;
+  educationStage?: string;
+  grade?: string;
   isSubscribed?: boolean;
   subscription?: {
     isActive: boolean;
@@ -104,6 +106,8 @@ export interface StudentProfile {
   phone: string;
   parentPhone: string;
   academicYear: AcademicYear;
+  educationStage?: string;
+  grade?: string;
   status: 'active' | 'blocked';
   avatar: string;
   packageId?: string;

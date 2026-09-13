@@ -12,7 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import { enrollmentsApi } from '../../api/enrollments.api';
 import { SubscriptionPlansModal } from '../../components/payment/SubscriptionPlansModal';
 import { getFriendlyErrorMessage } from '../../utils/errors';
-import { matchesAcademicYear } from '../../utils/courseFilter';
+import { matchesAcademicYear, matchesCourseForStudent } from '../../utils/courseFilter';
+import { getStageLabel, getGradeLabel } from '../../constants/education';
 
 interface CoursesPageProps {
   onSelectCourse: (courseId: string) => void;
@@ -90,7 +91,12 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     }
   };
 
+  const isStudent = !!currentUser && !isAdminOrTeacher;
+
   const filteredCourses = courses.filter((course: Course) => {
+    if (isStudent && (currentUser?.educationStage || currentUser?.grade || currentUser?.academicYear)) {
+      return matchesCourseForStudent(course, currentUser);
+    }
     return matchesAcademicYear(course, selectedYear);
   });
 
@@ -122,100 +128,161 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
           الكورسات والمسارات التعليمية
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', margin: 0, lineHeight: 1.6 }}>
-          حدد مرحلتك الدراسية للوصول إلى المحاضرات المعتمدة، امتحانات البابل شيت، والملازم
+          {isStudent
+            ? 'الكورسات والمحتوى التعليمي المخصص لمرحلتك وصفك الدراسي الحالي'
+            : 'حدد مرحلتك الدراسية للوصول إلى المحاضرات المعتمدة، امتحانات البابل شيت، والملازم'}
         </p>
       </div>
 
-      {/* ── ACADEMIC YEARS SELECTION CARDS (Requirement #2) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
-        {yearsList.map((yr) => {
-          const isThisYearSubscribed = isStudentSubscribed && (userSubscribedYear === yr.key);
-          const isCurrentSelected = selectedYear === yr.key;
-          const hasFullAccess = isAdminOrTeacher || isThisYearSubscribed;
-
-          return (
+      {/* ── STUDENT CUSTOM ENROLLED/GRADE STAGE BANNER ── */}
+      {isStudent && (currentUser?.educationStage || currentUser?.grade || currentUser?.academicYear) ? (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(8, 145, 178, 0.12) 0%, rgba(99, 102, 241, 0.12) 100%)',
+            border: '1px solid rgba(8, 145, 178, 0.35)',
+            borderRadius: '16px',
+            padding: '1.25rem 1.75rem',
+            marginBottom: '2rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
             <div
-              key={yr.key}
-              className={`glass-card ${isCurrentSelected && hasFullAccess ? 'popular' : ''}`}
-              onClick={() => handleYearClick(yr.key)}
               style={{
-                padding: '1.5rem',
-                cursor: 'pointer',
-                borderRadius: 'var(--radius-lg)',
-                border: isCurrentSelected && hasFullAccess
-                  ? '2px solid var(--primary-light)'
-                  : !hasFullAccess
-                  ? '1px solid rgba(245, 158, 11, 0.3)'
-                  : '1px solid var(--border-glass)',
-                background: isCurrentSelected && hasFullAccess
-                  ? 'rgba(8, 145, 178, 0.12)'
-                  : undefined,
-                transition: 'all 0.25s ease',
-                position: 'relative',
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                boxShadow: '0 4px 12px rgba(8, 145, 178, 0.35)',
               }}
             >
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(8, 145, 178, 0.15)', color: 'var(--primary-light)' }}>
-                    <yr.icon size={26} />
-                  </span>
-                  {isAdminOrTeacher ? (
-                    <span className="status-badge status-badge--active" style={{ fontSize: '0.75rem', gap: '0.3rem' }}>
-                      <ShieldCheck size={13} /> صلاحية إدارة كاملة
-                    </span>
-                  ) : isThisYearSubscribed ? (
-                    <span className="status-badge status-badge--active" style={{ fontSize: '0.75rem', gap: '0.3rem' }}>
-                      <CheckCircle2 size={13} /> اشتراكك مفعل
-                    </span>
-                  ) : (
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      background: 'rgba(245, 158, 11, 0.15)',
-                      color: '#F59E0B',
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
-                      padding: '0.2rem 0.65rem',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                    }}>
-                      <Lock size={12} /> غير مشترك
-                    </span>
-                  )}
-                </div>
-
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.35rem' }}>
-                  {yr.title}
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.84rem', margin: 0, lineHeight: 1.5 }}>
-                  {yr.subtitle}
-                </p>
+              <GraduationCap size={24} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                المسار والمرحلة التعليمية الخاصة بحسابك
               </div>
-
-              <div style={{ marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--primary-light)', fontWeight: 700 }}>
-                  تصفح كورسات {yr.title}
-                </span>
-                <button
-                  type="button"
-                  className={`btn ${isCurrentSelected ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', gap: '0.35rem' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleYearClick(yr.key);
-                  }}
-                >
-                  {isCurrentSelected ? 'معروض حالياً' : 'عرض الكورسات'}
-                </button>
+              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)' }}>
+                {getStageLabel(currentUser?.educationStage)} - {getGradeLabel(currentUser?.educationStage, currentUser?.grade || currentUser?.academicYear)}
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 1rem',
+              background: 'rgba(16, 185, 129, 0.15)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '20px',
+              color: '#10B981',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+            }}
+          >
+            <CheckCircle2 size={16} /> يتم عرض كورسات صفك الدراسي فقط ({filteredCourses.length} كورس متاح)
+          </div>
+        </div>
+      ) : (
+        /* ── ACADEMIC YEARS SELECTION CARDS (For visitors & admins) ── */
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+          {yearsList.map((yr) => {
+            const isThisYearSubscribed = isStudentSubscribed && (userSubscribedYear === yr.key);
+            const isCurrentSelected = selectedYear === yr.key;
+            const hasFullAccess = isAdminOrTeacher || isThisYearSubscribed;
+
+            return (
+              <div
+                key={yr.key}
+                className={`glass-card ${isCurrentSelected && hasFullAccess ? 'popular' : ''}`}
+                onClick={() => handleYearClick(yr.key)}
+                style={{
+                  padding: '1.5rem',
+                  cursor: 'pointer',
+                  borderRadius: 'var(--radius-lg)',
+                  border: isCurrentSelected && hasFullAccess
+                    ? '2px solid var(--primary-light)'
+                    : !hasFullAccess
+                    ? '1px solid rgba(245, 158, 11, 0.3)'
+                    : '1px solid var(--border-glass)',
+                  background: isCurrentSelected && hasFullAccess
+                    ? 'rgba(8, 145, 178, 0.12)'
+                    : undefined,
+                  transition: 'all 0.25s ease',
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(8, 145, 178, 0.15)', color: 'var(--primary-light)' }}>
+                      <yr.icon size={26} />
+                    </span>
+                    {isAdminOrTeacher ? (
+                      <span className="status-badge status-badge--active" style={{ fontSize: '0.75rem', gap: '0.3rem' }}>
+                        <ShieldCheck size={13} /> صلاحية إدارة كاملة
+                      </span>
+                    ) : isThisYearSubscribed ? (
+                      <span className="status-badge status-badge--active" style={{ fontSize: '0.75rem', gap: '0.3rem' }}>
+                        <CheckCircle2 size={13} /> اشتراكك مفعل
+                      </span>
+                    ) : (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        color: '#F59E0B',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        padding: '0.2rem 0.65rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                      }}>
+                        <Lock size={12} /> غير مشترك
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>
+                    {yr.title}
+                  </h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
+                    {yr.subtitle}
+                  </p>
+                </div>
+
+                <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {courses.filter((c) => matchesAcademicYear(c, yr.key)).length} كورس متاح
+                  </span>
+                  <button
+                    className={`btn ${isCurrentSelected ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleYearClick(yr.key);
+                    }}
+                  >
+                    {isCurrentSelected ? 'معروض حالياً' : 'عرض الكورسات'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Subscription Plans Modal */}
       <SubscriptionPlansModal

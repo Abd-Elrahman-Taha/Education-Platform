@@ -9,7 +9,7 @@ import { coursesApi } from '../../../api/courses.api';
 import { studentsApi } from '../../../api/students.api';
 import { enrollmentsApi } from '../../../api/enrollments.api';
 import { lessonsApi } from '../../../api/lessons.api';
-import { matchesAcademicYear } from '../../../utils/courseFilter';
+import { matchesAcademicYear, matchesCourseForStudent } from '../../../utils/courseFilter';
 import {
   Award, CheckCircle, XCircle, Clock, Calendar, BarChart2, Eye, X,
   Sigma, Check, HelpCircle, Users, TrendingUp, AlertTriangle, ArrowUp,
@@ -78,7 +78,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     if (isStudentSubscribed && allCourses.length > 0) {
       allCourses.forEach(c => {
         const cId = c._id || (c as any).id;
-        if (cId && (userSubscribedYear === 'all' || matchesAcademicYear(c, userSubscribedYear))) {
+        if (cId && (userSubscribedYear === 'all' || matchesCourseForStudent(c, currentUser) || matchesAcademicYear(c, userSubscribedYear))) {
           ids.add(cId);
         }
       });

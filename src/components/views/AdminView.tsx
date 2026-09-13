@@ -36,48 +36,8 @@ import {
 import { getFriendlyErrorMessage } from '../../utils/errors';
 import { matchesAcademicYear } from '../../utils/courseFilter';
 
-export const EDUCATION_STAGES: { key: EducationStage; label: string; grades: { value: string; label: string }[] }[] = [
-  {
-    key: 'Primary',
-    label: 'المرحلة الابتدائية',
-    grades: [
-      { value: '1', label: 'الصف الأول الابتدائي' },
-      { value: '2', label: 'الصف الثاني الابتدائي' },
-      { value: '3', label: 'الصف الثالث الابتدائي' },
-      { value: '4', label: 'الصف الرابع الابتدائي' },
-      { value: '5', label: 'الصف الخامس الابتدائي' },
-      { value: '6', label: 'الصف السادس الابتدائي' },
-    ],
-  },
-  {
-    key: 'Preparatory',
-    label: 'المرحلة الإعدادية',
-    grades: [
-      { value: '1', label: 'الصف الأول الإعدادي' },
-      { value: '2', label: 'الصف الثاني الإعدادي' },
-      { value: '3', label: 'الصف الثالث الإعدادي' },
-    ],
-  },
-  {
-    key: 'Secondary',
-    label: 'المرحلة الثانوية',
-    grades: [
-      { value: '1', label: 'الصف الأول الثانوي' },
-      { value: '2', label: 'الصف الثاني الثانوي' },
-      { value: '3', label: 'الصف الثالث الثانوي' },
-    ],
-  },
-  {
-    key: 'University',
-    label: 'المرحلة الجامعية',
-    grades: [
-      { value: '1', label: 'الفرقة الأولى' },
-      { value: '2', label: 'الفرقة الثانية' },
-      { value: '3', label: 'الفرقة الثالثة' },
-      { value: '4', label: 'الفرقة الرابعة' },
-    ],
-  },
-];
+import { EDUCATION_STAGES } from '../../constants/education';
+export { EDUCATION_STAGES };
 
 interface AdminViewProps {
   onNavigateView?: (view: AppView) => void;
@@ -199,6 +159,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     phone: '',
     parentPhone: '',
     password: '',
+    educationStage: 'Secondary' as EducationStage,
+    grade: '3',
   });
 
   const [editStudentForm, setEditStudentForm] = useState({
@@ -774,10 +736,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         Phone: cleanPhone,
         ParentPhone: cleanParentPhone,
         password,
+        EducationStage: newStudentForm.educationStage,
+        Grade: newStudentForm.grade,
       });
       showToast(`تم تسجيل حساب الطالب (${cleanName}) بنجاح!`, 'success');
       setIsRegisterStudentOpen(false);
-      setNewStudentForm({ fullName: '', nationalId: '', phone: '', parentPhone: '', password: '' });
+      setNewStudentForm({
+        fullName: '',
+        nationalId: '',
+        phone: '',
+        parentPhone: '',
+        password: '',
+        educationStage: 'Secondary',
+        grade: '3',
+      });
       loadStudents();
     } catch (err: any) {
       showToast(getFriendlyErrorMessage(err, 'تعذر تسجيل حساب الطالب، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
@@ -3099,6 +3071,41 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   value={newStudentForm.parentPhone}
                   onChange={e => setNewStudentForm({ ...newStudentForm, parentPhone: e.target.value.replace(/\D/g, '') })}
                 />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>المرحلة التعليمية</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newStudentForm.educationStage}
+                    onChange={e => {
+                      const newStage = e.target.value as EducationStage;
+                      const stageDef = EDUCATION_STAGES.find(s => s.key === newStage);
+                      const defaultGrade = stageDef?.grades[0]?.value || '1';
+                      setNewStudentForm({ ...newStudentForm, educationStage: newStage, grade: defaultGrade });
+                    }}
+                  >
+                    {EDUCATION_STAGES.map(s => (
+                      <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الصف الدراسي</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={newStudentForm.grade}
+                    onChange={e => setNewStudentForm({ ...newStudentForm, grade: e.target.value })}
+                  >
+                    {EDUCATION_STAGES.find(s => s.key === newStudentForm.educationStage)?.grades.map(g => (
+                      <option key={g.value} value={g.value}>{g.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>

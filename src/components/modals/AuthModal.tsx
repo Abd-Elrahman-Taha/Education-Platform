@@ -3,6 +3,8 @@ import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, Aler
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
+import { EducationStage } from '../../types/api.types';
+import { EDUCATION_STAGES } from '../../constants/education';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface AuthModalProps {
@@ -26,6 +28,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     parentPhone: '',
     password: '',
     confirmPassword: '',
+    educationStage: 'Secondary' as EducationStage,
+    grade: '3',
   });
 
   if (!isOpen) return null;
@@ -103,7 +107,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
       setIsSubmitting(true);
       try {
-        await signupApi(cleanName, cleanNationalId, cleanPhone, cleanParentPhone, formData.password);
+        await signupApi(
+          cleanName,
+          cleanNationalId,
+          cleanPhone,
+          cleanParentPhone,
+          formData.password,
+          formData.educationStage,
+          formData.grade
+        );
         showToast('تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول بحسابك الجديد.', 'success');
         setActiveTab('login');
         setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
@@ -311,6 +323,55 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                   value={formData.parentPhone}
                   onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value.replace(/\D/g, '') })}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* 5. Education Stage & Grade (Required for Signup) */}
+          {activeTab === 'register' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  المرحلة التعليمية (Stage) <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <GraduationCap size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                  <select
+                    className="input-field"
+                    style={{ width: '100%', paddingRight: '36px', fontSize: '0.85rem' }}
+                    value={formData.educationStage}
+                    onChange={(e) => {
+                      const newStage = e.target.value as EducationStage;
+                      const stageDef = EDUCATION_STAGES.find((s) => s.key === newStage);
+                      const defaultGrade = stageDef?.grades[0]?.value || '1';
+                      setFormData({ ...formData, educationStage: newStage, grade: defaultGrade });
+                    }}
+                  >
+                    {EDUCATION_STAGES.map((stage) => (
+                      <option key={stage.key} value={stage.key}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  الصف الدراسي (Grade) <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%', fontSize: '0.85rem' }}
+                  value={formData.grade}
+                  onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                >
+                  {EDUCATION_STAGES.find((s) => s.key === formData.educationStage)?.grades.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
