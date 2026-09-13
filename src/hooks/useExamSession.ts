@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { examsApi } from '../api/exams.api';
 import {
   ExamInfo,
@@ -9,6 +10,10 @@ import {
 import { getFriendlyErrorMessage } from '../utils/errors';
 
 export function useExamSession(examId: string) {
+  const { currentUser } = useAuth();
+  const userRole = (currentUser?.role || (currentUser as any)?.Role || '').toString().toLowerCase();
+  const isAdminUser = userRole === 'admin' || userRole === 'superadmin' || userRole === 'teacher';
+
   const [exam, setExam] = useState<ExamInfo | null>(null);
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -42,53 +47,95 @@ export function useExamSession(examId: string) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await examsApi.startExam(examId);
-      const examObj =
-        data.data?.exam ||
-        data.exam ||
-        (data.data && !Array.isArray(data.data) && !(data.data as any).questions ? (data.data as any) : null);
+      let examObj: any = null;
+      let rawQuestions: any[] = [];
+      let attemptIdVal = '';
+      let startError: any = null;
 
-      let rawQuestions: any[] =
-        data.data?.questions ||
-        data.questions ||
-        (data.data?.exam as any)?.questions ||
-        (data.exam as any)?.questions ||
-        (data.data as any)?.attempt?.questions ||
-        (data as any).attempt?.questions ||
-        (data.data as any)?.items ||
-        (Array.isArray(data.data) ? data.data : []) ||
-        [];
-
-      const attemptIdVal =
-        data.data?.attemptId ||
-        data.attemptId ||
-        (data.data as any)?.attempt?._id ||
-        (data as any).attempt?._id ||
-        (data.data as any)?._id ||
-        '';
-
-      // Fallback 1: If questions array from /start is empty, fetch questions from /exams/:id/questions
-      if (rawQuestions.length === 0) {
+      if (isAdminUser) {
+        // Admin preview mode: bypass student attempt creation (/start) which gives 403
+        attemptIdVal = 'preview-admin-attempt';
         try {
-          const qList = await examsApi.getQuestions(examId);
+          const [qList, singleExam] = await Promise.all([
+            examsApi.getQuestions(examId).catch(() => []),
+            examsApi.getExamById(examId).catch(() => null),
+          ]);
+
           if (Array.isArray(qList) && qList.length > 0) {
             rawQuestions = qList;
           }
-        } catch (qErr) {
-          console.warn('[useExamSession] Fallback getQuestions error:', qErr);
+          if (singleExam) {
+            examObj = singleExam;
+            if (rawQuestions.length === 0 && Array.isArray((singleExam as any)?.questions) && (singleExam as any).questions.length > 0) {
+              rawQuestions = (singleExam as any).questions;
+            }
+          }
+        } catch (adminErr) {
+          console.warn('[useExamSession] Admin preview questions fetch error:', adminErr);
+        }
+      } else {
+        // Normal student attempt flow
+        try {
+          const data: any = await examsApi.startExam(examId);
+          examObj =
+            data.data?.exam ||
+            data.exam ||
+            (data.data && !Array.isArray(data.data) && !(data.data as any).questions ? (data.data as any) : null);
+
+          rawQuestions =
+            data.data?.questions ||
+            data.questions ||
+            (data.data?.exam as any)?.questions ||
+            (data.exam as any)?.questions ||
+            (data.data as any)?.attempt?.questions ||
+            (data as any).attempt?.questions ||
+            (data.data as any)?.items ||
+            (Array.isArray(data.data) ? data.data : []) ||
+            [];
+
+          attemptIdVal =
+            data.data?.attemptId ||
+            data.attemptId ||
+            (data.data as any)?.attempt?._id ||
+            (data as any).attempt?._id ||
+            (data.data as any)?._id ||
+            '';
+        } catch (err: any) {
+          startError = err;
+          console.warn('[useExamSession] POST /exams/:id/start error:', err);
+        }
+
+        // Student Fallbacks if needed (e.g. questions returned inside getExamById)
+        if (rawQuestions.length === 0) {
+          try {
+            const singleExam = await examsApi.getExamById(examId);
+            if (singleExam) {
+              if (!examObj) examObj = singleExam;
+              if (rawQuestions.length === 0 && Array.isArray((singleExam as any)?.questions) && (singleExam as any).questions.length > 0) {
+                rawQuestions = (singleExam as any).questions;
+              }
+            }
+          } catch (eErr) {
+            console.warn('[useExamSession] Fallback getExamById error:', eErr);
+          }
         }
       }
 
-      // Fallback 2: If still empty, check GET /exams/:id
+      // If no questions found at all:
       if (rawQuestions.length === 0) {
-        try {
-          const singleExam = await examsApi.getExamById(examId);
-          if (Array.isArray((singleExam as any)?.questions) && (singleExam as any).questions.length > 0) {
-            rawQuestions = (singleExam as any).questions;
+        if (startError) {
+          const status = startError?.response?.status;
+          if (status === 403) {
+            throw new Error(
+              'عفواً، لا يمكنك خوض هذا الاختبار لأنك غير مشترك في هذا الكورس. يرجى الاشتراك في الكورس أولاً.'
+            );
           }
-        } catch (eErr) {
-          console.warn('[useExamSession] Fallback getExamById error:', eErr);
+          throw startError;
         }
+        if (isAdminUser) {
+          throw new Error('لا توجد أسئلة مضافة لهذا الاختبار بعد. يمكنك إضافة الأسئلة من لوحة تحكم الامتحانات.');
+        }
+        throw new Error('تعذر العثور على بيانات هذا الامتحان أو أسئلته.');
       }
 
       const normalizedQuestions: ExamQuestion[] = rawQuestions.map((q: any, idx: number) => {
@@ -148,7 +195,7 @@ export function useExamSession(examId: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [examId]);
+  }, [examId, isAdminUser]);
 
   // Answer selection
   const selectAnswer = useCallback((questionId: string, answer: string) => {
@@ -174,37 +221,91 @@ export function useExamSession(examId: string) {
         answers: payloadAnswers,
       };
 
-      const res = await examsApi.submitExam(examId, submitPayload);
-      const scoreVal =
-        res.data?.score ??
-        (res as any).data?.attempt?.score ??
-        res.score ??
-        (res as any).attempt?.score ??
-        0;
-      const statusVal =
-        res.data?.status ??
-        (res as any).data?.attempt?.status ??
-        res.status ??
-        (res as any).attempt?.status ??
-        'Passed';
-      const passingScoreVal =
-        res.data?.passingScore ??
-        (res as any).data?.attempt?.passingScore ??
-        res.passingScore ??
-        (res as any).attempt?.passingScore;
-      const totalPointsVal =
-        (res as any).data?.totalPoints ??
-        (res as any).data?.attempt?.totalPoints ??
-        (res as any).totalPoints;
+      let normalizedResult: SubmitExamResponse;
 
-      const normalizedResult: SubmitExamResponse = {
-        message: res.message || 'تم تسليم الاختبار بنجاح',
-        score: scoreVal,
-        totalPoints: totalPointsVal,
-        status: statusVal,
-        passingScore: passingScoreVal,
-        data: res.data,
-      };
+      if (isAdminUser || attemptId === 'preview-admin-attempt') {
+        try {
+          const res = await examsApi.submitExam(examId, submitPayload);
+          const scoreVal =
+            res.data?.score ??
+            (res as any).data?.attempt?.score ??
+            res.score ??
+            (res as any).attempt?.score ??
+            0;
+          const statusVal =
+            res.data?.status ??
+            (res as any).data?.attempt?.status ??
+            res.status ??
+            (res as any).attempt?.status ??
+            'Passed';
+          const passingScoreVal =
+            res.data?.passingScore ??
+            (res as any).data?.attempt?.passingScore ??
+            res.passingScore ??
+            (res as any).attempt?.passingScore;
+          const totalPointsVal =
+            (res as any).data?.totalPoints ??
+            (res as any).data?.attempt?.totalPoints ??
+            (res as any).totalPoints ??
+            questions.reduce((acc, q) => acc + (q.Points || 1), 0);
+
+          normalizedResult = {
+            message: res.message || 'تم تسليم الاختبار بنجاح',
+            score: scoreVal,
+            totalPoints: totalPointsVal,
+            status: statusVal,
+            passingScore: passingScoreVal,
+            data: res.data,
+          };
+        } catch {
+          // Graceful preview calculation for Admin / SuperAdmin
+          const totalPointsVal = questions.reduce((acc, q) => acc + (q.Points || 1), 0);
+          const answeredCount = payloadAnswers.filter(a => a.answer && a.answer.trim() !== '').length;
+          const simulatedScore = Math.round((answeredCount / (questions.length || 1)) * totalPointsVal);
+          const passingScoreVal = (exam as any)?.PassingScore ?? 50;
+
+          normalizedResult = {
+            message: 'معاينة تجريبية: تم تسليم إجابات الاختبار بنجاح (وضع معاينة الإدارة)',
+            score: simulatedScore,
+            totalPoints: totalPointsVal,
+            status: simulatedScore >= passingScoreVal ? 'Passed' : 'Failed',
+            passingScore: passingScoreVal,
+          };
+        }
+      } else {
+        const res = await examsApi.submitExam(examId, submitPayload);
+        const scoreVal =
+          res.data?.score ??
+          (res as any).data?.attempt?.score ??
+          res.score ??
+          (res as any).attempt?.score ??
+          0;
+        const statusVal =
+          res.data?.status ??
+          (res as any).data?.attempt?.status ??
+          res.status ??
+          (res as any).attempt?.status ??
+          'Passed';
+        const passingScoreVal =
+          res.data?.passingScore ??
+          (res as any).data?.attempt?.passingScore ??
+          res.passingScore ??
+          (res as any).attempt?.passingScore;
+        const totalPointsVal =
+          (res as any).data?.totalPoints ??
+          (res as any).data?.attempt?.totalPoints ??
+          (res as any).totalPoints;
+
+        normalizedResult = {
+          message: res.message || 'تم تسليم الاختبار بنجاح',
+          score: scoreVal,
+          totalPoints: totalPointsVal,
+          status: statusVal,
+          passingScore: passingScoreVal,
+          data: res.data,
+        };
+      }
+
       setResult(normalizedResult);
       setIsFinished(true);
       return normalizedResult;
@@ -215,11 +316,11 @@ export function useExamSession(examId: string) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [examId, questions, answers, isSubmitting, isFinished]);
+  }, [examId, questions, answers, isSubmitting, isFinished, isAdminUser, attemptId, exam]);
 
   // Register cheating warning (tab switch / blur / devtools)
   const registerCheatingWarning = useCallback(async () => {
-    if (!examId || !attemptId || isFinished || isSubmitting) return;
+    if (!examId || !attemptId || isFinished || isSubmitting || isAdminUser) return;
 
     // Cooldown of 3 seconds to prevent double triggers
     const now = Date.now();
@@ -248,11 +349,11 @@ export function useExamSession(examId: string) {
         await submitExam();
       }
     }
-  }, [examId, attemptId, isFinished, isSubmitting, warningCount, submitExam]);
+  }, [examId, attemptId, isFinished, isSubmitting, warningCount, submitExam, isAdminUser]);
 
   // Tab switch & window blur detection
   useEffect(() => {
-    if (!attemptId || isFinished) return;
+    if (!attemptId || isFinished || isAdminUser) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -271,7 +372,7 @@ export function useExamSession(examId: string) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
     };
-  }, [attemptId, isFinished, registerCheatingWarning]);
+  }, [attemptId, isFinished, registerCheatingWarning, isAdminUser]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -312,6 +413,7 @@ export function useExamSession(examId: string) {
     error,
     result,
     isFinished,
+    isAdminUser,
     timeRemainingSeconds,
     isTimerExpired,
     warningCount,
