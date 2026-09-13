@@ -48,14 +48,19 @@ export const studentsApi = {
   },
 
   /**
-   * Create a new student (Admin only).
+   * Create / register a new student using the same endpoint as signup (POST /auth/signup).
    */
-  createStudent: async (data: CreateStudentRequest): Promise<AdminStudent> => {
-    const response = await apiClient.post<{ status: string; data: { student: AdminStudent } }>(
-      '/users/students',
-      data
-    );
-    return response.data?.data?.student;
+  createStudent: async (data: CreateStudentRequest): Promise<any> => {
+    try {
+      const response = await apiClient.post<any>('/auth/signup', data);
+      return response.data;
+    } catch (err: any) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        const fallback = await apiClient.post<any>('/users/students', data);
+        return fallback.data?.data?.student || fallback.data?.student || fallback.data;
+      }
+      throw err;
+    }
   },
 
   /**

@@ -193,10 +193,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
   // Form inputs
   const [newStudentForm, setNewStudentForm] = useState({
-    name: '',
+    fullName: '',
+    nationalId: '',
     phone: '',
     parentPhone: '',
-    password: 'Password123',
+    password: '',
   });
 
   const [editStudentForm, setEditStudentForm] = useState({
@@ -738,19 +739,47 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanName = newStudentForm.fullName.trim();
+    const cleanNationalId = newStudentForm.nationalId.trim();
+    const cleanPhone = newStudentForm.phone.trim();
+    const cleanParentPhone = newStudentForm.parentPhone.trim();
+    const password = newStudentForm.password;
+
+    if (!cleanName || cleanName.length < 3 || cleanName.length > 60) {
+      showToast('يجب أن يتراوح الاسم بالكامل بين 3 إلى 60 حرفاً.', 'error');
+      return;
+    }
+    if (!/^\d{14}$/.test(cleanNationalId)) {
+      showToast('الرقم القومي يجب أن يتكون من 14 رقماً صحيحاً.', 'error');
+      return;
+    }
+    if (!cleanPhone || !/^01[0125][0-9]{8}$/.test(cleanPhone)) {
+      showToast('يرجى إدخال رقم هاتف مصري صحيح للطالب (11 رقماً).', 'error');
+      return;
+    }
+    if (!cleanParentPhone || !/^01[0125][0-9]{8}$/.test(cleanParentPhone)) {
+      showToast('يرجى إدخال رقم هاتف مصري صحيح لولي الأمر (11 رقماً).', 'error');
+      return;
+    }
+    if (!password || password.length < 8 || password.length > 40) {
+      showToast('يجب أن تتراوح كلمة المرور بين 8 إلى 40 حرفاً أو رقماً.', 'error');
+      return;
+    }
+
     try {
       await studentsApi.createStudent({
-        FullName: newStudentForm.name.trim(),
-        Phone: newStudentForm.phone.trim(),
-        ParentPhone: newStudentForm.parentPhone.trim() || undefined,
-        password: newStudentForm.password,
+        FullName: cleanName,
+        NationalId: cleanNationalId,
+        Phone: cleanPhone,
+        ParentPhone: cleanParentPhone,
+        password,
       });
-      showToast(`تم إنشاء حساب الطالب (${newStudentForm.name}) بنجاح!`, 'success');
+      showToast(`تم تسجيل حساب الطالب (${cleanName}) بنجاح!`, 'success');
       setIsRegisterStudentOpen(false);
-      setNewStudentForm({ name: '', phone: '', parentPhone: '', password: 'Password123' });
+      setNewStudentForm({ fullName: '', nationalId: '', phone: '', parentPhone: '', password: '' });
       loadStudents();
     } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'تعذر إنشاء حساب الطالب، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر تسجيل حساب الطالب، يرجى مراجعة البيانات والمحاولة مجدداً'), 'error');
     }
   };
 
@@ -2987,25 +3016,46 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             <button className="modal-close" onClick={() => setIsRegisterStudentOpen(false)}><X size={18} /></button>
 
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem' }}>
-              تسجيل حساب طالب جديد (Admin Create)
+              تسجيل حساب طالب جديد (تسجيل الطلاب)
             </h2>
 
             <form onSubmit={handleCreateStudent} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>اسم الطالب بالكامل</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  اسم الطالب بالكامل <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="text"
                   required
                   placeholder="مثال: يوسف أحمد عبد المنعم"
                   className="input-field"
                   style={{ width: '100%' }}
-                  value={newStudentForm.name}
-                  onChange={e => setNewStudentForm({ ...newStudentForm, name: e.target.value })}
+                  value={newStudentForm.fullName}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, fullName: e.target.value })}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>رقم هاتف الطالب (11 رقماً)</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  الرقم القومي (14 رقماً) <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  maxLength={14}
+                  placeholder="30101011234567"
+                  className="input-field"
+                  style={{ width: '100%', letterSpacing: '1px' }}
+                  value={newStudentForm.nationalId}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, nationalId: e.target.value.replace(/\D/g, '') })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  رقم هاتف الطالب (11 رقماً) <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="tel"
                   required
@@ -3014,25 +3064,45 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   className="input-field"
                   style={{ width: '100%' }}
                   value={newStudentForm.phone}
-                  onChange={e => setNewStudentForm({ ...newStudentForm, phone: e.target.value })}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, phone: e.target.value.replace(/\D/g, '') })}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>رقم هاتف ولي الأمر (اختياري)</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  رقم هاتف ولي الأمر (11 رقماً) <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="tel"
+                  required
                   maxLength={11}
                   placeholder="01112345678"
                   className="input-field"
                   style={{ width: '100%' }}
                   value={newStudentForm.parentPhone}
-                  onChange={e => setNewStudentForm({ ...newStudentForm, parentPhone: e.target.value })}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, parentPhone: e.target.value.replace(/\D/g, '') })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                  كلمة المرور (8-40 حرفاً) <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={40}
+                  placeholder="••••••••"
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={newStudentForm.password}
+                  onChange={e => setNewStudentForm({ ...newStudentForm, password: e.target.value })}
                 />
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem' }}>
-                تأكيد إنشاء الحساب
+                تأكيد تسجيل الطالب
               </button>
             </form>
           </div>

@@ -275,8 +275,9 @@ export interface StudentsListResponse {
 
 export interface CreateStudentRequest {
   FullName: string;
+  NationalId: string;
   Phone: string;
-  ParentPhone?: string;
+  ParentPhone: string;
   password: string;
 }
 

@@ -30,17 +30,16 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
   const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || (currentUser?.academicYear as AcademicYear) || 'third_secondary';
 
   const studentAcademicYear = currentUser?.academicYear || (currentUser as any)?.AcademicYear;
-  const isStudent = !!(currentUser && !isAdminOrTeacher && studentAcademicYear);
 
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>(
-    isStudent ? (studentAcademicYear as AcademicYear) : 'all'
+    (studentAcademicYear as AcademicYear) || 'all'
   );
 
   useEffect(() => {
-    if (isStudent && studentAcademicYear) {
+    if (studentAcademicYear) {
       setSelectedYear(studentAcademicYear as AcademicYear);
     }
-  }, [isStudent, studentAcademicYear]);
+  }, [studentAcademicYear]);
 
   const [modalYear, setModalYear] = useState<AcademicYear>('third_secondary');
   const [isPlansModalOpen, setIsPlansModalOpen] = useState(false);
@@ -81,12 +80,9 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     { key: 'third_secondary', title: 'الصف الثالث الثانوي', subtitle: 'التفاضل والتكامل والهندسة الفراغية التخصصية', icon: GraduationCap },
   ];
 
-  const displayedYearsList = isStudent
-    ? yearsList.filter(yr => yr.key === studentAcademicYear || matchesAcademicYear({ Grade: yr.key } as any, studentAcademicYear))
-    : yearsList;
+  const displayedYearsList = yearsList;
 
   const handleYearClick = (yearKey: AcademicYear) => {
-    if (isStudent) return; // Student view is pinned to their academic year
     if (selectedYear === yearKey) {
       setSelectedYear('all');
     } else {
@@ -94,9 +90,8 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     }
   };
 
-  const effectiveFilterYear = isStudent ? (studentAcademicYear as AcademicYear) : selectedYear;
   const filteredCourses = courses.filter((course: Course) => {
-    return matchesAcademicYear(course, effectiveFilterYear);
+    return matchesAcademicYear(course, selectedYear);
   });
 
   const handleCourseClick = (course: Course) => {
@@ -202,24 +197,19 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
               </div>
 
               <div style={{ marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: hasFullAccess ? 'var(--primary-light)' : '#F59E0B', fontWeight: 700 }}>
-                  {hasFullAccess ? 'تصفح الكورسات المتاحة' : 'عرض باقات وطرق الدفع'}
+                <span style={{ fontSize: '0.8rem', color: 'var(--primary-light)', fontWeight: 700 }}>
+                  تصفح كورسات {yr.title}
                 </span>
                 <button
                   type="button"
-                  className={`btn ${hasFullAccess ? (isCurrentSelected ? 'btn-primary' : 'btn-secondary') : 'btn-secondary'}`}
+                  className={`btn ${isCurrentSelected ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', gap: '0.35rem' }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (hasFullAccess) {
-                      handleYearClick(yr.key);
-                    } else {
-                      setModalYear(yr.key);
-                      setIsPlansModalOpen(true);
-                    }
+                    handleYearClick(yr.key);
                   }}
                 >
-                  {hasFullAccess ? (isCurrentSelected ? 'معروض حالياً' : 'عرض الكورسات') : <><CreditCard size={13} /> اشترك الآن</>}
+                  {isCurrentSelected ? 'معروض حالياً' : 'عرض الكورسات'}
                 </button>
               </div>
             </div>

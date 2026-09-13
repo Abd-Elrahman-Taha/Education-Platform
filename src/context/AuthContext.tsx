@@ -12,7 +12,7 @@ interface AuthContextType {
   login: (user: User, token?: string) => void;
   logout: () => Promise<void>;
   signinApi: (phone: string, password: string) => Promise<UserRole>;
-  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string, academicYear?: string) => Promise<any>;
+  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<any>;
   changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
   updateUserName: (newName: string) => void;
   refreshUser: () => Promise<void>;
@@ -324,16 +324,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return normalizedRole;
   };
 
-  /**
-   * Real backend signup using student details and academic year.
-   */
   const signupApi = async (
     fullName: string,
     nationalId: string,
     phone: string,
     parentPhone: string,
-    password: string,
-    academicYear?: string
+    password: string
   ): Promise<any> => {
     const res = await authApi.signup({
       FullName: fullName.trim(),
@@ -341,7 +337,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       Phone: phone.trim(),
       ParentPhone: parentPhone.trim(),
       password,
-      AcademicYear: academicYear || 'third_secondary',
     });
     return res;
   };
