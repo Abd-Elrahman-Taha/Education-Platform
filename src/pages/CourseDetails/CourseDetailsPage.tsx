@@ -6,6 +6,7 @@ import { ErrorState } from '../../components/common/ErrorState';
 import { CheckoutModal } from '../../components/payment/CheckoutModal';
 import { Lesson, Exam } from '../../types/api.types';
 import { examsApi } from '../../api/exams.api';
+import { lessonsApi } from '../../api/lessons.api';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 import { useAuth } from '../../context/AuthContext';
 
@@ -30,6 +31,8 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
     currentUser?.isSuperAdmin === true ||
     (currentUser as any)?.Role === 'SuperAdmin' ||
     (currentUser as any)?.Role === 'superadmin';
+  const isAdminOrTeacher = isSuperAdmin || currentUser?.role === 'admin' || currentUser?.role === 'teacher';
+
   const {
     course,
     lessons,
@@ -49,54 +52,86 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
     let isMounted = true;
     setIsExamsLoading(true);
 
-    const resolveExams = (backendExams: Exam[] = []) => {
-      const examMap = new Map<string, Exam>();
+    const loadExams = async () => {
+      try {
+        const examMap = new Map<string, Exam>();
 
-      // 1. Matched exams from getExams (if admin or cache available)
-      backendExams.forEach(e => {
-        const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
-        if (cid === courseId && (e.Status === 'Published' || !e.Status)) {
-          examMap.set(e._id, e);
+        if (isAdminOrTeacher) {
+          // Admin & Teacher: can safely query /exams
+          try {
+            const res = await examsApi.getExams({ CourseId: courseId });
+            (res.exams || []).forEach((e) => {
+              const cid = typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId;
+              if (cid === courseId && (e.Status === 'Published' || !e.Status)) {
+                examMap.set(e._id, e);
+              }
+            });
+          } catch {}
+        } else if (isEnrolled && Array.isArray(lessons) && lessons.length > 0) {
+          // Student: Query lesson exams via GET /courses/{courseId}/lessons/{lessonId}/exams
+          await Promise.all(
+            lessons.map(async (lesson) => {
+              try {
+                const lExams = await lessonsApi.getLessonExams(courseId, lesson._id);
+                if (Array.isArray(lExams)) {
+                  lExams.forEach((le) => {
+                    if (le && le._id && !examMap.has(le._id)) {
+                      examMap.set(le._id, {
+                        _id: le._id,
+                        Title: le.Title || `امتحان: ${lesson.Title}`,
+                        CourseId: courseId,
+                        LessonId: lesson._id,
+                        DurationMinutes: le.DurationMinutes || 20,
+                        PassingScore: (le as any).PassingScore || 10,
+                        TotalPoints: le.TotalPoints,
+                        MaxAttempts: le.MaxAttempts || 0,
+                        Status: 'Published',
+                        IsRandomized: true,
+                        IsGated: false,
+                      } as Exam);
+                    }
+                  });
+                }
+              } catch {}
+            })
+          );
         }
-      });
 
-      // 2. Discover from course lessons with PrerequisiteExamId (works reliably for students)
-      if (Array.isArray(lessons)) {
-        lessons.forEach(l => {
-          if (l.PrerequisiteExamId && !examMap.has(l.PrerequisiteExamId)) {
-            examMap.set(l.PrerequisiteExamId, {
-              _id: l.PrerequisiteExamId,
-              Title: `امتحان: ${l.Title || 'المحاضرة'}`,
-              CourseId: courseId,
-              LessonId: l._id,
-              DurationMinutes: (l as any).DurationMinutes || (l.DurationSeconds ? Math.round(l.DurationSeconds / 60) : 20),
-              PassingScore: 10,
-              MaxAttempts: 0,
-              Status: 'Published',
-              IsRandomized: true,
-              IsGated: false,
-            } as Exam);
-          }
-        });
+        // Always check lesson.PrerequisiteExamId as well
+        if (Array.isArray(lessons)) {
+          lessons.forEach((l) => {
+            if (l.PrerequisiteExamId && !examMap.has(l.PrerequisiteExamId)) {
+              examMap.set(l.PrerequisiteExamId, {
+                _id: l.PrerequisiteExamId,
+                Title: `امتحان: ${l.Title || 'المحاضرة'}`,
+                CourseId: courseId,
+                LessonId: l._id,
+                DurationMinutes: (l as any).DurationMinutes || (l.DurationSeconds ? Math.round(l.DurationSeconds / 60) : 20),
+                PassingScore: 10,
+                MaxAttempts: 0,
+                Status: 'Published',
+                IsRandomized: true,
+                IsGated: false,
+              } as Exam);
+            }
+          });
+        }
+
+        if (isMounted) {
+          setCourseExams(Array.from(examMap.values()));
+        }
+      } finally {
+        if (isMounted) {
+          setIsExamsLoading(false);
+        }
       }
-
-      return Array.from(examMap.values());
     };
 
-    examsApi.getExams({ CourseId: courseId })
-      .then(res => {
-        if (!isMounted) return;
-        setCourseExams(resolveExams(res.exams || []));
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setCourseExams(resolveExams([]));
-      })
-      .finally(() => {
-        if (isMounted) setIsExamsLoading(false);
-      });
-    return () => { isMounted = false; };
-  }, [courseId, lessons]);
+    loadExams();
+    return () => {
+      isMounted = false;
+    };
+  }, [courseId, lessons, isEnrolled, isAdminOrTeacher]);
 
   if (isLoading) {
     return <LoadingSpinner message="جاري تحميل بيانات الكورس والمحاضرات..." size="lg" />;
@@ -185,19 +220,26 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
               الوصول متاح لجميع المحاضرات
             </div>
           ) : (
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                if (onNavigateToPackages) {
-                  onNavigateToPackages();
-                } else {
-                  setIsCheckoutOpen(true);
-                }
-              }}
-              style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}
-            >
-              الاشتراك والالتحاق بالكورس (الباقات وطرق الدفع)
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsCheckoutOpen(true)}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}
+              >
+                الاشتراك والالتحاق بالكورس
+              </button>
+              {onNavigateToPackages && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={onNavigateToPackages}
+                  style={{ width: '100%', marginTop: '0.5rem', padding: '0.5rem', fontSize: '0.82rem' }}
+                >
+                  استعراض الباقات والخصومات
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -412,6 +454,10 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
           isOpen={isCheckoutOpen}
           onClose={() => setIsCheckoutOpen(false)}
           course={course}
+          onSuccess={() => {
+            refetchCourse();
+            refetchLessons();
+          }}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, BookOpen, Book, ArrowLeft, Filter, Sparkles, GraduationCap, Lock, CheckCircle2, ShieldCheck, CreditCard } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCourses } from '../../hooks/useCourses';
@@ -27,9 +27,21 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     (currentUser as any)?.Role === 'superadmin';
   const isAdminOrTeacher = isSuperAdmin || currentUser?.role === 'admin' || currentUser?.role === 'teacher';
   const isStudentSubscribed = !!(currentUser?.isSubscribed || currentUser?.subscription?.isActive);
-  const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || 'third_secondary';
+  const userSubscribedYear: AcademicYear = (currentUser?.subscribedYear as AcademicYear) || (currentUser?.subscription?.year as AcademicYear) || (currentUser?.academicYear as AcademicYear) || 'third_secondary';
 
-  const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
+  const studentAcademicYear = currentUser?.academicYear || (currentUser as any)?.AcademicYear;
+  const isStudent = !!(currentUser && !isAdminOrTeacher && studentAcademicYear);
+
+  const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>(
+    isStudent ? (studentAcademicYear as AcademicYear) : 'all'
+  );
+
+  useEffect(() => {
+    if (isStudent && studentAcademicYear) {
+      setSelectedYear(studentAcademicYear as AcademicYear);
+    }
+  }, [isStudent, studentAcademicYear]);
+
   const [modalYear, setModalYear] = useState<AcademicYear>('third_secondary');
   const [isPlansModalOpen, setIsPlansModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState('');
@@ -69,7 +81,12 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     { key: 'third_secondary', title: 'الصف الثالث الثانوي', subtitle: 'التفاضل والتكامل والهندسة الفراغية التخصصية', icon: GraduationCap },
   ];
 
+  const displayedYearsList = isStudent
+    ? yearsList.filter(yr => yr.key === studentAcademicYear || matchesAcademicYear({ Grade: yr.key } as any, studentAcademicYear))
+    : yearsList;
+
   const handleYearClick = (yearKey: AcademicYear) => {
+    if (isStudent) return; // Student view is pinned to their academic year
     if (selectedYear === yearKey) {
       setSelectedYear('all');
     } else {
@@ -77,8 +94,9 @@ export const CoursesPage: React.FC<CoursesPageProps> = ({ onSelectCourse }) => {
     }
   };
 
+  const effectiveFilterYear = isStudent ? (studentAcademicYear as AcademicYear) : selectedYear;
   const filteredCourses = courses.filter((course: Course) => {
-    return matchesAcademicYear(course, selectedYear);
+    return matchesAcademicYear(course, effectiveFilterYear);
   });
 
   const handleCourseClick = (course: Course) => {

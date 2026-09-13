@@ -8,27 +8,36 @@ import { AcademicYear } from '../types';
  * 2. Explicit academicYear property ('first_secondary', 'second_secondary', 'third_secondary')
  * 3. Arabic & English keyword matching in Title and Description for legacy/unmigrated courses
  */
+function normalizeYear(val: string): 'first_secondary' | 'second_secondary' | 'third_secondary' | string {
+  const s = String(val || '').toLowerCase().trim();
+  if (s === '1' || s === 'first' || s.includes('first') || s.includes('الأول') || s.includes('الاول') || s.includes('1 ثانوي') || s.includes('1ث')) return 'first_secondary';
+  if (s === '2' || s === 'second' || s.includes('second') || s.includes('الثاني') || s.includes('التاني') || s.includes('2 ثانوي') || s.includes('2ث')) return 'second_secondary';
+  if (s === '3' || s === 'third' || s.includes('third') || s.includes('الثالث') || s.includes('التالت') || s.includes('3 ثانوي') || s.includes('3ث')) return 'third_secondary';
+  return s;
+}
+
 export function matchesAcademicYear(
   course: Course,
   year: AcademicYear | 'all' | string
 ): boolean {
   if (!year || year === 'all') return true;
 
-  // 1. Direct academicYear property if present (legacy / mock / payload)
+  const targetYear = normalizeYear(year);
+
+  // 1. Direct academicYear or AcademicYear property
   const rawYear = (course as any).academicYear || (course as any).AcademicYear;
-  if (rawYear === year) return true;
+  if (rawYear && normalizeYear(rawYear) === targetYear) return true;
 
   // 2. Structured EducationStage + Grade from backend
-  const stage = course.EducationStage;
   const grade = String(course.Grade ?? '').trim();
+  if (grade && normalizeYear(grade) === targetYear) return true;
 
-  // If EducationStage is set to non-Secondary (e.g. Primary, Preparatory), it shouldn't match secondary years
+  const stage = course.EducationStage;
   const isSecondaryStage = !stage || stage === 'Secondary';
-
   if (isSecondaryStage && grade) {
-    if (year === 'first_secondary' && grade === '1') return true;
-    if (year === 'second_secondary' && grade === '2') return true;
-    if (year === 'third_secondary' && grade === '3') return true;
+    if (targetYear === 'first_secondary' && (grade === '1' || grade.toLowerCase().includes('first'))) return true;
+    if (targetYear === 'second_secondary' && (grade === '2' || grade.toLowerCase().includes('second'))) return true;
+    if (targetYear === 'third_secondary' && (grade === '3' || grade.toLowerCase().includes('third'))) return true;
   }
 
   // 3. Fallback: Semantic title & description search

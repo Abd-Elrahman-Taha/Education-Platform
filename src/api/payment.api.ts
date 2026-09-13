@@ -51,4 +51,15 @@ export const paymentApi = {
     );
     return response.data;
   },
+
+  /**
+   * Purchase a course using Wallet balance (Student).
+   * Backend endpoint: POST /payment/checkout/wallet
+   */
+  checkoutWallet: async (data: { courseId: string }): Promise<{ message: string; data?: any }> => {
+    const response = await apiClient.post<any>('/payment/checkout/wallet', {
+      courseId: data.courseId,
+    });
+    return response.data;
+  },
 };

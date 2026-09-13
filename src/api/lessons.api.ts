@@ -4,6 +4,7 @@ import {
   CreateLessonRequest,
   UpdateLessonRequest,
   LessonQueryParams,
+  LessonExam,
 } from '../types/api.types';
 
 export const lessonsApi = {
@@ -23,6 +24,16 @@ export const lessonsApi = {
     const response = await apiClient.get<any>(`/courses/${courseId}/lessons/${lessonId}`);
     const raw = response.data;
     return raw?.data?.lesson || raw?.lesson || raw;
+  },
+
+  /**
+   * Fetch exams for a specific lesson (Student).
+   * Backend endpoint: GET /courses/{courseId}/lessons/{lessonId}/exams
+   */
+  getLessonExams: async (courseId: string, lessonId: string): Promise<LessonExam[]> => {
+    const response = await apiClient.get<any>(`/courses/${courseId}/lessons/${lessonId}/exams`);
+    const raw = response.data;
+    return raw?.data?.exams || raw?.exams || [];
   },
 
   /**

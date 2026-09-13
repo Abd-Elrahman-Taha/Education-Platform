@@ -10,11 +10,12 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   login: (user: User, token?: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   signinApi: (phone: string, password: string) => Promise<UserRole>;
-  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string) => Promise<any>;
+  signupApi: (fullName: string, nationalId: string, phone: string, parentPhone: string, password: string, academicYear?: string) => Promise<any>;
   changePasswordApi: (oldPassword: string, newPassword: string) => Promise<void>;
   updateUserName: (newName: string) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,7 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY = 'syntax_current_user_v2';
 
 /**
- * Query the live backend API to retrieve the exact FullName stored in the database.
+ * Query the live backend API (GET /users/me) to retrieve the exact profile stored in the database.
  */
 export async function fetchBackendUserName(
   userId?: string,
@@ -30,12 +31,21 @@ export async function fetchBackendUserName(
   phone?: string,
   role?: string
 ): Promise<string | null> {
-  if (!authToken || !userId) return null;
+  if (!authToken) return null;
+
+  // 1. Primary: GET /users/me
+  try {
+    const res = await apiClient.get<any>('/users/me', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const user = res.data?.data?.user || res.data?.user;
+    if (user?.FullName) {
+      return user.FullName.trim();
+    }
+  } catch {}
 
   const isAdminRole = role && (role.toLowerCase() === 'admin' || role.toLowerCase() === 'superadmin');
-
-  if (isAdminRole) {
-    // 1. Admin endpoint: GET /users/admins/:userId
+  if (isAdminRole && userId) {
     try {
       const res = await apiClient.get<any>(`/users/admins/${userId}`, {
         headers: { Authorization: `Bearer ${authToken}` },
@@ -46,34 +56,6 @@ export async function fetchBackendUserName(
         res.data?.data?.FullName ||
         res.data?.FullName;
       if (cand && !isPlaceholderName(cand, 'admin')) {
-        return cand.trim();
-      }
-    } catch {}
-
-    // 2. Admin endpoint fallback: GET /users/admins
-    try {
-      const res = await apiClient.get<any>('/users/admins', {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const list = res.data?.data?.admins || res.data?.admins || res.data || [];
-      if (Array.isArray(list)) {
-        const match = list.find((a: any) => a._id === userId || (phone && a.Phone === phone));
-        if (match?.FullName && !isPlaceholderName(match.FullName, 'admin')) {
-          return match.FullName.trim();
-        }
-      }
-    } catch {}
-  } else {
-    // 3. Student endpoint: GET /users/students/:userId
-    try {
-      const res = await apiClient.get<any>(`/users/students/${userId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const cand =
-        res.data?.data?.student?.FullName ||
-        res.data?.student?.FullName ||
-        res.data?.FullName;
-      if (cand && !isPlaceholderName(cand, 'student')) {
         return cand.trim();
       }
     } catch {}
@@ -216,77 +198,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
-      const payload = parseJwt(token);
-      if (payload) {
+  const syncUserFromBackend = async (authToken: string) => {
+    try {
+      const dbUser = await authApi.getCurrentUser();
+      if (dbUser) {
+        const payload = parseJwt(authToken) || {};
         const roleRaw = (
+          dbUser.Role ||
+          dbUser.role ||
           payload.Role ||
           payload.role ||
-          payload.user?.Role ||
-          payload.user?.role ||
-          payload.userRole ||
           'Student'
         ).toString();
         const roleLower = roleRaw.toLowerCase();
-        const isSuperAdmin = roleLower === 'superadmin' || payload.isSuperAdmin === true || roleRaw === 'SuperAdmin';
-        const isAdmin = roleLower === 'admin' || isSuperAdmin || roleLower === 'administrator';
-        const userId = payload.userId || payload.sub || payload._id;
-        const phone = payload.Phone || payload.phone || '';
-
+        const isSuperAdmin = roleLower === 'superadmin' || roleRaw === 'SuperAdmin';
+        const isAdmin = roleLower === 'admin' || isSuperAdmin;
         const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
 
-        // Automatically fetch real student / user name from live backend API
-        if (userId || phone) {
-          fetchBackendUserName(userId, token, phone, normalizedRole).then((nameFromApi) => {
-            const isAdminRole = normalizedRole === 'admin' || normalizedRole === 'superadmin';
-            const adminFallbackName = isAdminRole
-              ? (payload.username || payload.userName || (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null) || (isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة'))
-              : null;
+        const resolvedName = (dbUser.FullName || dbUser.name || payload.FullName || 'حساب المستخدم').trim();
+        const resolvedAcademicYear = dbUser.AcademicYear || dbUser.academicYear || payload.AcademicYear || 'third_secondary';
 
-            const resolvedName =
-              (nameFromApi && !isPlaceholderName(nameFromApi, normalizedRole) ? nameFromApi.trim() : null) ||
-              (!isPlaceholderName(payload.FullName, normalizedRole) ? payload.FullName.trim() : null) ||
-              (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName.trim() : null) ||
-              (!isPlaceholderName(payload.username, normalizedRole) ? payload.username.trim() : null) ||
-              (!isPlaceholderName(payload.name, normalizedRole) ? payload.name.trim() : null) ||
-              adminFallbackName ||
-              (phone ? phone.trim() : 'حساب الطالب');
+        const updatedUser: User = {
+          id: dbUser._id || dbUser.id || payload.userId || payload.sub || `usr-${Date.now()}`,
+          name: resolvedName,
+          email: dbUser.email || payload.email || `${dbUser.Phone || payload.Phone || 'user'}@lms.edu`,
+          phone: (dbUser.Phone || payload.Phone || '').trim(),
+          nationalId: dbUser.NationalId || payload.NationalId,
+          role: normalizedRole,
+          isSuperAdmin,
+          status: (dbUser.Status || 'active').toLowerCase() as any,
+          avatar: dbUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+          registrationDate: dbUser.createdAt ? dbUser.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          academicYear: resolvedAcademicYear as any,
+          subscribedYear: resolvedAcademicYear,
+          isSubscribed: false,
+          subscription: {
+            isActive: false,
+            year: resolvedAcademicYear,
+            plan: 'باقة التفوق',
+          },
+          ...(typeof dbUser.WalletBalance === 'number' ? { walletBalance: dbUser.WalletBalance } : {}),
+        } as any;
 
-            if (resolvedName) {
-              setCurrentUser((prev) => {
-                if (!prev) {
-                  return {
-                    id: userId || `usr-${Date.now()}`,
-                    name: resolvedName,
-                    email: payload.email || `${phone || 'user'}@lms.edu`,
-                    phone: phone,
-                    role: normalizedRole,
-                    isSuperAdmin: isSuperAdmin,
-                    status: 'active',
-                    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-                    registrationDate: new Date().toISOString().slice(0, 10),
-                    isSubscribed: false,
-                    subscribedYear: 'third_secondary',
-                    subscription: {
-                      isActive: false,
-                      year: 'third_secondary',
-                      plan: 'باقة التفوق',
-                    },
-                  };
-                }
-                return {
-                  ...prev,
-                  name: resolvedName,
-                  role: normalizedRole,
-                  isSuperAdmin: isSuperAdmin,
-                };
-              });
-            }
-          });
-        }
+        setCurrentUser(updatedUser);
+        return updatedUser;
       }
+    } catch (err) {
+      console.warn('[AuthContext] syncUserFromBackend error:', err);
+    }
+    return null;
+  };
+
+  const refreshUser = async () => {
+    const currentToken = token || localStorage.getItem(AUTH_TOKEN_KEY);
+    if (currentToken) {
+      await syncUserFromBackend(currentToken);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      syncUserFromBackend(token);
     } else {
       localStorage.removeItem(AUTH_TOKEN_KEY);
     }
@@ -299,13 +272,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    setCurrentUser(null);
-    setToken(null);
+  const logout = async () => {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-    } catch {}
+      if (token) {
+        await authApi.logout();
+      }
+    } catch (err) {
+      console.warn('[Auth] Logout API notice:', err);
+    } finally {
+      setCurrentUser(null);
+      setToken(null);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+      } catch {}
+      window.dispatchEvent(new CustomEvent('auth:logout'));
+    }
   };
 
   /**
@@ -325,97 +307,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setToken(jwtToken);
 
-    // Decode user payload from JWT (Backend returns Role: "Student" | "Admin")
-    const payload = parseJwt(jwtToken) || {};
-    const roleRaw = (
-      payload.Role ||
-      payload.role ||
-      payload.user?.Role ||
-      payload.user?.role ||
-      payload.userRole ||
-      res.user?.Role ||
-      res.user?.role ||
-      'Student'
-    ).toString();
-    const roleLower = roleRaw.toLowerCase();
-    const isSuperAdmin = roleLower === 'superadmin' || payload.isSuperAdmin === true || roleRaw === 'SuperAdmin' || (res.user as any)?.isSuperAdmin === true || (res.user as any)?.Role === 'SuperAdmin';
-    const isAdmin = roleLower === 'admin' || isSuperAdmin || roleLower === 'administrator';
-    const userId = payload.userId || payload.sub || payload._id || res.user?.id || `usr-${Date.now()}`;
-
-    const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
-
-    // Get the name directly from the backend API or token payload
-    const isAdminUser = normalizedRole === 'admin' || normalizedRole === 'superadmin';
-    const resUserAny = res.user as any;
-    const candidateAdmin = isAdminUser
-      ? (
-          (!isPlaceholderName(resUserAny?.username, 'admin') ? resUserAny?.username : null) ||
-          (!isPlaceholderName(payload.username, 'admin') ? payload.username : null) ||
-          (!isPlaceholderName(payload.userName, 'admin') ? payload.userName : null) ||
-          (!isPlaceholderName((res as any).username, 'admin') ? (res as any).username : null) ||
-          (!isPlaceholderName((res as any).data?.username, 'admin') ? (res as any).data?.username : null) ||
-          (!isPlaceholderName(res.user?.FullName, 'admin') ? res.user?.FullName : null) ||
-          (!isPlaceholderName(payload.FullName, 'admin') ? payload.FullName : null) ||
-          (!isPlaceholderName(resUserAny?.name, 'admin') ? resUserAny?.name : null) ||
-          (!isPlaceholderName(payload.name, 'admin') ? payload.name : null) ||
-          (payload.email && !payload.email.includes('user') ? payload.email.split('@')[0] : null)
-        )
-      : null;
-    let backendName =
-      candidateAdmin ||
-      (!isPlaceholderName(res.user?.FullName, normalizedRole) ? res.user?.FullName : null) ||
-      (!isPlaceholderName(resUserAny?.fullName, normalizedRole) ? resUserAny?.fullName : null) ||
-      (!isPlaceholderName(resUserAny?.username, normalizedRole) ? resUserAny?.username : null) ||
-      (!isPlaceholderName(resUserAny?.name, normalizedRole) ? resUserAny?.name : null) ||
-      (!isPlaceholderName((res as any).student?.FullName, normalizedRole) ? (res as any).student?.FullName : null) ||
-      (!isPlaceholderName((res as any).data?.user?.FullName, normalizedRole) ? (res as any).data?.user?.FullName : null) ||
-      (!isPlaceholderName((res as any).data?.student?.FullName, normalizedRole) ? (res as any).data?.student?.FullName : null) ||
-      (!isPlaceholderName(payload.FullName, normalizedRole) ? payload.FullName : null) ||
-      (!isPlaceholderName(payload.fullName, normalizedRole) ? payload.fullName : null) ||
-      (!isPlaceholderName(payload.username, normalizedRole) ? payload.username : null) ||
-      (!isPlaceholderName(payload.name, normalizedRole) ? payload.name : null);
-
-    if (!backendName) {
-      backendName = await fetchBackendUserName(userId, jwtToken, phone.trim(), normalizedRole);
+    // Synchronize full profile from live backend GET /users/me
+    const syncedUser = await syncUserFromBackend(jwtToken);
+    if (syncedUser) {
+      return syncedUser.role;
     }
 
-    // FOR ADMIN: NEVER FALL BACK TO PHONE NUMBER!
-    const finalName = (backendName && !isPlaceholderName(backendName, normalizedRole))
-      ? backendName.trim()
-      : (isAdminUser ? (candidateAdmin || (isSuperAdmin ? 'المدير العام (SuperAdmin)' : 'مدير المنصة')) : (phone || 'حساب الطالب'));
+    // Fallback if network issue on initial me query
+    const payload = parseJwt(jwtToken) || {};
+    const roleRaw = (payload.Role || payload.role || 'Student').toString();
+    const roleLower = roleRaw.toLowerCase();
+    const isSuperAdmin = roleLower === 'superadmin' || roleRaw === 'SuperAdmin';
+    const isAdmin = roleLower === 'admin' || isSuperAdmin;
+    const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
 
-    const userObj: User = {
-      id: userId,
-      name: finalName,
-      email: payload.email || `${phone}@lms.edu`,
-      phone: phone.trim(),
-      role: normalizedRole,
-      isSuperAdmin: isSuperAdmin,
-      status: 'active',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-      registrationDate: new Date().toISOString().slice(0, 10),
-      isSubscribed: !!((payload as any).isSubscribed || (res.user as any)?.isSubscribed),
-      subscribedYear: (payload as any).subscribedYear || (res.user as any)?.subscribedYear || 'third_secondary',
-      subscription: {
-        isActive: !!((payload as any).isSubscribed || (res.user as any)?.isSubscribed),
-        year: (payload as any).subscribedYear || (res.user as any)?.subscribedYear || 'third_secondary',
-        plan: 'باقة التفوق',
-      },
-    };
-
-    login(userObj, jwtToken);
     return normalizedRole;
   };
 
   /**
-   * Real backend signup using student details.
+   * Real backend signup using student details and academic year.
    */
   const signupApi = async (
     fullName: string,
     nationalId: string,
     phone: string,
     parentPhone: string,
-    password: string
+    password: string,
+    academicYear?: string
   ): Promise<any> => {
     const res = await authApi.signup({
       FullName: fullName.trim(),
@@ -423,6 +341,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       Phone: phone.trim(),
       ParentPhone: parentPhone.trim(),
       password,
+      AcademicYear: academicYear || 'third_secondary',
     });
     return res;
   };
@@ -444,7 +363,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const changePasswordApi = async (oldPassword: string, newPassword: string) => {
     await authApi.changePassword({ oldPassword, newPassword });
-    logout();
+    await logout();
   };
 
   return (
@@ -459,6 +378,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signupApi,
         changePasswordApi,
         updateUserName,
+        refreshUser,
       }}
     >
       {children}

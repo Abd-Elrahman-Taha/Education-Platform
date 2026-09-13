@@ -10,6 +10,38 @@ export function useCheckout() {
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState<ScratchCardResponse | null>(null);
 
+  const [checkoutSuccess, setCheckoutSuccess] = useState<string | null>(null);
+
+  /**
+   * Purchases a course using student's Wallet balance (POST /payment/checkout/wallet).
+   * Automatically refreshes wallet balance and student enrollments upon success.
+   */
+  const checkoutWithWallet = async (courseId: string) => {
+    setIsCheckingOut(true);
+    setCheckoutError(null);
+    setCheckoutSuccess(null);
+
+    try {
+      const res = await paymentApi.checkoutWallet({ courseId });
+      const successMsg = res?.message || 'تم الاشتراك في الكورس بنجاح!';
+      setCheckoutSuccess(successMsg);
+
+      // Trigger wallet refresh across components
+      window.dispatchEvent(new CustomEvent('wallet:balance-updated'));
+
+      return res;
+    } catch (err: any) {
+      const friendly = getFriendlyErrorMessage(
+        err,
+        'تعذر إتمام عملية الاشتراك، يرجى التأكد من رصيد المحفظة والمحاولة لاحقاً.'
+      );
+      setCheckoutError(friendly);
+      throw err;
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
   /**
    * Initializes course checkout with fresh idempotency key and redirects to paymentUrl.
    */
@@ -65,12 +97,15 @@ export function useCheckout() {
     isCheckingOut,
     isRedeeming,
     checkoutError,
+    checkoutSuccess,
     redeemError,
     redeemSuccess,
     initiateCourseCheckout,
+    checkoutWithWallet,
     redeemScratchCard,
     clearErrors: () => {
       setCheckoutError(null);
+      setCheckoutSuccess(null);
       setRedeemError(null);
     },
   };

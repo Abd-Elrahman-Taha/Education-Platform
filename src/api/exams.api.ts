@@ -101,7 +101,9 @@ export const examsApi = {
         totalPages: pagination.totalPages || 1,
       };
     } catch (err: any) {
-      console.warn('[Exams API] getExams error:', err?.message || err);
+      if (err?.response?.status !== 403 && err?.status !== 403) {
+        console.warn('[Exams API] getExams error:', err?.message || err);
+      }
 
       // Student database fallback: Directly query real database for enrolled courses and their lesson exams
       try {

@@ -114,21 +114,23 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     queryFn: async () => {
       const examMap = new Map<string, Exam>();
 
-      // 1. General published exams query from /exams
-      try {
-        const res = await backendExamsApi.getExams();
-        const list = res.exams || [];
-        list.forEach(e => {
-          const id = e._id || (e as any).id;
-          if (e && id) {
-            examMap.set(id, { ...e, _id: id });
-          }
-        });
-      } catch (err: any) {
-        console.warn('[Exams] General getExams returned:', err?.message || err);
+      // 1. General published exams query from /exams (Admin/Teacher only)
+      if (isTeacherOrAdmin) {
+        try {
+          const res = await backendExamsApi.getExams();
+          const list = res.exams || [];
+          list.forEach(e => {
+            const id = e._id || (e as any).id;
+            if (e && id) {
+              examMap.set(id, { ...e, _id: id });
+            }
+          });
+        } catch (err: any) {
+          console.warn('[Exams] General getExams returned:', err?.message || err);
+        }
       }
 
-      // 2. Discover lesson-linked prerequisite exams for all enrolled and available courses directly from database
+      // 2. Discover lesson-linked exams for all enrolled and available courses directly from student endpoint
       const allCourseIds = (allCourses || []).map((c: any) => c._id || c.id).filter(Boolean);
       const courseIdList = Array.from(new Set([...Array.from(enrolledCourseIds), ...allCourseIds]));
       if (courseIdList.length > 0) {
@@ -138,6 +140,30 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
               const lessons = await lessonsApi.getCourseLessons(courseId);
               if (Array.isArray(lessons)) {
                 for (const lesson of lessons) {
+                  // Query student lesson exams: GET /courses/{courseId}/lessons/{lessonId}/exams
+                  try {
+                    const lExams = await lessonsApi.getLessonExams(courseId, lesson._id);
+                    if (Array.isArray(lExams)) {
+                      for (const le of lExams) {
+                        if (le && le._id && !examMap.has(le._id)) {
+                          examMap.set(le._id, {
+                            _id: le._id,
+                            Title: le.Title || `امتحان: ${lesson.Title}`,
+                            CourseId: courseId,
+                            LessonId: lesson._id,
+                            DurationMinutes: le.DurationMinutes || 20,
+                            PassingScore: (le as any).PassingScore || 10,
+                            TotalPoints: le.TotalPoints,
+                            MaxAttempts: le.MaxAttempts || 0,
+                            Status: 'Published',
+                            IsRandomized: true,
+                            IsGated: false,
+                          } as Exam);
+                        }
+                      }
+                    }
+                  } catch {}
+
                   if (lesson.PrerequisiteExamId && !examMap.has(lesson.PrerequisiteExamId)) {
                     examMap.set(lesson.PrerequisiteExamId, {
                       _id: lesson.PrerequisiteExamId,
@@ -155,7 +181,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                 }
               }
             } catch (err) {
-              console.warn(`[Exams] getCourseLessons for ${courseId} returned:`, err);
+              // Ignore forbidden error for courses student isn't enrolled in
             }
           })
         );

@@ -24,6 +24,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     nationalId: '',
     phone: '',
     parentPhone: '',
+    academicYear: 'third_secondary',
     password: '',
     confirmPassword: '',
   });
@@ -103,7 +104,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
       setIsSubmitting(true);
       try {
-        await signupApi(cleanName, cleanNationalId, cleanPhone, cleanParentPhone, formData.password);
+        await signupApi(cleanName, cleanNationalId, cleanPhone, cleanParentPhone, formData.password, formData.academicYear);
         showToast('تم إنشاء الحساب بنجاح! يرجى تسجيل الدخول بحسابك الجديد.', 'success');
         setActiveTab('login');
         setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
@@ -315,7 +316,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </div>
           )}
 
-          {/* 5. Password * */}
+          {/* 5. Academic Year * (REQUIRED for Student Registration) */}
+          {activeTab === 'register' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                السنة الدراسية (Academic Year) <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <GraduationCap size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <select
+                  required
+                  className="input-field"
+                  style={{ width: '100%', paddingRight: '38px', fontSize: '0.85rem' }}
+                  value={formData.academicYear}
+                  onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                >
+                  <option value="third_secondary">الصف الثالث الثانوي</option>
+                  <option value="second_secondary">الصف الثاني الثانوي</option>
+                  <option value="first_secondary">الصف الأول الثانوي</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Password * */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
               كلمة المرور (Password) <span style={{ color: 'var(--danger)' }}>*</span> {activeTab === 'register' && '(8–40 حرفاً)'}

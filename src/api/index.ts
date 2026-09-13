@@ -7,3 +7,4 @@ export * from './exams.api';
 export * from './payment.api';
 export * from './enrollments.api';
 export * from './students.api';
+export * from './users.api';

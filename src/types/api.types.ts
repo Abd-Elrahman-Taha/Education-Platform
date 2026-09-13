@@ -26,6 +26,7 @@ export interface SignupRequest {
   Phone: string;
   ParentPhone: string;
   password: string;
+  AcademicYear?: string;
 }
 
 export interface SigninRequest {
@@ -42,9 +43,46 @@ export interface AuthResponse {
     _id?: string;
     FullName?: string;
     Phone?: string;
+    ParentPhone?: string;
     Role?: 'Student' | 'Admin' | string;
     role?: 'Student' | 'Admin' | string;
+    AcademicYear?: string;
+    WalletBalance?: number;
   };
+}
+
+export interface UpdateMeRequest {
+  FullName?: string;
+  Phone?: string;
+  ParentPhone?: string;
+  AcademicYear?: string;
+}
+
+export interface UserProfileResponse {
+  status: string;
+  data: {
+    user: {
+      _id: string;
+      FullName: string;
+      Phone: string;
+      ParentPhone?: string;
+      NationalId?: string;
+      Role: string;
+      Status?: string;
+      AcademicYear?: string;
+      WalletBalance?: number;
+      createdAt?: string;
+      updatedAt?: string;
+    };
+  };
+}
+
+export interface LessonExam {
+  _id: string;
+  Title: string;
+  DurationMinutes: number;
+  TotalPoints?: number;
+  MaxAttempts?: number;
 }
 
 export interface ChangePasswordRequest {

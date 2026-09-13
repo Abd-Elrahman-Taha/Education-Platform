@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiClient } from '../api/axios';
+import { usersApi } from '../api/users.api';
 
 export function useWalletBalance() {
   const { currentUser, token } = useAuth();
@@ -16,27 +16,22 @@ export function useWalletBalance() {
 
     setIsLoading(true);
     try {
-      if (currentUser?.id) {
-        try {
-          const res = await apiClient.get<any>(`/users/students/${currentUser.id}`);
-          const bal =
-            res.data?.data?.student?.WalletBalance ??
-            res.data?.student?.WalletBalance ??
-            res.data?.WalletBalance;
-          if (typeof bal === 'number') {
-            setWalletBalance(bal);
-            return;
-          }
-        } catch (err: any) {
-          if (err?.status === 401 || err?.status === 403 || err?.status === 404) return;
-        }
+      const user = await usersApi.getMe();
+      const bal = user?.WalletBalance;
+      if (typeof bal === 'number') {
+        setWalletBalance(bal);
+      } else if (typeof (currentUser as any)?.walletBalance === 'number') {
+        setWalletBalance((currentUser as any).walletBalance);
       }
     } catch {
-      // Ignore network errors
+      // If error, fall back to currentUser state
+      if (typeof (currentUser as any)?.walletBalance === 'number') {
+        setWalletBalance((currentUser as any).walletBalance);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser?.id, currentUser?.role, currentUser?.isSuperAdmin, token]);
+  }, [currentUser, token]);
 
   useEffect(() => {
     fetchBalance();

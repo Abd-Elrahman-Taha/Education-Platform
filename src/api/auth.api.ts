@@ -31,4 +31,32 @@ export const authApi = {
     const response = await apiClient.patch<{ message: string }>('/auth/change-password', data);
     return response.data;
   },
+
+  /**
+   * Real backend logout invalidates Redis session.
+   * Backend endpoint: POST /auth/logout
+   */
+  logout: async (): Promise<{ success?: boolean; message?: string }> => {
+    const response = await apiClient.post<{ success?: boolean; message?: string }>('/auth/logout');
+    return response.data;
+  },
+
+  /**
+   * Get current authenticated user profile.
+   * Backend endpoint: GET /users/me
+   */
+  getCurrentUser: async (): Promise<any> => {
+    const response = await apiClient.get<any>('/users/me');
+    const raw = response.data;
+    return raw?.data?.user || raw?.user || raw?.data || raw;
+  },
+
+  /**
+   * Update current authenticated user profile.
+   * Backend endpoint: PATCH /users/me
+   */
+  updateCurrentUser: async (data: { FullName?: string; Phone?: string; ParentPhone?: string; AcademicYear?: string }): Promise<any> => {
+    const response = await apiClient.patch<any>('/users/me', data);
+    return response.data;
+  },
 };
