@@ -51,6 +51,9 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
     lowerMsg.includes('device lock') ||
     lowerMsg.includes('suspendedmultidevice')
   ) {
+    if (lowerMsg.includes('prerequisite')) {
+      return 'يجب اجتياز الاختبار التأهيلي السابق قبل البدء في هذا الاختبار.';
+    }
     if (lowerMsg.includes('device') || lowerMsg.includes('جهاز') || lowerMsg.includes('multidevice')) {
       return 'تم تسجيل الدخول من جهاز آخر.';
     }

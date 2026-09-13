@@ -124,7 +124,16 @@ export function useExamSession(examId: string) {
       // If no questions found at all:
       if (rawQuestions.length === 0) {
         if (startError) {
-          const status = startError?.response?.status;
+          const rawErrMsg =
+            startError?.backendMessage ||
+            startError?.rawMessage ||
+            startError?.response?.data?.message ||
+            startError?.message ||
+            '';
+          if (rawErrMsg.toLowerCase().includes('prerequisite')) {
+            throw new Error('يجب اجتياز الاختبار التأهيلي السابق أولاً قبل البدء في هذا الاختبار.');
+          }
+          const status = startError?.response?.status || startError?.status;
           if (status === 403) {
             throw new Error(
               'عفواً، لا يمكنك خوض هذا الاختبار لأنك غير مشترك في هذا الكورس. يرجى الاشتراك في الكورس أولاً.'
