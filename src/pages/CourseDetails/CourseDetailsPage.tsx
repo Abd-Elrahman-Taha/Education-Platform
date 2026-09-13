@@ -47,6 +47,7 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [courseExams, setCourseExams] = useState<Exam[]>([]);
   const [isExamsLoading, setIsExamsLoading] = useState(false);
+  const [examAttemptsMap, setExamAttemptsMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
     let isMounted = true;
@@ -67,26 +68,25 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
               }
             });
           } catch {}
-        } else if (isEnrolled && Array.isArray(lessons) && lessons.length > 0) {
-          // Student: Query lesson exams via GET /courses/{courseId}/lessons/{lessonId}/exams
+        } else if (isEnrolled) {
+          // Student enrolled in this course: query exams for each lesson safely
           await Promise.all(
             lessons.map(async (lesson) => {
               try {
-                const lExams = await lessonsApi.getLessonExams(courseId, lesson._id);
-                if (Array.isArray(lExams)) {
-                  lExams.forEach((le) => {
+                const lessonExams = await lessonsApi.getLessonExams(courseId, lesson._id);
+                if (Array.isArray(lessonExams)) {
+                  lessonExams.forEach((le: any) => {
                     if (le && le._id && !examMap.has(le._id)) {
                       examMap.set(le._id, {
                         _id: le._id,
-                        Title: le.Title || `امتحان: ${lesson.Title}`,
+                        Title: le.Title || `امتحان ${lesson.Title}`,
                         CourseId: courseId,
                         LessonId: lesson._id,
                         DurationMinutes: le.DurationMinutes || 20,
-                        PassingScore: (le as any).PassingScore || 10,
-                        TotalPoints: le.TotalPoints,
+                        PassingScore: le.PassingScore || 10,
                         MaxAttempts: le.MaxAttempts || 0,
-                        Status: 'Published',
-                        IsRandomized: true,
+                        Status: le.Status || 'Published',
+                        IsRandomized: false,
                         IsGated: false,
                       } as Exam);
                     }
@@ -132,6 +132,35 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
       isMounted = false;
     };
   }, [courseId, lessons, isEnrolled, isAdminOrTeacher]);
+
+  // Fetch student's attempt & degree for each exam in the course
+  useEffect(() => {
+    let isMounted = true;
+    if (courseExams.length === 0) return;
+
+    const loadAttempts = async () => {
+      const attemptsMap: Record<string, any> = {};
+      await Promise.all(
+        courseExams.map(async (exam) => {
+          try {
+            const list = await examsApi.getMyExamAttempts(exam._id);
+            if (Array.isArray(list) && list.length > 0) {
+              const bestAttempt = [...list].sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))[0];
+              attemptsMap[exam._id] = bestAttempt;
+            }
+          } catch {}
+        })
+      );
+      if (isMounted) {
+        setExamAttemptsMap(attemptsMap);
+      }
+    };
+
+    loadAttempts();
+    return () => {
+      isMounted = false;
+    };
+  }, [courseExams]);
 
   if (isLoading) {
     return <LoadingSpinner message="جاري تحميل بيانات الكورس والمحاضرات..." size="lg" />;
@@ -395,55 +424,111 @@ export const CourseDetailsPage: React.FC<CourseDetailsPageProps> = ({
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-            {courseExams.map(exam => (
-              <div
-                key={exam._id}
-                className="glass-card"
-                style={{
-                  padding: '1.25rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  border: '1px solid var(--border-glass)',
-                  background: 'rgba(255, 255, 255, 0.02)'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{
-                      fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.55rem',
-                      borderRadius: '9999px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981'
-                    }}>
-                      اختبار متاح
-                    </span>
-                    {exam.IsGated && (
-                      <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                        مشروط <Lock size={11} />
-                      </span>
-                    )}
-                  </div>
+            {courseExams.map(exam => {
+              const attempt = examAttemptsMap[exam._id];
+              const hasAttempt = !!attempt;
+              const isPassed = attempt?.status === 'Passed' || (attempt?.score ?? 0) >= (exam.PassingScore || 50);
+              const scoreVal = attempt?.score ?? 0;
+              const totalVal = attempt?.totalPoints;
 
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
-                    {exam.Title}
-                  </h3>
-
-                  <div style={{ display: 'flex', gap: '0.85rem', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> {exam.DurationMinutes} دقيقة</span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Target size={13} /> درجة النجاح: {exam.PassingScore}</span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><RotateCcw size={13} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
-                  onClick={() => onSelectExam(exam._id)}
+              return (
+                <div
+                  key={exam._id}
+                  className="glass-card"
+                  style={{
+                    padding: '1.25rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    border: hasAttempt
+                      ? (isPassed ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)')
+                      : '1px solid var(--border-glass)',
+                    background: hasAttempt
+                      ? (isPassed ? 'rgba(16, 185, 129, 0.03)' : 'rgba(239, 68, 68, 0.03)')
+                      : 'rgba(255, 255, 255, 0.02)'
+                  }}
                 >
-                  <Award size={15} /> بدء الامتحان الآن
-                </button>
-              </div>
-            ))}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      {hasAttempt ? (
+                        <span style={{
+                          fontSize: '0.75rem', fontWeight: 800, padding: '0.2rem 0.65rem',
+                          borderRadius: '9999px',
+                          background: isPassed ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+                          color: isPassed ? '#10B981' : '#EF4444',
+                          display: 'inline-flex', alignItems: 'center', gap: '0.3rem'
+                        }}>
+                          {isPassed ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                          {isPassed ? 'اجتياز ناجح' : 'لم يتم الاجتياز'}
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.55rem',
+                          borderRadius: '9999px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981'
+                        }}>
+                          اختبار متاح
+                        </span>
+                      )}
+                      {exam.IsGated && (
+                        <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          مشروط <Lock size={11} />
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-bright)', margin: '0 0 0.5rem' }}>
+                      {exam.Title}
+                    </h3>
+
+                    {/* DEGREE DISPLAY BANNER FOR STUDENT */}
+                    {hasAttempt && (
+                      <div style={{
+                        background: isPassed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        border: `1px solid ${isPassed ? 'rgba(16, 185, 129, 0.28)' : 'rgba(239, 68, 68, 0.28)'}`,
+                        borderRadius: '8px',
+                        padding: '0.55rem 0.85rem',
+                        marginBottom: '0.85rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-bright)', fontWeight: 700 }}>
+                          درجتك في الاختبار:
+                        </span>
+                        <strong style={{ fontSize: '1.15rem', fontWeight: 900, color: isPassed ? '#10B981' : '#EF4444' }}>
+                          {scoreVal} {totalVal ? `/ ${totalVal}` : '%'}
+                        </strong>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.85rem', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> {exam.DurationMinutes} دقيقة</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Target size={13} /> درجة النجاح: {exam.PassingScore}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><RotateCcw size={13} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      background: hasAttempt && isPassed ? 'linear-gradient(135deg, #10B981, #059669)' : undefined,
+                      borderColor: hasAttempt && isPassed ? '#10B981' : undefined
+                    }}
+                    onClick={() => onSelectExam(exam._id)}
+                  >
+                    <Award size={15} /> {hasAttempt ? 'إعادة الاختبار' : 'بدء الامتحان الآن'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

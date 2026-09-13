@@ -81,6 +81,7 @@ export interface LessonExam {
   _id: string;
   Title: string;
   DurationMinutes: number;
+  PassingScore?: number;
   TotalPoints?: number;
   MaxAttempts?: number;
 }

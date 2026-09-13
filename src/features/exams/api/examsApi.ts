@@ -67,29 +67,41 @@ export const examsApi = {
       const examsList = await getStudentOrAdminExams();
       const historyRecords: ExamRecord[] = [];
 
-      for (const exam of examsList.slice(0, 15)) {
-        try {
-          const myAttempts = await backendExamsApi.getMyExamAttempts(exam._id);
-          for (const att of myAttempts) {
-            const isPassed = att.status === 'Passed' || att.score >= att.passingScore;
-            const percentage = att.totalPoints && att.totalPoints > 0
-              ? Math.round((att.score / att.totalPoints) * 100)
-              : Math.round(att.score || 0);
+      const results = await Promise.allSettled(
+        examsList.slice(0, 50).map(async exam => {
+          try {
+            const myAttempts = await backendExamsApi.getMyExamAttempts(exam._id);
+            return (myAttempts || []).map(att => {
+              const isPassed = att.status === 'Passed' || att.score >= att.passingScore;
+              const percentage = att.totalPoints && att.totalPoints > 0
+                ? Math.round((att.score / att.totalPoints) * 100)
+                : Math.round(att.score || 0);
 
-            historyRecords.push({
-              id: att._id,
-              lessonId: exam.CourseId || 'course-lesson',
-              lessonTitle: exam.Title,
-              date: att.submittedAt ? att.submittedAt.slice(0, 10) : (att.createdAt ? att.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10)),
-              score: att.score ?? 0,
-              totalQuestions: att.totalPoints || 10,
-              percentage,
-              isPassed,
-              durationSpent: '20 دقيقة',
-              details: [],
+              const record: ExamRecord = {
+                id: att._id,
+                examId: exam._id,
+                lessonId: exam.CourseId || 'course-lesson',
+                lessonTitle: exam.Title,
+                date: att.submittedAt ? att.submittedAt.slice(0, 10) : (att.createdAt ? att.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+                score: att.score ?? 0,
+                totalQuestions: att.totalPoints || 10,
+                percentage,
+                isPassed,
+                durationSpent: '20 دقيقة',
+                details: [],
+              };
+              return record;
             });
+          } catch {
+            return [];
           }
-        } catch {}
+        })
+      );
+
+      for (const res of results) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          historyRecords.push(...res.value);
+        }
       }
 
       return {

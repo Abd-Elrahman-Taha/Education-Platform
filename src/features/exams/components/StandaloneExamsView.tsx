@@ -758,6 +758,11 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
               const courseTitle = courseMatch?.Title || (typeof exam.CourseId === 'object' && (exam.CourseId as any)?.Title ? (exam.CourseId as any).Title : 'كورس تعليمي');
               const isEnrolledExam = enrolledCourseIds.has(examCourseId) || isTeacherOrAdmin;
 
+              const examAttempts = history.filter(h => (h as any).examId === exam._id || h.lessonTitle === exam.Title);
+              const hasAttempted = examAttempts.length > 0;
+              const bestAttempt = hasAttempted ? [...examAttempts].sort((a, b) => (b.score || 0) - (a.score || 0))[0] : null;
+              const latestAttempt = hasAttempted ? examAttempts[0] : null;
+
               return (
                 <div
                   key={exam._id}
@@ -767,14 +772,34 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    border: isEnrolledExam ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)',
-                    background: isEnrolledExam ? 'rgba(16, 185, 129, 0.03)' : 'rgba(255, 255, 255, 0.02)',
+                    border: hasAttempted
+                      ? (bestAttempt?.isPassed ? '1px solid rgba(16, 185, 129, 0.45)' : '1px solid rgba(225, 29, 72, 0.45)')
+                      : (isEnrolledExam ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)'),
+                    background: hasAttempted
+                      ? (bestAttempt?.isPassed ? 'rgba(16, 185, 129, 0.04)' : 'rgba(225, 29, 72, 0.04)')
+                      : (isEnrolledExam ? 'rgba(16, 185, 129, 0.03)' : 'rgba(255, 255, 255, 0.02)'),
                     position: 'relative'
                   }}
                 >
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {isEnrolledExam ? (
+                      {hasAttempted ? (
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          padding: '0.2rem 0.65rem',
+                          borderRadius: '9999px',
+                          background: bestAttempt?.isPassed ? 'rgba(16, 185, 129, 0.2)' : 'rgba(225, 29, 72, 0.2)',
+                          color: bestAttempt?.isPassed ? '#10B981' : '#E11D48',
+                          border: `1px solid ${bestAttempt?.isPassed ? 'rgba(16, 185, 129, 0.4)' : 'rgba(225, 29, 72, 0.4)'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}>
+                          {bestAttempt?.isPassed ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                          {bestAttempt?.isPassed ? 'تم الاجتياز بنجاح' : 'لم يتم اجتياز الاختبار'}
+                        </span>
+                      ) : isEnrolledExam ? (
                         <span style={{
                           fontSize: '0.75rem',
                           fontWeight: 700,
@@ -813,7 +838,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                       {exam.Title}
                     </h3>
 
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-light)', fontWeight: 700 }}>
                         <BookOpen size={14} />
                         <span>الكورس: {courseTitle}</span>
@@ -830,6 +855,70 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                         </span>
                       </div>
                     </div>
+
+                    {/* Prominent Degree Badge if attempted */}
+                    {hasAttempted && bestAttempt && (
+                      <div style={{
+                        margin: '0.75rem 0',
+                        padding: '0.75rem 0.85rem',
+                        borderRadius: '10px',
+                        background: bestAttempt.isPassed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(225, 29, 72, 0.1)',
+                        border: `1px solid ${bestAttempt.isPassed ? 'rgba(16, 185, 129, 0.35)' : 'rgba(225, 29, 72, 0.35)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Award size={22} color={bestAttempt.isPassed ? '#10B981' : '#E11D48'} />
+                          <div>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>درجتك المحققة:</span>
+                            <strong style={{ fontSize: '1.1rem', color: bestAttempt.isPassed ? '#10B981' : '#E11D48' }}>
+                              {bestAttempt.score} / {bestAttempt.totalQuestions}
+                              <span style={{ fontSize: '0.82rem', marginRight: '0.35rem', opacity: 0.9 }}>({bestAttempt.percentage}%)</span>
+                            </strong>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            padding: '0.25rem 0.65rem',
+                            borderRadius: '9999px',
+                            background: bestAttempt.isPassed ? 'rgba(16, 185, 129, 0.2)' : 'rgba(225, 29, 72, 0.2)',
+                            color: bestAttempt.isPassed ? '#10B981' : '#E11D48',
+                            border: `1px solid ${bestAttempt.isPassed ? 'rgba(16, 185, 129, 0.4)' : 'rgba(225, 29, 72, 0.4)'}`
+                          }}>
+                            {bestAttempt.isPassed ? 'ناجح' : 'راسب'}
+                          </span>
+                          {latestAttempt && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedExamDetail(latestAttempt);
+                              }}
+                              style={{
+                                background: 'rgba(8, 145, 178, 0.15)',
+                                border: '1px solid rgba(8, 145, 178, 0.3)',
+                                color: 'var(--primary-light)',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.25rem 0.6rem',
+                                borderRadius: '6px'
+                              }}
+                            >
+                              <Eye size={13} /> عرض إجاباتك
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -845,8 +934,10 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                       justifyContent: 'center',
                       gap: '0.45rem',
                       marginTop: '0.5rem',
-                      background: isEnrolledExam ? 'linear-gradient(135deg, #10B981, #059669)' : undefined,
-                      borderColor: isEnrolledExam ? '#10B981' : undefined
+                      background: hasAttempted
+                        ? (bestAttempt?.isPassed ? 'linear-gradient(135deg, #10B981, #059669)' : undefined)
+                        : (isEnrolledExam ? 'linear-gradient(135deg, #10B981, #059669)' : undefined),
+                      borderColor: (hasAttempted && bestAttempt?.isPassed) || isEnrolledExam ? '#10B981' : undefined
                     }}
                     onClick={() => {
                       const examId = typeof exam._id === 'object' && exam._id !== null ? (exam._id as any)._id || (exam._id as any).id : String(exam._id);
@@ -859,7 +950,15 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                       }
                     }}
                   >
-                    <Award size={16} /> بدء الاختبار الآن
+                    {hasAttempted ? (
+                      <>
+                        <RotateCcw size={16} /> إعادة الاختبار
+                      </>
+                    ) : (
+                      <>
+                        <Award size={16} /> بدء الاختبار الآن
+                      </>
+                    )}
                   </button>
                 </div>
               );

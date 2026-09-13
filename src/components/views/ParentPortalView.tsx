@@ -102,17 +102,45 @@ export const ParentPortalView: React.FC = () => {
   const overallLessonPercentage = totalCourseLessons > 0 ? Math.round((totalViewedLessons / totalCourseLessons) * 100) : 0;
 
   // Flatten all attempts across all courses
-  const allAttempts = courses.flatMap(c =>
-    (c.exams || []).flatMap(ex =>
-      (ex.attempts || []).map(att => ({
-        courseTitle: c.title,
-        examTitle: ex.title,
-        attemptNumber: att.attemptNumber,
-        score: att.score,
-        status: att.status,
-      }))
-    )
-  );
+  const allAttempts = courses.flatMap(c => {
+    const examsList = c.exams || (c as any).Exams || (c as any).examList || [];
+    return examsList.flatMap((ex: any) => {
+      const attemptsList = Array.isArray(ex.attempts)
+        ? ex.attempts
+        : Array.isArray(ex.Attempts)
+        ? ex.Attempts
+        : Array.isArray(ex.examAttempts)
+        ? ex.examAttempts
+        : [];
+
+      const directScore = ex.score ?? ex.Score ?? ex.degree ?? ex.grade;
+      if (attemptsList.length === 0 && directScore !== undefined && directScore !== null) {
+        const dScore = Number(directScore);
+        const dTotal = Number(ex.totalPoints ?? ex.TotalPoints ?? ex.total ?? 0);
+        return [{
+          courseTitle: c.title || (c as any).Title || 'كورس',
+          examTitle: ex.title || ex.Title || 'امتحان',
+          attemptNumber: 1,
+          score: dScore,
+          totalPoints: dTotal,
+          status: ex.status || ex.Status || (dScore >= 50 ? 'Passed' : 'Failed'),
+        }];
+      }
+
+      return attemptsList.map((att: any, idx: number) => {
+        const aScore = Number(att.score ?? att.Score ?? att.grade ?? att.Grade ?? att.degree ?? 0);
+        const aTotal = Number(att.totalPoints ?? att.TotalPoints ?? att.total ?? 0);
+        return {
+          courseTitle: c.title || (c as any).Title || 'كورس',
+          examTitle: ex.title || ex.Title || 'امتحان',
+          attemptNumber: Number(att.attemptNumber ?? att.AttemptNumber ?? idx + 1),
+          score: aScore,
+          totalPoints: aTotal,
+          status: att.status || att.Status || (aScore >= 50 ? 'Passed' : 'Failed'),
+        };
+      });
+    });
+  });
 
   const averageExamScore = allAttempts.length > 0
     ? Math.round(allAttempts.reduce((acc, a) => acc + a.score, 0) / allAttempts.length)
@@ -451,80 +479,148 @@ export const ParentPortalView: React.FC = () => {
                         لم تسجل أي اختبارات لهذا الكورس بعد.
                       </p>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                        {examsList.map((ex) => (
-                          <div
-                            key={ex.examId}
-                            style={{
-                              background: 'var(--bg-subtle)',
-                              border: '1px solid var(--border-glass)',
-                              borderRadius: '8px',
-                              padding: '0.85rem 1.15rem',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              flexWrap: 'wrap',
-                              gap: '0.75rem',
-                            }}
-                          >
-                            <div>
-                              <strong style={{ fontSize: '0.92rem', color: 'var(--text-bright)', display: 'block' }}>
-                                {ex.title}
-                              </strong>
-                              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                عدد المحاولات المعتمدة: {ex.attempts?.length || 0}
-                              </span>
-                            </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {examsList.map((ex: any) => {
+                          const exTitle = ex.title || ex.Title || 'امتحان تعليمي';
+                          const rawAttempts = Array.isArray(ex.attempts)
+                            ? ex.attempts
+                            : Array.isArray(ex.Attempts)
+                            ? ex.Attempts
+                            : Array.isArray(ex.examAttempts)
+                            ? ex.examAttempts
+                            : [];
 
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              {(ex.attempts && ex.attempts.length > 0) ? (
-                                ex.attempts.map((att, aIdx) => {
-                                  const isPassed = att.status === 'Passed' || att.score >= 50;
-                                  const isAutoSubmitted = att.status === 'AutoSubmitted';
+                          const directScore = ex.score ?? ex.Score ?? ex.degree ?? ex.grade;
+                          const attempts = rawAttempts.length > 0
+                            ? rawAttempts
+                            : (directScore !== undefined && directScore !== null)
+                            ? [{
+                                attemptNumber: 1,
+                                score: directScore,
+                                status: ex.status || ex.Status || (Number(directScore) >= 50 ? 'Passed' : 'Failed'),
+                                totalPoints: ex.totalPoints ?? ex.TotalPoints,
+                              }]
+                            : [];
 
-                                  return (
-                                    <span
-                                      key={aIdx}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.35rem',
-                                        padding: '0.3rem 0.65rem',
-                                        borderRadius: '6px',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 700,
-                                        background: isAutoSubmitted
-                                          ? 'rgba(245, 158, 11, 0.15)'
-                                          : isPassed
-                                          ? 'rgba(16, 185, 129, 0.15)'
-                                          : 'rgba(239, 68, 68, 0.15)',
-                                        color: isAutoSubmitted
-                                          ? '#F59E0B'
-                                          : isPassed
-                                          ? '#10B981'
-                                          : '#EF4444',
-                                        border: `1px solid ${
-                                          isAutoSubmitted
-                                            ? 'rgba(245, 158, 11, 0.3)'
-                                            : isPassed
-                                            ? 'rgba(16, 185, 129, 0.3)'
-                                            : 'rgba(239, 68, 68, 0.3)'
-                                        }`,
-                                      }}
-                                    >
-                                      {isAutoSubmitted ? <AlertTriangle size={12} /> : isPassed ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-                                      <span>محاولة {att.attemptNumber}: {att.score}%</span>
+                          const hasAttempts = attempts.length > 0;
+                          const bestAttempt = hasAttempts
+                            ? [...attempts].sort((a: any, b: any) => Number(b.score ?? b.Score ?? 0) - Number(a.score ?? a.Score ?? 0))[0]
+                            : null;
+                          const bestScore = bestAttempt ? Number(bestAttempt.score ?? bestAttempt.Score ?? bestAttempt.grade ?? 0) : null;
+                          const bestTotal = bestAttempt ? Number(bestAttempt.totalPoints ?? bestAttempt.TotalPoints ?? 0) : null;
+                          const isPassed = bestAttempt ? (bestAttempt.status === 'Passed' || bestAttempt.Status === 'Passed' || (bestScore ?? 0) >= 50) : false;
+
+                          return (
+                            <div
+                              key={ex.examId || ex._id || exTitle}
+                              style={{
+                                background: hasAttempts
+                                  ? (isPassed ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)')
+                                  : 'var(--bg-subtle)',
+                                border: hasAttempts
+                                  ? (isPassed ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(239, 68, 68, 0.35)')
+                                  : '1px solid var(--border-glass)',
+                                borderRadius: '10px',
+                                padding: '1rem 1.25rem',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '1rem',
+                              }}
+                            >
+                              <div style={{ flex: 1, minWidth: '220px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                  <Award size={20} color={hasAttempts ? (isPassed ? '#10B981' : '#EF4444') : 'var(--text-muted)'} />
+                                  <strong style={{ fontSize: '1rem', color: 'var(--text-bright)' }}>
+                                    {exTitle}
+                                  </strong>
+                                </div>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                  {hasAttempts ? `عدد المحاولات المسجلة: ${attempts.length}` : 'لم يقم الطالب بدخول هذا الاختبار بعد'}
+                                </span>
+                              </div>
+
+                              {hasAttempts ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                                  {/* Featured Degree Box for Parents */}
+                                  <div
+                                    style={{
+                                      background: isPassed ? 'rgba(16, 185, 129, 0.16)' : 'rgba(239, 68, 68, 0.16)',
+                                      border: `1px solid ${isPassed ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)'}`,
+                                      borderRadius: '8px',
+                                      padding: '0.45rem 1rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.75rem',
+                                    }}
+                                  >
+                                    <div style={{ textAlign: 'center' }}>
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>درجة الطالب:</span>
+                                      <strong style={{ fontSize: '1.35rem', fontWeight: 900, color: isPassed ? '#10B981' : '#EF4444', lineHeight: 1 }}>
+                                        {bestScore} {bestTotal ? `/ ${bestTotal}` : '%'}
+                                      </strong>
+                                    </div>
+                                    <span style={{
+                                      fontSize: '0.75rem',
+                                      fontWeight: 800,
+                                      padding: '0.25rem 0.6rem',
+                                      borderRadius: '6px',
+                                      background: isPassed ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                                      color: isPassed ? '#10B981' : '#EF4444',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.3rem',
+                                    }}>
+                                      {isPassed ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                                      {isPassed ? 'اجتياز ناجح' : 'لم يجتز'}
                                     </span>
-                                  );
-                                })
+                                  </div>
+
+                                  {/* Attempts chips */}
+                                  {attempts.length > 1 && (
+                                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                      {attempts.map((att: any, aIdx: number) => {
+                                        const attScore = Number(att.score ?? att.Score ?? att.grade ?? 0);
+                                        const attTotal = Number(att.totalPoints ?? att.TotalPoints ?? 0);
+                                        const attPassed = att.status === 'Passed' || att.Status === 'Passed' || attScore >= 50;
+                                        const attNum = att.attemptNumber ?? att.AttemptNumber ?? aIdx + 1;
+
+                                        return (
+                                          <span
+                                            key={aIdx}
+                                            style={{
+                                              fontSize: '0.75rem',
+                                              fontWeight: 600,
+                                              padding: '0.2rem 0.5rem',
+                                              borderRadius: '4px',
+                                              background: 'rgba(255, 255, 255, 0.05)',
+                                              color: attPassed ? '#10B981' : '#EF4444',
+                                              border: '1px solid var(--border-glass)',
+                                            }}
+                                          >
+                                            م{attNum}: {attScore}{attTotal ? `/${attTotal}` : '%'}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
-                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                  لم يؤد الاختبار بعد
+                                <span style={{
+                                  fontSize: '0.82rem',
+                                  color: 'var(--text-muted)',
+                                  background: 'rgba(255,255,255,0.03)',
+                                  padding: '0.4rem 0.85rem',
+                                  borderRadius: '6px',
+                                  border: '1px dashed rgba(255,255,255,0.12)'
+                                }}>
+                                  لم يؤدِ الاختبار بعد
                                 </span>
                               )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

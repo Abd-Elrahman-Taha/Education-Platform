@@ -290,6 +290,7 @@ export interface ExamRecordDetail {
 
 export interface ExamRecord {
   id: string;
+  examId?: string;
   lessonId: string;
   lessonTitle: string;
   academicYear?: AcademicYear;
