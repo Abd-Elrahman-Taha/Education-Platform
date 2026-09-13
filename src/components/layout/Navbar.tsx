@@ -51,7 +51,7 @@ const adminNav: NavItem[] = [
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
-  { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
+  { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
@@ -217,7 +217,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Action Buttons */}
-        <div className="nav-actions">
+        <div className={`nav-actions ${isSuperAdmin ? 'nav-actions--superadmin' : ''}`}>
           {/* Notification Bell with live unread badge */}
           {isAuthenticated && (
             <NotificationBell onNavigateView={onNavigateView} />
@@ -240,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {isAuthenticated && currentUser ? (
             <>
               <button
-                className="icon-btn desktop-only-btn"
+                className="icon-btn desktop-only-btn desktop-profile-btn"
                 onClick={() => handleNavClick('view-profile')}
                 title="الملف الشخصي وإعدادات الحساب"
               >
@@ -258,18 +258,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="nav-user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800, color: 'var(--text-bright)' }}>
                   {cleanDisplayName.split(' ').slice(0, 2).join(' ')}
                 </span>
-                <Edit3 size={11} color="var(--primary-light)" style={{ opacity: 0.7 }} />
+                <Edit3 size={11} color="var(--primary-light)" style={{ opacity: 0.7, flexShrink: 0 }} />
                 <span className={`role-badge role-badge--${currentUser.role}`} style={{ padding: '0.12rem 0.55rem', fontSize: '0.72rem' }}>
                   {isSuperAdmin ? 'المدير العام' : ROLE_LABELS[currentUser.role]}
                 </span>
               </div>
               <button
-                className="btn btn-secondary desktop-only-btn"
+                className="btn btn-secondary desktop-only-btn nav-logout-btn"
                 onClick={logout}
                 style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }}
                 title="تسجيل الخروج"
               >
-                <LogOut size={15} /> خروج
+                <LogOut size={15} /> <span className="nav-logout-text">خروج</span>
               </button>
             </>
           ) : (
