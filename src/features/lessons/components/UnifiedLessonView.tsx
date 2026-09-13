@@ -192,13 +192,17 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                     score: 0,
                     questions: [],
                   },
-                  exam: {
-                    id: l.PrerequisiteExamId || `exam-${l._id}`,
-                    title: `امتحان: ${l.Title || 'المحاضرة'}`,
-                    durationMinutes: 15,
-                    passingScorePercentage: 60,
-                    questions: [],
-                  },
+                  exam: l.PrerequisiteExamId
+                    ? {
+                        id: typeof l.PrerequisiteExamId === 'object' && l.PrerequisiteExamId !== null
+                          ? ((l.PrerequisiteExamId as any)._id || (l.PrerequisiteExamId as any).id)
+                          : l.PrerequisiteExamId,
+                        title: `امتحان: ${l.Title || 'المحاضرة'}`,
+                        durationMinutes: 15,
+                        passingScorePercentage: 60,
+                        questions: [],
+                      }
+                    : null,
                 } as any);
               });
             }
@@ -1050,13 +1054,14 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
                         className="btn btn-primary"
                         style={{ padding: '0.85rem 1.75rem', fontSize: '0.95rem' }}
                         onClick={() => {
-                          const examId = (lesson as any).PrerequisiteExamId || lesson.exam?.id;
-                          if (examId && onNavigateView) {
+                          const rawExam = (lesson as any).PrerequisiteExamId || lesson.exam?.id;
+                          const examId = typeof rawExam === 'object' && rawExam !== null
+                            ? (rawExam._id || rawExam.id)
+                            : (typeof rawExam === 'string' ? rawExam : null);
+                          if (examId && !examId.startsWith('exam-') && onNavigateView) {
                             onNavigateView('view-exam-session', examId);
                           } else {
-                            setExamStarted(true);
-                            setExamTimer((lesson.exam?.durationMinutes || 15) * 60);
-                            showToast('بدأ امتحان الدرس — بالتوفيق!', 'success');
+                            showToast('لا يوجد امتحان تأهيلي منشور متاح لهذه المحاضرة حالياً.', 'info');
                           }
                         }}
                       >

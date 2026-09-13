@@ -849,12 +849,13 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
                       borderColor: isEnrolledExam ? '#10B981' : undefined
                     }}
                     onClick={() => {
+                      const examId = typeof exam._id === 'object' && exam._id !== null ? (exam._id as any)._id || (exam._id as any).id : String(exam._id);
                       if (onSelectExam) {
-                        onSelectExam(exam._id);
+                        onSelectExam(examId);
                       } else if (onNavigateView) {
-                        onNavigateView('view-exam-session', exam._id);
+                        onNavigateView('view-exam-session', examId);
                       } else {
-                        window.location.href = `/exams/${exam._id}`;
+                        window.location.href = `/exams/${examId}`;
                       }
                     }}
                   >

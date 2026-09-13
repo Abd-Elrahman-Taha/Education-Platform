@@ -214,7 +214,10 @@ export const AppContent: React.FC = () => {
 
   const handleNavigateView = (view: AppView, lessonId?: string) => {
     setCurrentView(view);
-    if (lessonId) {
+    if (view === 'view-exam-session' && lessonId) {
+      const cleanExamId = typeof lessonId === 'object' && lessonId !== null ? (lessonId as any)._id || (lessonId as any).id : String(lessonId);
+      setSelectedExamId(cleanExamId);
+    } else if (lessonId) {
       setActiveLessonId(lessonId);
     }
     const targetPath = VIEW_TO_ROUTE[view] || '/';
@@ -248,10 +251,11 @@ export const AppContent: React.FC = () => {
   };
 
   const handleOpenExam = (examId: string) => {
-    setSelectedExamId(examId);
+    const cleanExamId = typeof examId === 'object' && examId !== null ? (examId as any)._id || (examId as any).id : String(examId);
+    setSelectedExamId(cleanExamId);
     setCurrentView('view-exam-session');
     try {
-      window.history.pushState({ examId }, '', `/exams/${examId}`);
+      window.history.pushState({ examId: cleanExamId }, '', `/exams/${cleanExamId}`);
     } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

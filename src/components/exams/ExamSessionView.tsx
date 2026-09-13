@@ -4,6 +4,8 @@ import { Clock, Award, CheckCircle, XCircle, AlertTriangle, Send, ShieldCheck, F
 import { useExamSession } from '../../hooks/useExamSession';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ErrorState } from '../common/ErrorState';
+import { useToast } from '../../context/ToastContext';
+import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface ExamSessionViewProps {
   examId: string;
@@ -14,6 +16,7 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
   examId,
   onBackToCourse,
 }) => {
+  const { showToast } = useToast();
   const {
     exam,
     questions,
@@ -37,12 +40,80 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
 
   const [hasStarted, setHasStarted] = useState(false);
 
-  if (isLoading) {
-    return <LoadingSpinner message="جاري إعداد جلسة الاختبار..." />;
+  if (!examId) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '2rem auto' }}>
+        <ErrorState
+          title="معرّف الاختبار غير محدد"
+          message="لم يتم العثور على معرّف الاختبار المطلوب. يرجى العودة لصفحة الكورس أو قائمة الاختبارات واختيار الاختبار مرة أخرى."
+          onRetry={onBackToCourse}
+        />
+        {onBackToCourse && (
+          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+            <button className="btn btn-secondary" onClick={onBackToCourse}>
+              العودة إلى صفحة المحاضرة
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
-  if (error && !hasStarted) {
-    return <ErrorState title="خطأ في بدء الاختبار" message={error} onRetry={startExam} />;
+  const handleStartExam = async () => {
+    try {
+      await startExam();
+      setHasStarted(true);
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر بدء الاختبار، يرجى المحاولة مرة أخرى.'), 'error');
+    }
+  };
+
+  const handleSubmitExam = async () => {
+    if (questions.length === 0) {
+      showToast('لا توجد أسئلة لتسليمها.', 'warning');
+      return;
+    }
+
+    const answeredCount = Object.keys(answers).filter(
+      k => answers[k] !== undefined && answers[k] !== null && String(answers[k]).trim() !== ''
+    ).length;
+
+    if (answeredCount < questions.length) {
+      const confirmSubmit = window.confirm(
+        `لقد قمت بالإجابة على ${answeredCount} من أصل ${questions.length} سؤال. هل أنت متأكد من رغبتك في تسليم الاختبار الآن؟`
+      );
+      if (!confirmSubmit) return;
+    }
+
+    try {
+      await submitExam();
+      showToast('تم تسليم الاختبار بنجاح!', 'success');
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر تسليم الاختبار، يرجى المحاولة مرة أخرى.'), 'error');
+    }
+  };
+
+  if (isLoading) {
+    return <LoadingSpinner message="جاري إعداد جلسة الاختبار والأسئلة..." />;
+  }
+
+  if (error) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '2rem auto' }}>
+        <ErrorState
+          title="تعذر بدء أو تسليم الاختبار"
+          message={error}
+          onRetry={hasStarted ? handleSubmitExam : handleStartExam}
+        />
+        {onBackToCourse && (
+          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+            <button className="btn btn-secondary" onClick={onBackToCourse}>
+              العودة إلى صفحة المحاضرة
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   // Pre-start screen
@@ -74,13 +145,45 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
         <button
           className="btn btn-primary"
           style={{ padding: '0.75rem 2rem', fontSize: '0.95rem' }}
-          onClick={() => {
-            setHasStarted(true);
-            startExam();
+          onClick={handleStartExam}
+          disabled={isLoading}
+        >
+          {isLoading ? 'جاري بدء الاختبار...' : 'بدء الاختبار الآن'}
+        </button>
+      </div>
+    );
+  }
+
+  // Handle empty questions state when exam is started
+  if (hasStarted && questions.length === 0) {
+    return (
+      <div className="glass-card" style={{ maxWidth: '640px', margin: '2rem auto', padding: '2.5rem 2rem', textAlign: 'center' }}>
+        <div
+          style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'rgba(245, 158, 11, 0.15)',
+            color: '#F59E0B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1.25rem',
           }}
         >
-          بدء الاختبار الآن
-        </button>
+          <AlertTriangle size={32} />
+        </div>
+        <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+          لا توجد أسئلة مضافة لهذا الاختبار حالياً
+        </h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+          لم يقم المعلم أو إدارة المنصة بإضافة أي أسئلة لهذا الاختبار بعد، أو أن الاختبار قيد الإعداد.
+        </p>
+        {onBackToCourse && (
+          <button className="btn btn-primary" onClick={onBackToCourse}>
+            العودة إلى صفحة المحاضرة
+          </button>
+        )}
       </div>
     );
   }
@@ -219,8 +322,8 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
                 {q.QuestionText}
               </p>
 
-              {/* Options or Essay Input */}
-              {q.QuestionType === 'Essay' || !q.Options || q.Options.length === 0 ? (
+              {/* Options or Essay / FillInBlank Input */}
+              {q.QuestionType === 'Essay' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                   <textarea
                     rows={4}
@@ -235,39 +338,71 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
                     <FileText size={13} color="var(--primary-light)" /> سؤال مقالي يتطلب إجابة كتابية ويتم تقييمه يدوياً من قِبل المعلم/المشرف.
                   </span>
                 </div>
+              ) : q.QuestionType === 'FillInBlank' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  <input
+                    type="text"
+                    disabled={isTimerExpired || isSubmitting}
+                    placeholder="اكتب إجابتك هنا..."
+                    value={answers[q._id] || ''}
+                    onChange={e => selectAnswer(q._id, e.target.value)}
+                    className="input-field"
+                    style={{ width: '100%' }}
+                  />
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                  {q.Options.map((opt, optIndex) => {
-                    const isSelected = selectedOption === opt;
-                    return (
-                      <label
-                        key={optIndex}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.75rem',
-                          padding: '0.75rem 1rem',
-                          borderRadius: 'var(--radius-md)',
-                          background: isSelected ? 'rgba(8, 145, 178, 0.16)' : 'var(--bg-surface)',
-                          border: `1px solid ${isSelected ? 'var(--primary-light)' : 'var(--border-glass)'}`,
-                          cursor: isTimerExpired ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name={`q-${q._id}`}
-                          disabled={isTimerExpired || isSubmitting}
-                          checked={isSelected}
-                          onChange={() => selectAnswer(q._id, opt)}
-                          style={{ accentColor: 'var(--primary-light)', width: '18px', height: '18px' }}
-                        />
-                        <span style={{ fontSize: '0.9rem', color: isSelected ? 'var(--text-bright)' : 'var(--text-muted)', fontWeight: isSelected ? 700 : 500 }}>
-                          {opt}
-                        </span>
-                      </label>
-                    );
-                  })}
+                  {q.Options && q.Options.length > 0 ? (
+                    q.Options.map((opt, optIndex) => {
+                      const isSelected = selectedOption === opt;
+                      let displayLabel = opt;
+                      if (q.QuestionType === 'TrueFalse') {
+                        if (opt === 'true' || opt.toLowerCase() === 'true') displayLabel = 'صح (صواب)';
+                        else if (opt === 'false' || opt.toLowerCase() === 'false') displayLabel = 'خطأ';
+                      }
+
+                      return (
+                        <label
+                          key={optIndex}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            padding: '0.75rem 1rem',
+                            borderRadius: 'var(--radius-md)',
+                            background: isSelected ? 'rgba(8, 145, 178, 0.16)' : 'var(--bg-surface)',
+                            border: `1px solid ${isSelected ? 'var(--primary-light)' : 'var(--border-glass)'}`,
+                            cursor: isTimerExpired ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={`q-${q._id}`}
+                            disabled={isTimerExpired || isSubmitting}
+                            checked={isSelected}
+                            onChange={() => selectAnswer(q._id, opt)}
+                            style={{ accentColor: 'var(--primary-light)', width: '18px', height: '18px' }}
+                          />
+                          <span style={{ fontSize: '0.9rem', color: isSelected ? 'var(--text-bright)' : 'var(--text-muted)', fontWeight: isSelected ? 700 : 500 }}>
+                            {displayLabel}
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      <input
+                        type="text"
+                        disabled={isTimerExpired || isSubmitting}
+                        placeholder="اكتب إجابتك هنا..."
+                        value={answers[q._id] || ''}
+                        onChange={e => selectAnswer(q._id, e.target.value)}
+                        className="input-field"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -282,9 +417,10 @@ export const ExamSessionView: React.FC<ExamSessionViewProps> = ({
         </span>
 
         <button
+          type="button"
           className="btn btn-primary"
           disabled={isSubmitting || isTimerExpired}
-          onClick={submitExam}
+          onClick={handleSubmitExam}
           style={{ padding: '0.65rem 1.5rem', fontSize: '0.9rem' }}
         >
           {isSubmitting ? (
