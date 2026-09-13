@@ -120,12 +120,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         setActiveTab('login');
         setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
       } catch (err: any) {
-        const rawStr = JSON.stringify(err?.raw || '').toLowerCase();
-        const errMsg = (err?.message || '').toLowerCase();
-        if (errMsg.includes('nationalid') || rawStr.includes('nationalid')) {
-          setApiError('يرجى التأكد من صحة الرقم القومي (14 رقماً) والمحاولة مرة أخرى.');
-        } else if (errMsg.includes('phone') && (errMsg.includes('exist') || errMsg.includes('duplicate') || err?.status === 409)) {
+        console.error('[AuthModal] Signup error details:', err?.raw || err?.response?.data || err);
+        const rawData = err?.raw || err?.response?.data || {};
+        const rawStr = JSON.stringify(rawData).toLowerCase();
+        const specificBackendMsg =
+          err?.backendMessage ||
+          rawData?.message ||
+          rawData?.error ||
+          (typeof rawData === 'string' ? rawData : '') ||
+          err?.rawMessage;
+
+        if (rawStr.includes('phone') && (rawStr.includes('exist') || rawStr.includes('duplicate') || err?.status === 409)) {
           setApiError('رقم الهاتف مسجل مسبقاً. يرجى تسجيل الدخول أو استخدام رقم آخر.');
+        } else if (rawStr.includes('nationalid') && (rawStr.includes('exist') || rawStr.includes('duplicate'))) {
+          setApiError('الرقم القومي مسجل مسبقاً لمستخدم آخر.');
+        } else if (rawStr.includes('nationalid')) {
+          setApiError('يرجى التأكد من صحة الرقم القومي (14 رقماً) والمحاولة مرة أخرى.');
+        } else if (specificBackendMsg && typeof specificBackendMsg === 'string' && specificBackendMsg.trim().length > 0) {
+          setApiError(specificBackendMsg);
         } else {
           setApiError(getFriendlyErrorMessage(err, 'تعذر إنشاء الحساب، يرجى مراجعة البيانات والمحاولة مرة أخرى.'));
         }

@@ -410,12 +410,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (grade !== undefined && grade !== null && grade !== '') {
       payload.Grade = String(grade);
     }
-    // Also attach AcademicYear if secondary for backward compatibility
-    if (educationStage === 'Secondary' && grade) {
-      if (grade === '1') payload.AcademicYear = 'first_secondary';
-      else if (grade === '2') payload.AcademicYear = 'second_secondary';
-      else if (grade === '3') payload.AcademicYear = 'third_secondary';
-    }
     const res = await authApi.signup(payload);
     return res;
   };
