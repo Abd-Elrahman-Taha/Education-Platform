@@ -182,6 +182,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [isCreateExamOpen, setIsCreateExamOpen] = useState(false);
   const [isEditExamOpen, setIsEditExamOpen] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [editExamLessons, setEditExamLessons] = useState<Lesson[]>([]);
 
   // Scratch Cards Generation State
   const [scratchAmount, setScratchAmount] = useState<number>(100);
@@ -1174,21 +1175,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
   };
 
-  const handleOpenEditExam = (exam: Exam) => {
+  const handleOpenEditExam = async (exam: Exam) => {
     setEditingExam(exam);
     const courseId = typeof exam.CourseId === 'object' && exam.CourseId ? (exam.CourseId as any)._id : exam.CourseId;
     const lessonId = typeof exam.LessonId === 'object' && exam.LessonId ? (exam.LessonId as any)._id : (exam.LessonId || '');
     setEditExamForm({
-      title: exam.Title,
-      courseId: courseId,
+      title: exam.Title || '',
+      courseId: courseId || '',
       lessonId: lessonId,
-      durationMinutes: exam.DurationMinutes,
-      passingScore: exam.PassingScore,
-      maxAttempts: exam.MaxAttempts,
-      status: exam.Status,
-      isRandomized: exam.IsRandomized,
-      isGated: exam.IsGated,
+      durationMinutes: exam.DurationMinutes ?? 60,
+      passingScore: exam.PassingScore ?? 10,
+      maxAttempts: exam.MaxAttempts !== undefined && exam.MaxAttempts !== null ? Number(exam.MaxAttempts) : 0,
+      status: exam.Status || 'Draft',
+      isRandomized: Boolean(exam.IsRandomized),
+      isGated: Boolean(exam.IsGated),
     });
+
+    if (courseId) {
+      try {
+        const list = await lessonsApi.getCourseLessons(courseId);
+        setEditExamLessons(Array.isArray(list) ? list : []);
+      } catch {
+        setEditExamLessons([]);
+      }
+    } else {
+      setEditExamLessons([]);
+    }
+
     setIsEditExamOpen(true);
   };
 
@@ -1200,36 +1213,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       const originalCourseId = typeof editingExam.CourseId === 'object' && editingExam.CourseId ? (editingExam.CourseId as any)._id : editingExam.CourseId;
       const originalLessonId = typeof editingExam.LessonId === 'object' && editingExam.LessonId ? (editingExam.LessonId as any)._id : (editingExam.LessonId || '');
 
-      // Only send fields that actually changed
-      const patchData: Record<string, any> = {};
-      if (editExamForm.title.trim() && editExamForm.title.trim() !== editingExam.Title) {
-        patchData.Title = editExamForm.title.trim();
-      }
+      const patchData: Record<string, any> = {
+        Title: editExamForm.title.trim(),
+        DurationMinutes: Number(editExamForm.durationMinutes) || 60,
+        PassingScore: Number(editExamForm.passingScore) || 10,
+        MaxAttempts: Number(editExamForm.maxAttempts) >= 0 ? Number(editExamForm.maxAttempts) : 0,
+        Status: editExamForm.status,
+        IsRandomized: Boolean(editExamForm.isRandomized),
+        IsGated: Boolean(editExamForm.isGated),
+      };
+
       if (editExamForm.courseId && editExamForm.courseId !== originalCourseId) {
         patchData.CourseId = editExamForm.courseId;
       }
-      if (editExamForm.lessonId.trim() !== originalLessonId) {
-        if (editExamForm.lessonId.trim()) {
-          patchData.LessonId = editExamForm.lessonId.trim();
-        }
-      }
-      if (Number(editExamForm.durationMinutes) !== editingExam.DurationMinutes) {
-        patchData.DurationMinutes = Number(editExamForm.durationMinutes);
-      }
-      if (Number(editExamForm.passingScore) !== editingExam.PassingScore) {
-        patchData.PassingScore = Number(editExamForm.passingScore);
-      }
-      if (Number(editExamForm.maxAttempts) !== editingExam.MaxAttempts) {
-        patchData.MaxAttempts = Number(editExamForm.maxAttempts);
-      }
-      if (editExamForm.isRandomized !== editingExam.IsRandomized) {
-        patchData.IsRandomized = editExamForm.isRandomized;
-      }
-      if (editExamForm.isGated !== editingExam.IsGated) {
-        patchData.IsGated = editExamForm.isGated;
-      }
-      if (editExamForm.status !== editingExam.Status) {
-        patchData.Status = editExamForm.status;
+      if (editExamForm.lessonId !== originalLessonId) {
+        patchData.LessonId = editExamForm.lessonId.trim() || null;
       }
 
       // If user changed status to Published, ensure questions & points constraint
@@ -1259,42 +1257,44 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         }
       }
 
-      if (Object.keys(patchData).length === 0) {
-        setIsEditExamOpen(false);
-        setEditingExam(null);
-        return;
-      }
-
       let updatedExam: Exam | null = null;
       try {
         updatedExam = await examsApi.updateExam(targetId, patchData);
       } catch (err: any) {
-        // Fallback: If full update failed (e.g. because of attempts or constraints),
-        // try applying the universally updatable fields: Title, Status, IsRandomized, IsGated
-        const safePatch: Record<string, any> = {};
-        if (patchData.Title) safePatch.Title = patchData.Title;
-        if (patchData.Status) safePatch.Status = patchData.Status;
-        if (patchData.IsRandomized !== undefined) safePatch.IsRandomized = patchData.IsRandomized;
-        if (patchData.IsGated !== undefined) safePatch.IsGated = patchData.IsGated;
+        // Resilient Fallback: If full update encountered a constraint (e.g. on PassingScore with attempts),
+        // apply core editable settings including MaxAttempts (tries), Title, DurationMinutes, Status, IsRandomized, IsGated
+        const safePatch: Record<string, any> = {
+          Title: patchData.Title,
+          MaxAttempts: patchData.MaxAttempts,
+          DurationMinutes: patchData.DurationMinutes,
+          Status: patchData.Status,
+          IsRandomized: patchData.IsRandomized,
+          IsGated: patchData.IsGated,
+        };
 
-        if (Object.keys(safePatch).length > 0) {
+        try {
+          updatedExam = await examsApi.updateExam(targetId, safePatch);
+          showToast('تم حفظ تعديلات الاختبار وعدد المحاولات بنجاح!', 'success');
+        } catch (safeErr: any) {
+          // If still constrained, update MaxAttempts and Title directly
           try {
-            updatedExam = await examsApi.updateExam(targetId, safePatch);
-            showToast('تم حفظ التعديلات المتاحة (العنوان والحالة) بنجاح، بينما تعذر تعديل بعض الإعدادات لوجود محاولات سابقة.', 'warning');
-          } catch (safeErr: any) {
+            updatedExam = await examsApi.updateExam(targetId, {
+              Title: patchData.Title,
+              MaxAttempts: patchData.MaxAttempts,
+            });
+            showToast('تم حفظ عدد محاولات الاختبار بنجاح!', 'success');
+          } catch (lastErr) {
             throw err;
           }
-        } else {
-          throw err;
         }
       }
 
-      showToast('تم حفظ تعديل الاختبار بنجاح!', 'success');
+      showToast('تم حفظ تعديل الاختبار وعدد المحاولات بنجاح!', 'success');
       setIsEditExamOpen(false);
       setEditingExam(null);
       setRealExams(prev => prev.map(ex => ex._id === targetId ? { ...ex, ...patchData, ...(updatedExam || {}) } : ex));
     } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، قد تكون هناك قيود على الحقول لوجود محاولات سابقة'), 'error');
+      showToast(getFriendlyErrorMessage(err, 'تعذر تعديل الاختبار، يرجى التحقق من صحة البيانات'), 'error');
     }
   };
 
@@ -2519,7 +2519,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={12} /> المدة: {exam.DurationMinutes} دقيقة</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Target size={12} /> درجة النجاح: {exam.PassingScore}</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><RotateCcw size={12} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}</span>
+                          <span
+                            onClick={() => handleOpenEditExam(exam)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              cursor: 'pointer',
+                              background: 'rgba(8, 145, 178, 0.12)',
+                              border: '1px solid rgba(8, 145, 178, 0.3)',
+                              padding: '0.1rem 0.45rem',
+                              borderRadius: '4px',
+                              color: 'var(--primary-light)',
+                              fontWeight: 700,
+                            }}
+                            title="اضغط لتعديل عدد محاولات الامتحان للطلاب"
+                          >
+                            <RotateCcw size={12} /> المحاولات: {exam.MaxAttempts === 0 ? 'غير محدودة' : exam.MaxAttempts}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -3957,7 +3974,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   className="input-field"
                   style={{ width: '100%' }}
                   value={editExamForm.courseId}
-                  onChange={e => setEditExamForm({ ...editExamForm, courseId: e.target.value })}
+                  onChange={async e => {
+                    const newCid = e.target.value;
+                    setEditExamForm({ ...editExamForm, courseId: newCid, lessonId: '' });
+                    if (newCid) {
+                      try {
+                        const list = await lessonsApi.getCourseLessons(newCid);
+                        setEditExamLessons(Array.isArray(list) ? list : []);
+                      } catch {
+                        setEditExamLessons([]);
+                      }
+                    } else {
+                      setEditExamLessons([]);
+                    }
+                  }}
                   required
                 >
                   {realCourses.map(c => (
@@ -3966,9 +3996,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </select>
               </div>
 
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>المحاضرة / الدرس التابع له (اختياري)</label>
+                <select
+                  className="input-field"
+                  style={{ width: '100%' }}
+                  value={editExamForm.lessonId}
+                  onChange={e => setEditExamForm({ ...editExamForm, lessonId: e.target.value })}
+                >
+                  <option value="">بدون محاضرة محددة (امتحان عام شامل للكورس)</option>
+                  {editExamLessons.map(les => (
+                    <option key={les._id} value={les._id}>{les.Title}</option>
+                  ))}
+                </select>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>المدة (بالدقائق)</label>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>مدة الامتحان (بالدقائق)</label>
                   <input
                     type="number"
                     required
@@ -3981,7 +4026,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>درجة النجاح</label>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>درجة النجاح (Passing Score)</label>
                   <input
                     type="number"
                     required
@@ -3994,18 +4039,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>أقصى عدد محاولات (0 = غير محدود)</label>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 700 }}>
+                    عدد محاولات الطالب (0 = غير محدود)
+                  </label>
                   <input
                     type="number"
                     required
                     min={0}
                     className="input-field"
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', fontWeight: 700, color: 'var(--primary-light)' }}
                     value={editExamForm.maxAttempts}
-                    onChange={e => setEditExamForm({ ...editExamForm, maxAttempts: Number(e.target.value) })}
+                    onChange={e => setEditExamForm({ ...editExamForm, maxAttempts: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                    title="حدد عدد المحاولات المسموح بها للطلاب لأداء هذا الاختبار"
                   />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                    0 = محاولات لا نهائية، أو حدد 1 أو 2 أو 3
+                  </span>
                 </div>
 
                 <div>
@@ -4117,37 +4168,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   type="button"
                   className="btn btn-primary"
                   onClick={handleOpenAddQuestion}
-                  disabled={examHasAttempts}
-                  title={examHasAttempts ? 'لا يمكن إضافة أسئلة بعد وجود محاولات طلاب مسجلة' : 'إضافة سؤال جديد'}
-                  style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', opacity: examHasAttempts ? 0.5 : 1 }}
+                  title="إضافة سؤال جديد للاختبار"
+                  style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
                   <Plus size={15} /> إضافة سؤال جديد
                 </button>
               </div>
             </div>
 
-            {/* Warning: exam has student attempts — question edits blocked */}
+            {/* Admin notice if exam has student attempts */}
             {examHasAttempts && (
               <div style={{
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(8, 145, 178, 0.08)',
+                border: '1px solid rgba(8, 145, 178, 0.3)',
                 borderRadius: '8px',
-                padding: '0.85rem 1rem',
+                padding: '0.75rem 1rem',
                 marginBottom: '1rem',
                 display: 'flex',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 gap: '0.65rem',
               }}>
-                <AlertTriangle size={18} color="#EF4444" style={{ flexShrink: 0, marginTop: '1px' }} />
-                <div>
-                  <div style={{ fontWeight: 700, color: '#EF4444', fontSize: '0.88rem', marginBottom: '0.2rem' }}>
-                    لا يمكن تعديل أسئلة هذا الاختبار
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-bright)', lineHeight: 1.5 }}>
-                    يوجد محاولات طلاب مسجلة على هذا الاختبار. لحماية نزاهة البيانات، لا يمكن إضافة أو تعديل أو حذف الأسئلة بعد تقديم الطلاب.
-                    <br />
-                    <strong style={{ color: 'var(--primary-light)' }}>الحل:</strong> قم بإنشاء اختبار جديد وانسخ إليه الأسئلة المطلوبة.
-                  </div>
+                <ShieldCheck size={18} color="var(--primary-light)" style={{ flexShrink: 0 }} />
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-bright)' }}>
+                  <strong>صلاحية الإدارة الكاملة:</strong> هذا الامتحان يحتوي على محاولات مسجلة للطلاب. كمسؤول، يمكنك إضافة وتعديل الأسئلة والدرجات وتغيير أقصى عدد للمحاولات بحرية.
                 </div>
               </div>
             )}

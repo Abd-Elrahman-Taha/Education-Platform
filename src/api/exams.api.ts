@@ -209,6 +209,10 @@ export const examsApi = {
         cleanPayload[k] = v;
       }
     }
+    if (data.MaxAttempts !== undefined && data.MaxAttempts !== null) {
+      cleanPayload.MaxAttempts = Number(data.MaxAttempts);
+      cleanPayload.maxAttempts = Number(data.MaxAttempts);
+    }
     const response = await apiClient.patch<any>(`/exams/${examId}`, cleanPayload);
     const raw = response.data;
     return raw?.data?.exam || raw?.exam || raw?.data || raw;

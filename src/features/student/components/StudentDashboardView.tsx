@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '../api/studentApi';
 import { enrollmentsApi } from '../../../api/enrollments.api';
+import { examsApi } from '../../exams/api/examsApi';
 import { AppView } from '../../../types';
 import {
   GraduationCap, BookOpen, Clock, Award, Flame, Calendar,
@@ -53,6 +54,12 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
     retry: false,
   });
 
+  const { data: examHistoryRes, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ['studentExamHistoryDashboard'],
+    queryFn: () => examsApi.getExamHistory(),
+  });
+  const examHistory = examHistoryRes?.data || [];
+
   if (isDashLoading || isTimelineLoading || isEnrollmentsLoading) {
     return (
       <div className="container fade-in-up" style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
@@ -83,6 +90,14 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
   const dash = dashboardRes.data;
   const timeline = timelineRes?.data;
   const enrolledList = enrollments || [];
+
+  const realPassedExams = examHistory.filter(h => h.isPassed).length;
+  const realAvgExamScore = examHistory.length > 0
+    ? Math.round(examHistory.reduce((acc, h) => acc + (h.percentage || 0), 0) / examHistory.length)
+    : (dash?.averageExamScore ?? 0);
+  const chartExamScores = (examHistory.length > 0
+    ? examHistory.slice(-8).map(h => ({ date: h.date, score: h.percentage }))
+    : timeline?.examScores) || [];
 
   return (
     <div className="container fade-in-up" style={{ padding: '2.5rem 1.5rem 5rem' }}>
@@ -316,6 +331,145 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
         </div>
       )}
 
+      {/* ── MY EXAM DEGREES & RESULTS SECTION ─────────────── */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Award size={24} color="var(--primary-light)" /> درجاتي في الامتحانات والتقييمات ({examHistory.length})
+            </h2>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              سجل كافة الدرجات والنتائج ونسب الاجتياز المحققة في امتحانات البابل شيت
+            </span>
+          </div>
+
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+            onClick={() => onNavigateView('view-assessment')}
+          >
+            تصفح جميع الامتحانات المتاحة
+          </button>
+        </div>
+
+        {isHistoryLoading ? (
+          <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            جاري جلب درجات وسجل الامتحانات...
+          </div>
+        ) : examHistory.length === 0 ? (
+          <div className="glass-card" style={{ padding: '2.5rem', textAlign: 'center' }}>
+            <Award size={44} color="var(--text-muted)" style={{ margin: '0 auto 0.75rem' }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)', margin: '0 0 0.4rem' }}>
+              لم تسجل أي نتائج امتحانات بعد
+            </h3>
+            <p style={{ color: 'var(--text-muted)', margin: '0 0 1.25rem', fontSize: '0.9rem' }}>
+              ابدأ الآن بأداء امتحانات المحاضرات والتقييمات التفاعلية لتظهر نتائجك ونسب نجاحك هنا.
+            </p>
+            <button className="btn btn-primary" onClick={() => onNavigateView('view-assessment')}>
+              <PlayCircle size={16} /> ابدأ الامتحان الآن
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1.25rem' }}>
+            {examHistory.map((record) => (
+              <div
+                key={record.id}
+                className="glass-card"
+                style={{
+                  padding: '1.5rem',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  border: record.isPassed ? '1px solid rgba(16, 185, 129, 0.45)' : '1px solid rgba(225, 29, 72, 0.45)',
+                  background: record.isPassed ? 'rgba(16, 185, 129, 0.03)' : 'rgba(225, 29, 72, 0.03)',
+                  position: 'relative',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      padding: '0.2rem 0.65rem',
+                      borderRadius: '9999px',
+                      background: record.isPassed ? 'rgba(16, 185, 129, 0.15)' : 'rgba(225, 29, 72, 0.15)',
+                      color: record.isPassed ? '#10B981' : '#E11D48',
+                      border: `1px solid ${record.isPassed ? 'rgba(16, 185, 129, 0.35)' : 'rgba(225, 29, 72, 0.35)'}`,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem'
+                    }}>
+                      {record.isPassed ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                      {record.isPassed ? 'ناجح (اجتياز)' : 'لم يتم الاجتياز'}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <Calendar size={12} /> {record.date}
+                    </span>
+                  </div>
+
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: '0 0 0.75rem', lineHeight: 1.4 }}>
+                    {record.lessonTitle}
+                  </h3>
+
+                  {/* Prominent Degree & Score Box */}
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    borderRadius: '10px',
+                    background: record.isPassed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(225, 29, 72, 0.1)',
+                    border: `1px solid ${record.isPassed ? 'rgba(16, 185, 129, 0.3)' : 'rgba(225, 29, 72, 0.3)'}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '1rem',
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>الدرجة المحققة:</span>
+                      <strong style={{ fontSize: '1.3rem', color: record.isPassed ? '#10B981' : '#E11D48' }}>
+                        {record.score} <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>/ {record.totalQuestions}</span>
+                      </strong>
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>النسبة المئوية:</span>
+                      <strong style={{ fontSize: '1.3rem', color: record.isPassed ? '#10B981' : '#E11D48' }}>
+                        {record.percentage}%
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem',
+                      background: record.isPassed ? 'linear-gradient(135deg, #10B981, #059669)' : undefined,
+                      borderColor: record.isPassed ? '#10B981' : undefined
+                    }}
+                    onClick={() => {
+                      const examId = record.examId;
+                      if (examId) {
+                        onNavigateView('view-exam-session', examId);
+                      } else {
+                        onNavigateView('view-assessment');
+                      }
+                    }}
+                  >
+                    <RefreshCw size={13} /> إعادة الامتحان
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ── 10 ANALYTIC WIDGETS GRID ───────────────────────── */}
       <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <BarChart3 size={20} color="var(--primary-light)" /> المؤشرات والأداء الأكاديمي الشامل
@@ -412,7 +566,9 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
             <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>امتحانات تم اجتيازها</span>
             <Award size={20} color="#8B5CF6" />
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#8B5CF6' }}>{dash.examsPassed} اختبارات</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#8B5CF6' }}>
+            {examHistory.length > 0 ? `${realPassedExams} من ${examHistory.length}` : `${dash.examsPassed} اختبارات`}
+          </div>
         </div>
 
         {/* Widget 7: Average Exam Score */}
@@ -421,7 +577,9 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
             <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>متوسط درجات الاختبارات</span>
             <TrendingUp size={20} color="#EC4899" />
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#EC4899' }}>{dash.averageExamScore}%</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#EC4899' }}>
+            {realAvgExamScore}%
+          </div>
         </div>
 
         {/* Widget 8: Total Study Hours */}
@@ -465,7 +623,7 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
           </h3>
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={timeline?.examScores}>
+              <LineChart data={chartExamScores}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                 <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={12} />
                 <YAxis domain={[0, 100]} stroke="var(--text-muted)" fontSize={12} />
