@@ -100,7 +100,7 @@ export interface ChangePasswordRequest {
 }
 
 // ── Courses ───────────────────────────────────────────────────────────────
-export type EducationStage = 'Primary' | 'Preparatory' | 'Secondary' | 'University';
+export type EducationStage = 'Primary' | 'Secondary' | 'University' | 'Preparatory';
 
 export interface Course {
   _id: string;

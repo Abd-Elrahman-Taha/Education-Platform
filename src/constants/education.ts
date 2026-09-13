@@ -7,10 +7,17 @@ export interface StageDefinition {
   grades: { value: string; label: string }[];
 }
 
+/**
+ * Supported Backend Education Stages (Exact Choices):
+ * 1. Primary
+ * 2. Secondary
+ * 3. University
+ * 4. Preparatory
+ */
 export const EDUCATION_STAGES: StageDefinition[] = [
   {
     key: 'Primary',
-    label: 'المرحلة الابتدائية',
+    label: 'المرحلة الابتدائية (Primary)',
     grades: [
       { value: '1', label: 'الصف الأول الابتدائي' },
       { value: '2', label: 'الصف الثاني الابتدائي' },
@@ -21,17 +28,8 @@ export const EDUCATION_STAGES: StageDefinition[] = [
     ],
   },
   {
-    key: 'Preparatory',
-    label: 'المرحلة الإعدادية',
-    grades: [
-      { value: '1', label: 'الصف الأول الإعدادي' },
-      { value: '2', label: 'الصف الثاني الإعدادي' },
-      { value: '3', label: 'الصف الثالث الإعدادي' },
-    ],
-  },
-  {
     key: 'Secondary',
-    label: 'المرحلة الثانوية',
+    label: 'المرحلة الثانوية (Secondary)',
     grades: [
       { value: '1', label: 'الصف الأول الثانوي' },
       { value: '2', label: 'الصف الثاني الثانوي' },
@@ -40,12 +38,21 @@ export const EDUCATION_STAGES: StageDefinition[] = [
   },
   {
     key: 'University',
-    label: 'المرحلة الجامعية',
+    label: 'المرحلة الجامعية (University)',
     grades: [
       { value: '1', label: 'الفرقة الأولى' },
       { value: '2', label: 'الفرقة الثانية' },
       { value: '3', label: 'الفرقة الثالثة' },
       { value: '4', label: 'الفرقة الرابعة' },
+    ],
+  },
+  {
+    key: 'Preparatory',
+    label: 'المرحلة الإعدادية (Preparatory)',
+    grades: [
+      { value: '1', label: 'الصف الأول الإعدادي' },
+      { value: '2', label: 'الصف الثاني الإعدادي' },
+      { value: '3', label: 'الصف الثالث الإعدادي' },
     ],
   },
 ];
@@ -54,6 +61,10 @@ export function getStageLabel(stage?: string): string {
   if (!stage) return 'المرحلة الثانوية';
   const norm = stage.toLowerCase().trim();
   if (norm === 'primary' || norm.includes('ابتدائ')) return 'المرحلة الابتدائية';
+  if (norm === 'secondary' || norm.includes('ثانو')) return 'المرحلة الثانوية';
+  if (norm === 'university' || norm === 'college' || norm.includes('جامع') || norm.includes('كلية')) {
+    return 'المرحلة الجامعية';
+  }
   if (
     norm === 'preparatory' ||
     norm === 'middle' ||
@@ -63,10 +74,6 @@ export function getStageLabel(stage?: string): string {
   ) {
     return 'المرحلة الإعدادية';
   }
-  if (norm === 'secondary' || norm.includes('ثانو')) return 'المرحلة الثانوية';
-  if (norm === 'university' || norm === 'college' || norm.includes('جامع') || norm.includes('كلية')) {
-    return 'المرحلة الجامعية';
-  }
   return stage;
 }
 
@@ -74,7 +81,7 @@ export function getGradeLabel(stage?: string, grade?: string | number): string {
   if (grade === undefined || grade === null) return 'الصف الدراسي';
   const gStr = String(grade).trim();
   const stageDef = EDUCATION_STAGES.find(
-    (s) => s.key === stage || s.label === stage || getStageLabel(s.key) === getStageLabel(stage)
+    (s) => s.key === stage || s.label.includes(stage || '') || getStageLabel(s.key) === getStageLabel(stage)
   );
   const found = stageDef?.grades.find((g) => g.value === gStr);
   if (found) return found.label;
