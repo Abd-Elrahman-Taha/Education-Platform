@@ -13,7 +13,17 @@ export function useCourses(initialParams?: CourseQueryParams) {
 
   const query = useQuery({
     queryKey: ['courses', params],
-    queryFn: () => coursesApi.getCourses(params),
+    queryFn: async () => {
+      try {
+        return await coursesApi.getCourses(params);
+      } catch (err: any) {
+        const token = localStorage.getItem('auth_token');
+        if (!token && (err?.status === 401 || err?.response?.status === 401)) {
+          return { courses: [], data: { courses: [] }, pagination: { total: 0, page: 1, limit: 12, totalPages: 1 } };
+        }
+        throw err;
+      }
+    },
     placeholderData: (previousData) => previousData,
   });
 

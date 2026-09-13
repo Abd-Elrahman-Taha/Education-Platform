@@ -170,7 +170,12 @@ export const AppContent: React.FC = () => {
 
   // Listen to session invalidation / multi-device logout
   useEffect(() => {
+    let lastToastTime = 0;
     const handleAuthLogout = (e: any) => {
+      const now = Date.now();
+      if (now - lastToastTime < 3500) return;
+      lastToastTime = now;
+
       const detail = e?.detail;
       if (detail?.reason === 'multi_device') {
         showToast(detail?.message || 'تم تسجيل الدخول بحسابك من جهاز آخر. يرجى تسجيل الدخول مجدداً للمتابعة.', 'warning');

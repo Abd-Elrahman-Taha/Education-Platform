@@ -45,8 +45,9 @@ export const authApi = {
    * Get current authenticated user profile.
    * Backend endpoint: GET /users/me
    */
-  getCurrentUser: async (): Promise<any> => {
-    const response = await apiClient.get<any>('/users/me');
+  getCurrentUser: async (token?: string): Promise<any> => {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+    const response = await apiClient.get<any>('/users/me', config);
     const raw = response.data;
     return raw?.data?.user || raw?.user || raw?.data || raw;
   },

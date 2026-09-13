@@ -118,15 +118,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // Listen to 401 unauthenticated event from Axios response interceptor
-  useEffect(() => {
-    const handleAuthLogout = () => {
-      logout();
-    };
-
-    window.addEventListener('auth:logout', handleAuthLogout);
-    return () => window.removeEventListener('auth:logout', handleAuthLogout);
-  }, []);
 
   // Listen to real-time profile updates (e.g. from Admin Dashboard or Profile Page)
   useEffect(() => {
@@ -200,7 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const syncUserFromBackend = async (authToken: string) => {
     try {
-      const dbUser = await authApi.getCurrentUser();
+      const dbUser = await authApi.getCurrentUser(authToken);
       if (dbUser) {
         const payload = parseJwt(authToken) || {};
         const roleRaw = (
@@ -241,11 +232,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } as any;
 
         setCurrentUser(updatedUser);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+        } catch {}
         return updatedUser;
       }
     } catch (err) {
       console.warn('[AuthContext] syncUserFromBackend error:', err);
     }
+
+    // Robust Fallback: Reconstruct valid user object from JWT payload
+    const payload = parseJwt(authToken) || {};
+    if (payload.userId || payload.sub) {
+      const roleRaw = (payload.Role || payload.role || 'Student').toString();
+      const roleLower = roleRaw.toLowerCase();
+      const isSuperAdmin = roleLower === 'superadmin' || roleRaw === 'SuperAdmin';
+      const isAdmin = roleLower === 'admin' || isSuperAdmin;
+      const normalizedRole: UserRole = isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : 'student');
+
+      const fallbackUser: User = {
+        id: payload.userId || payload.sub,
+        name: (payload.FullName || payload.name || 'حساب المستخدم').trim(),
+        email: payload.email || `${payload.Phone || 'user'}@lms.edu`,
+        phone: (payload.Phone || '').trim(),
+        nationalId: payload.NationalId,
+        role: normalizedRole,
+        isSuperAdmin,
+        status: 'active',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
+        registrationDate: new Date().toISOString().slice(0, 10),
+        academicYear: (payload.AcademicYear || 'third_secondary') as any,
+        subscribedYear: payload.AcademicYear || 'third_secondary',
+        isSubscribed: false,
+        subscription: {
+          isActive: false,
+          year: payload.AcademicYear || 'third_secondary',
+          plan: 'باقة التفوق',
+        },
+      } as any;
+
+      setCurrentUser(fallbackUser);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackUser));
+      } catch {}
+      return fallbackUser;
+    }
+
     return null;
   };
 
@@ -268,13 +300,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = (user: User, authToken?: string) => {
     setCurrentUser(user);
     if (authToken) {
+      try {
+        localStorage.setItem(AUTH_TOKEN_KEY, authToken);
+      } catch {}
       setToken(authToken);
     }
   };
 
   const logout = async () => {
+    const currentToken = token || localStorage.getItem(AUTH_TOKEN_KEY);
     try {
-      if (token) {
+      if (currentToken) {
         await authApi.logout();
       }
     } catch (err) {
@@ -286,7 +322,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(AUTH_TOKEN_KEY);
       } catch {}
-      window.dispatchEvent(new CustomEvent('auth:logout'));
     }
   };
 
@@ -305,6 +340,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!jwtToken) {
       throw new Error('تعذر تسجيل الدخول حالياً، يرجى المحاولة مرة أخرى.');
     }
+
+    // Synchronously commit auth token so concurrent requests and interceptors immediately have it
+    try {
+      localStorage.setItem(AUTH_TOKEN_KEY, jwtToken);
+    } catch {}
     setToken(jwtToken);
 
     // Synchronize full profile from live backend GET /users/me

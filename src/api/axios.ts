@@ -45,6 +45,8 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+let lastLogoutDispatchTime = 0;
+
 // Response Interceptor: Centralized Error Handling
 apiClient.interceptors.response.use(
   (response) => response,
@@ -63,20 +65,35 @@ apiClient.interceptors.response.use(
       raw: backendData,
     });
 
+    const requestUrl = error.config?.url || '';
+    const isAuthEndpoint =
+      requestUrl.includes('/auth/signin') ||
+      requestUrl.includes('/auth/signup') ||
+      requestUrl.includes('/auth/logout');
+
+    const hadAuthHeader = !!error.config?.headers?.Authorization;
+
     // Invalidate session if 401 Unauthorized or 403 Multi-Device session revocation
+    // Only if not an auth endpoint, and the request actually attempted authenticated access
     const isMultiDeviceOrSessionRevoked =
-      status === 401 ||
-      (status === 403 &&
-        typeof rawErrorMessage === 'string' &&
-        (rawErrorMessage.includes('تم تسجيل الدخول من جهاز آخر') ||
-         rawErrorMessage.includes('تعدد الأجهزة') ||
-         rawErrorMessage.toLowerCase().includes('suspendedmultidevice')));
+      !isAuthEndpoint &&
+      hadAuthHeader &&
+      (status === 401 ||
+        (status === 403 &&
+          typeof rawErrorMessage === 'string' &&
+          (rawErrorMessage.includes('تم تسجيل الدخول من جهاز آخر') ||
+           rawErrorMessage.includes('تعدد الأجهزة') ||
+           rawErrorMessage.toLowerCase().includes('suspendedmultidevice'))));
 
     if (isMultiDeviceOrSessionRevoked) {
       try {
         const hadToken = localStorage.getItem(AUTH_TOKEN_KEY);
         if (hadToken) {
           localStorage.removeItem(AUTH_TOKEN_KEY);
+        }
+        const now = Date.now();
+        if (now - lastLogoutDispatchTime > 4000) {
+          lastLogoutDispatchTime = now;
           // Emit auth:logout event so AuthContext reactively updates
           window.dispatchEvent(
             new CustomEvent('auth:logout', {
