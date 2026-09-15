@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, AlertCircle, CreditCard } from 'lucide-react';
+import { X, LogIn, UserPlus, Lock, User, Phone, Zap, Shield, GraduationCap, AlertCircle, CreditCard, Check, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
@@ -31,6 +31,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     educationStage: 'Secondary' as EducationStage,
     grade: '3',
   });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Real-time password requirement evaluations for Sign Up
+  const passwordVal = formData.password || '';
+  const confirmPasswordVal = formData.confirmPassword || '';
+
+  const passwordRequirements = [
+    {
+      id: 'length',
+      label: '8 أحرف أو أرقام على الأقل (8–40 حرفاً)',
+      isValid: passwordVal.length >= 8 && passwordVal.length <= 40,
+    },
+    {
+      id: 'letter',
+      label: 'تحتوي على حرف إنجليزي واحد على الأقل (a-z أو A-Z)',
+      isValid: /[a-zA-Z]/.test(passwordVal),
+    },
+    {
+      id: 'number',
+      label: 'تحتوي على رقم واحد على الأقل (0-9)',
+      isValid: /[0-9]/.test(passwordVal),
+    },
+  ];
+
+  const isConfirmMatch = confirmPasswordVal.length > 0 && passwordVal === confirmPasswordVal;
 
   if (!isOpen) return null;
 
@@ -89,13 +116,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         return;
       }
 
-      // 5. Password: Required, 8–40 characters
+      // 5. Password: Required, 8–40 characters, at least one letter, at least one number
       if (!formData.password) {
         setApiError('يرجى إدخال كلمة المرور.');
         return;
       }
       if (formData.password.length < 8 || formData.password.length > 40) {
         setApiError('يجب أن تتراوح كلمة المرور بين 8 إلى 40 حرفاً أو رقماً.');
+        return;
+      }
+      if (!/[a-zA-Z]/.test(formData.password)) {
+        setApiError('يجب أن تحتوي كلمة المرور على حرف إنجليزي واحد على الأقل (a-z أو A-Z).');
+        return;
+      }
+      if (!/[0-9]/.test(formData.password)) {
+        setApiError('يجب أن تحتوي كلمة المرور على رقم واحد على الأقل (0-9).');
         return;
       }
 
@@ -391,20 +426,121 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           {/* 5. Password * */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-              كلمة المرور (Password) <span style={{ color: 'var(--danger)' }}>*</span> {activeTab === 'register' && '(8–40 حرفاً)'}
+              كلمة المرور (Password) <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <Lock size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 placeholder="••••••••"
                 className="input-field"
-                style={{ width: '100%', paddingRight: '38px', fontSize: '0.85rem' }}
+                style={{
+                  width: '100%',
+                  paddingRight: '38px',
+                  paddingLeft: '38px',
+                  fontSize: '0.85rem',
+                  borderColor:
+                    activeTab === 'register' && passwordVal.length > 0
+                      ? passwordRequirements.every((r) => r.isValid)
+                        ? 'rgba(16, 185, 129, 0.6)'
+                        : 'rgba(239, 68, 68, 0.6)'
+                      : undefined,
+                  boxShadow:
+                    activeTab === 'register' && passwordVal.length > 0
+                      ? passwordRequirements.every((r) => r.isValid)
+                        ? '0 0 8px rgba(16, 185, 129, 0.25)'
+                        : '0 0 8px rgba(239, 68, 68, 0.2)'
+                      : undefined,
+                  transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
+                }}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                tabIndex={-1}
+                title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
+
+            {/* Password Requirements Checklist (Under Enter Password) */}
+            {activeTab === 'register' && (
+              <div
+                style={{
+                  marginTop: '0.65rem',
+                  padding: '0.65rem 0.75rem',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-glass)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.45rem',
+                }}
+              >
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.1rem' }}>
+                  شروط كلمة المرور المطلوبة:
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {passwordRequirements.map((req) => (
+                    <div
+                      key={req.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.78rem',
+                        padding: '0.35rem 0.6rem',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                        background: req.isValid ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.1)',
+                        border: req.isValid
+                          ? '1px solid rgba(16, 185, 129, 0.5)'
+                          : '1px solid rgba(239, 68, 68, 0.5)',
+                        color: req.isValid ? '#10B981' : '#EF4444',
+                        boxShadow: req.isValid
+                          ? '0 0 10px rgba(16, 185, 129, 0.35)'
+                          : '0 0 10px rgba(239, 68, 68, 0.25)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: req.isValid ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                          flexShrink: 0,
+                          transition: 'background 0.25s ease',
+                        }}
+                      >
+                        {req.isValid ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                      </span>
+                      <span>{req.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 6. Confirm Password * */}
@@ -416,14 +552,95 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
               <div style={{ position: 'relative' }}>
                 <Lock size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
                   className="input-field"
-                  style={{ width: '100%', paddingRight: '38px', fontSize: '0.85rem' }}
+                  style={{
+                    width: '100%',
+                    paddingRight: '38px',
+                    paddingLeft: '38px',
+                    fontSize: '0.85rem',
+                    borderColor:
+                      confirmPasswordVal.length > 0
+                        ? isConfirmMatch
+                          ? 'rgba(16, 185, 129, 0.6)'
+                          : 'rgba(239, 68, 68, 0.6)'
+                        : undefined,
+                    boxShadow:
+                      confirmPasswordVal.length > 0
+                        ? isConfirmMatch
+                          ? '0 0 8px rgba(16, 185, 129, 0.25)'
+                          : '0 0 8px rgba(239, 68, 68, 0.2)'
+                        : undefined,
+                    transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
+                  }}
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{
+                    position: 'absolute',
+                    left: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  tabIndex={-1}
+                  title={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Confirm Password Matching Requirement */}
+              <div
+                style={{
+                  marginTop: '0.45rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.78rem',
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  background: isConfirmMatch ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.1)',
+                  border: isConfirmMatch
+                    ? '1px solid rgba(16, 185, 129, 0.5)'
+                    : '1px solid rgba(239, 68, 68, 0.5)',
+                  color: isConfirmMatch ? '#10B981' : '#EF4444',
+                  boxShadow: isConfirmMatch
+                    ? '0 0 10px rgba(16, 185, 129, 0.35)'
+                    : '0 0 10px rgba(239, 68, 68, 0.25)',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: isConfirmMatch ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                    flexShrink: 0,
+                    transition: 'background 0.25s ease',
+                  }}
+                >
+                  {isConfirmMatch ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                </span>
+                <span>
+                  {isConfirmMatch ? 'كلمتا المرور متطابقتان' : 'يجب تطابق كلمتي المرور'}
+                </span>
               </div>
             </div>
           )}
