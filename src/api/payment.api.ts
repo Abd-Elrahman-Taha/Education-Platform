@@ -54,55 +54,17 @@ export const paymentApi = {
     const courseId = String(data.courseId || data.CourseId || '').trim();
     const method = (data.paymentMethod === 'InstaPay' || data.PaymentMethod === 'InstaPay') ? 'InstaPay' : 'VodafoneCash';
 
-    // Primary payload providing both camelCase and PascalCase for maximum server compatibility
-    const cleanPayload: Record<string, any> = {
+    // The backend strictly validates payload with Joi (stripUnknown: false).
+    // Exactly and only these 4 keys are allowed:
+    const cleanPayload = {
       courseId,
-      CourseId: courseId,
       paymentMethod: method,
-      PaymentMethod: method,
       SenderPhone: cleanPhone,
-      senderPhone: cleanPhone,
       transactionReference: cleanRef,
-      TransactionReference: cleanRef,
     };
 
-    if (data.fileKey) {
-      cleanPayload.fileKey = data.fileKey;
-    }
-
-    try {
-      const response = await apiClient.post<any>('/payment/requests', cleanPayload);
-      return response.data;
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const errMsg = String(err?.response?.data?.message || err?.response?.data?.error || '').toLowerCase();
-
-      // If rejected with 400 specifically due to strict rejection of additional properties,
-      // fallback to exact PascalCase (Mongoose schema) or exact Swagger fields:
-      if (status === 400 && (errMsg.includes('allowed') || errMsg.includes('extra') || errMsg.includes('unknown') || errMsg.includes('additional'))) {
-        try {
-          const pascalPayload = {
-            CourseId: courseId,
-            PaymentMethod: method,
-            SenderPhone: cleanPhone,
-            TransactionReference: cleanRef,
-          };
-          const res2 = await apiClient.post<any>('/payment/requests', pascalPayload);
-          return res2.data;
-        } catch {
-          const swaggerPayload = {
-            courseId,
-            paymentMethod: method,
-            SenderPhone: cleanPhone,
-            transactionReference: cleanRef,
-          };
-          const res3 = await apiClient.post<any>('/payment/requests', swaggerPayload);
-          return res3.data;
-        }
-      }
-
-      throw err;
-    }
+    const response = await apiClient.post<any>('/payment/requests', cleanPayload);
+    return response.data;
   },
 
   /**

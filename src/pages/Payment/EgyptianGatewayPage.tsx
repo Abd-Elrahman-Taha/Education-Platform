@@ -227,7 +227,6 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
         paymentMethod: method,
         SenderPhone: cleanPhone,
         transactionReference: cleanRef,
-        TransactionReference: cleanRef,
       });
 
       setRequestSubmitted(res.data);
@@ -797,7 +796,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)' }}>
-                  الرقم المسلسل / كود العملية للتحويل (من رسالة فودافون كاش): <span style={{ color: '#EF4444' }}>*</span>
+                  كود العملية أو الرسالة المرجعية للتحويل (Reference / Note): <span style={{ color: '#EF4444' }}>*</span>
                 </label>
                 {!transactionRef && (
                   <button
@@ -822,13 +821,13 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 type="text"
                 required
                 className="input-field"
-                placeholder="مثال: 2024091600123 أو الرقم المسلسل من رسالة التحويل"
+                placeholder="أدخل كود العملية أو رسالة التحويل المرجعية..."
                 value={transactionRef}
                 onChange={e => setTransactionRef(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                * الرقم المسلسل أو كود العملية يصلك في رسالة SMS نصية بعد إتمام التحويل. يجب أن يكون فريداً لكل عملية.
+                * يمكنك إدخال كود العملية من رسالة فودافون كاش أو أي رسالة وملاحظة مرجعية لمطابقة عملية السداد.
               </span>
             </div>
 
@@ -954,7 +953,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)' }}>
-                  الرقم المسلسل / الرقم المرجعي للعملية (Reference Number): <span style={{ color: '#EF4444' }}>*</span>
+                  الرقم المرجعي أو كود العملية (Reference / Note): <span style={{ color: '#EF4444' }}>*</span>
                 </label>
                 {!transactionRef && (
                   <button
@@ -979,13 +978,13 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 type="text"
                 required
                 className="input-field"
-                placeholder="الرقم المرجعي أو كود العملية من إيصال إنستاباي (Reference ID)..."
+                placeholder="أدخل الرقم المرجعي أو كود العملية أو رسالة التحويل..."
                 value={transactionRef}
                 onChange={e => setTransactionRef(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                * الرقم المرجعي أو المسلسل (Reference ID) الموجود في إيصال إتمام التحويل بتطبيق إنستاباي.
+                * يمكنك إدخال الرقم المرجعي (Reference ID) أو كود العملية من إيصال إنستاباي أو أي رسالة مرجعية لتأكيد التحويل.
               </span>
             </div>
 
