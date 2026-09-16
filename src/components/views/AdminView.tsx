@@ -608,9 +608,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     setIsPaymentRequestsLoading(true);
     try {
       const res = await paymentApi.getAdminPaymentRequests({ page: 1, limit: 100 });
-      setPaymentRequests(res?.data || []);
+      let list: ManualPaymentRequest[] = [];
+      const raw = res?.data;
+      if (Array.isArray(raw)) {
+        list = raw;
+      } else if (raw && typeof raw === 'object') {
+        if (Array.isArray((raw as any).requests)) {
+          list = (raw as any).requests;
+        } else if (Array.isArray((raw as any).paymentRequests)) {
+          list = (raw as any).paymentRequests;
+        } else if (Array.isArray((raw as any).data)) {
+          list = (raw as any).data;
+        } else if (Array.isArray((raw as any).items)) {
+          list = (raw as any).items;
+        }
+      } else if (Array.isArray((res as any)?.requests)) {
+        list = (res as any).requests;
+      }
+      setPaymentRequests(list);
     } catch (err: any) {
       console.warn('Error loading admin payment requests:', err);
+      setPaymentRequests([]);
     } finally {
       setIsPaymentRequestsLoading(false);
     }
@@ -650,14 +668,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   };
 
   const pendingPaymentCount = useMemo(() => {
-    return paymentRequests.filter(r => r.Status === 'Pending' || r.Status === 'pending').length;
+    if (!Array.isArray(paymentRequests)) return 0;
+    return paymentRequests.filter(r => r && (r.Status === 'Pending' || r.Status === 'pending')).length;
   }, [paymentRequests]);
 
   const filteredPaymentRequests = useMemo(() => {
+    if (!Array.isArray(paymentRequests)) return [];
     return paymentRequests.filter(req => {
+      if (!req) return false;
       // Status filter
       if (paymentStatusFilter !== 'all') {
-        if (req.Status?.toLowerCase() !== paymentStatusFilter.toLowerCase()) {
+        if ((req.Status || '').toLowerCase() !== paymentStatusFilter.toLowerCase()) {
           return false;
         }
       }
@@ -2909,7 +2930,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>مراجعة وتأكيد مدفوعات الطلاب</span>
               </div>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                طلبات التحويل اليدوي ({filteredPaymentRequests.length})
+                طلبات التحويل اليدوي ({Array.isArray(filteredPaymentRequests) ? filteredPaymentRequests.length : 0})
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
                 يقوم الطالب بتحويل سعر الكورس إلى رقم فودافون كاش أو إنستاباي، ثم يرسل الطلب هنا ليتم مراجعته واعتماده وتفعيل الكورس تلقائياً.
@@ -2969,7 +2990,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 className={`btn btn-sm ${paymentStatusFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
                 style={{ fontSize: '0.8rem' }}
               >
-                الكل ({paymentRequests.length})
+                الكل ({Array.isArray(paymentRequests) ? paymentRequests.length : 0})
               </button>
             </div>
 
@@ -3017,7 +3038,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPaymentRequests.map((req) => {
+                  {(Array.isArray(filteredPaymentRequests) ? filteredPaymentRequests : []).map((req) => {
                     const studentName = typeof req.StudentId === 'object' ? req.StudentId?.FullName : 'طالب';
                     const studentEmail = typeof req.StudentId === 'object' ? req.StudentId?.Email : '';
                     const studentPhone = typeof req.StudentId === 'object' ? req.StudentId?.PhoneNumber : '';

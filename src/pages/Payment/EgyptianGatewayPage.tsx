@@ -83,9 +83,22 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
     setIsLoadingRequests(true);
     try {
       const res = await paymentApi.getMyPaymentRequests({ page: 1, limit: 20 });
-      setMyRequests(res?.data || []);
+      let list: ManualPaymentRequest[] = [];
+      const raw = res?.data;
+      if (Array.isArray(raw)) {
+        list = raw;
+      } else if (raw && typeof raw === 'object') {
+        if (Array.isArray((raw as any).requests)) list = (raw as any).requests;
+        else if (Array.isArray((raw as any).paymentRequests)) list = (raw as any).paymentRequests;
+        else if (Array.isArray((raw as any).data)) list = (raw as any).data;
+        else if (Array.isArray((raw as any).items)) list = (raw as any).items;
+      } else if (Array.isArray((res as any)?.requests)) {
+        list = (res as any).requests;
+      }
+      setMyRequests(list);
     } catch (err) {
       console.warn('Could not load my payment requests:', err);
+      setMyRequests([]);
     } finally {
       setIsLoadingRequests(false);
     }

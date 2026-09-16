@@ -28,7 +28,6 @@ const studentNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
-  { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
@@ -39,7 +38,6 @@ const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
@@ -50,8 +48,8 @@ const teacherNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
@@ -62,8 +60,8 @@ const adminNav: NavItem[] = [
 const superAdminNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
+  { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
@@ -74,7 +72,6 @@ const superAdminNav: NavItem[] = [
 const parentLoggedInNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
@@ -82,7 +79,6 @@ const parentLoggedInNav: NavItem[] = [
 const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },

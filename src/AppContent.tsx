@@ -477,12 +477,17 @@ export const AppContent: React.FC = () => {
           />
         )}
 
-        {/* Leaderboard Hub */}
+        {/* Leaderboard Hub (Admin & SuperAdmin Only) */}
         {currentView === 'view-leaderboard' && (
-          <LeaderboardView
-            onNavigateView={handleNavigateView}
-            onOpenAuthModal={() => setIsAuthModalOpen(true)}
-          />
+          <RoleGuard
+            allowedRoles={['admin', 'superadmin']}
+            onNavigateHome={() => handleNavigateView('view-landing')}
+          >
+            <LeaderboardView
+              onNavigateView={handleNavigateView}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            />
+          </RoleGuard>
         )}
 
         {/* Admin Hub */}
