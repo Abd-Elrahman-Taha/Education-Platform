@@ -39,7 +39,6 @@ const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
-  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
@@ -52,7 +51,6 @@ const adminNav: NavItem[] = [
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
@@ -65,7 +63,6 @@ const superAdminNav: NavItem[] = [
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
-  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
@@ -247,16 +244,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {isAuthenticated && currentUser ? (
             <>
-              <button
-                className="icon-btn desktop-only-btn"
-                onClick={() => {
-                  sessionStorage.setItem('payment_gateway_tab', 'history');
-                  handleNavClick('view-egyptian-gateway');
-                }}
-                title="طلبات التحويل السابقة وسجل السداد"
-              >
-                <History size={18} />
-              </button>
+              {!isAdmin && (
+                <button
+                  className="icon-btn desktop-only-btn"
+                  onClick={() => {
+                    sessionStorage.setItem('payment_gateway_tab', 'history');
+                    handleNavClick('view-egyptian-gateway');
+                  }}
+                  title="طلبات التحويل السابقة وسجل السداد"
+                >
+                  <History size={18} />
+                </button>
+              )}
               <button
                 className="icon-btn desktop-only-btn desktop-profile-btn"
                 onClick={() => handleNavClick('view-profile')}
@@ -363,16 +362,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="mobile-actions-row">
             {isAuthenticated && currentUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%' }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
-                  onClick={() => {
-                    sessionStorage.setItem('payment_gateway_tab', 'history');
-                    handleNavClick('view-egyptian-gateway');
-                  }}
-                >
-                  <History size={16} color="var(--primary-light)" /> طلبات التحويل السابقة
-                </button>
+                {!isAdmin && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+                    onClick={() => {
+                      sessionStorage.setItem('payment_gateway_tab', 'history');
+                      handleNavClick('view-egyptian-gateway');
+                    }}
+                  >
+                    <History size={16} color="var(--primary-light)" /> طلبات التحويل السابقة
+                  </button>
+                )}
                 <button
                   className="btn btn-secondary"
                   style={{ width: '100%', justifyContent: 'center' }}
