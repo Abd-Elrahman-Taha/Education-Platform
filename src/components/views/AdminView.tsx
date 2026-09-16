@@ -2953,12 +2953,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           {/* Filters & Search toolbar */}
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
             {/* Status Tabs/Buttons */}
-            <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.03)', padding: '0.35rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <div style={{ display: 'flex', gap: '0.45rem', background: 'transparent', padding: '0', borderRadius: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => setPaymentStatusFilter('Pending')}
-                className={`btn btn-sm ${paymentStatusFilter === 'Pending' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                className={`btn btn-sm ${paymentStatusFilter === 'Pending' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: paymentStatusFilter === 'Pending' ? undefined : 'transparent',
+                  borderColor: paymentStatusFilter === 'Pending' ? undefined : 'var(--border-glass)',
+                  color: paymentStatusFilter === 'Pending' ? '#fff' : 'var(--text-muted)',
+                }}
               >
                 <Clock size={13} />
                 قيد المراجعة
@@ -2971,24 +2979,45 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               <button
                 type="button"
                 onClick={() => setPaymentStatusFilter('Approved')}
-                className={`btn btn-sm ${paymentStatusFilter === 'Approved' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                className={`btn btn-sm ${paymentStatusFilter === 'Approved' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: paymentStatusFilter === 'Approved' ? undefined : 'transparent',
+                  borderColor: paymentStatusFilter === 'Approved' ? undefined : 'var(--border-glass)',
+                  color: paymentStatusFilter === 'Approved' ? '#fff' : 'var(--text-muted)',
+                }}
               >
                 <CheckCircle2 size={13} /> المقبولة
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentStatusFilter('Rejected')}
-                className={`btn btn-sm ${paymentStatusFilter === 'Rejected' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                className={`btn btn-sm ${paymentStatusFilter === 'Rejected' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: paymentStatusFilter === 'Rejected' ? undefined : 'transparent',
+                  borderColor: paymentStatusFilter === 'Rejected' ? undefined : 'var(--border-glass)',
+                  color: paymentStatusFilter === 'Rejected' ? '#fff' : 'var(--text-muted)',
+                }}
               >
                 <XCircle size={13} /> المرفوضة
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentStatusFilter('all')}
-                className={`btn btn-sm ${paymentStatusFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.8rem' }}
+                className={`btn btn-sm ${paymentStatusFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  fontSize: '0.8rem',
+                  background: paymentStatusFilter === 'all' ? undefined : 'transparent',
+                  borderColor: paymentStatusFilter === 'all' ? undefined : 'var(--border-glass)',
+                  color: paymentStatusFilter === 'all' ? '#fff' : 'var(--text-muted)',
+                }}
               >
                 الكل ({Array.isArray(paymentRequests) ? paymentRequests.length : 0})
               </button>

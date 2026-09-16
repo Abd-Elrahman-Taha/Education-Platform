@@ -255,6 +255,21 @@ button { cursor: pointer; }
 }
 .btn-warning:hover { background: rgba(245, 158, 11, 0.25); border-color: var(--accent); }
 
+.btn-ghost {
+  background: transparent !important;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text-bright);
+}
+
+.btn-sm {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+}
+
 /* ── Inputs ─────────────────────────────────────────── */
 .input-field {
   flex: 1;
