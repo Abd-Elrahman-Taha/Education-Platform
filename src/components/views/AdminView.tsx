@@ -686,7 +686,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       if (searchPayment.trim()) {
         const q = searchPayment.trim().toLowerCase();
         const phone = (req.SenderPhone || '').toLowerCase();
-        const ref = (req.TransactionReference || '').toLowerCase();
+        const ref = (req.TransactionReference || (req as any).transactionReference || '').toLowerCase();
         const courseTitle = ((typeof req.CourseId === 'object' ? req.CourseId?.Title : req.CourseId) || '').toLowerCase();
         const studentName = ((typeof req.StudentId === 'object' ? req.StudentId?.FullName : req.StudentId) || '').toLowerCase();
         return phone.includes(q) || ref.includes(q) || courseTitle.includes(q) || studentName.includes(q);
@@ -3150,15 +3150,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
                         {/* Reference */}
                         <td style={{ padding: '0.85rem 1rem' }}>
-                          {req.TransactionReference ? (
+                          {req.TransactionReference || (req as any).transactionReference ? (
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', direction: 'ltr' }}>
                               <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                {req.TransactionReference}
+                                {req.TransactionReference || (req as any).transactionReference}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  navigator.clipboard.writeText(req.TransactionReference || '');
+                                  navigator.clipboard.writeText(req.TransactionReference || (req as any).transactionReference || '');
                                   showToast('تم نسخ الرقم المرجعي!', 'success');
                                 }}
                                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}

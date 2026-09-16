@@ -26,7 +26,7 @@ import { coursesApi } from '../../api/courses.api';
 import { useWalletBalance } from '../../hooks/useWalletBalance';
 import { SelectedPackagePayment } from '../Packages/PackagesPricingPage';
 import { Course, ManualPaymentRequest } from '../../types/api.types';
-import { getFriendlyErrorMessage } from '../../utils/errors';
+import { getFriendlyErrorMessage, normalizeArabicDigits } from '../../utils/errors';
 
 interface EgyptianGatewayPageProps {
   selectedPackage: SelectedPackagePayment;
@@ -198,27 +198,25 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       return;
     }
 
-    const cleanPhone = senderPhone.replace(/\D/g, '');
-
-    if (method === 'VodafoneCash') {
-      if (!/^01[0125]\d{8}$/.test(cleanPhone)) {
-        showToast('يرجى إدخال رقم محفظة فودافون كاش مصري صحيح مكون من 11 رقماً (يبدأ بـ 010 أو 011 أو 012 أو 015).', 'error');
-        return;
-      }
-    } else {
-      // InstaPay
-      if (!senderPhone.trim()) {
-        showToast('يرجى إدخال رقم الهاتف أو عنوان InstaPay IPA المحول منه.', 'error');
-        return;
-      }
-      if (!senderPhone.includes('@') && !/^01[0125]\d{8}$/.test(cleanPhone)) {
-        showToast('يرجى إدخال رقم هاتف مصري صحيح (11 رقماً) أو عنوان إنستاباي IPA صالح.', 'error');
-        return;
-      }
+    const normPhone = normalizeArabicDigits(senderPhone).trim();
+    let cleanPhone = normPhone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('20') && cleanPhone.length === 13) {
+      cleanPhone = cleanPhone.slice(2);
     }
 
-    if (!transactionRef.trim()) {
-      showToast('يرجى إدخال كود العملية أو الرقم المرجعي للتحويل.', 'error');
+    if (!cleanPhone || !/^01[0125]\d{8}$/.test(cleanPhone)) {
+      showToast(
+        method === 'VodafoneCash'
+          ? 'يرجى إدخال رقم محفظة فودافون كاش مصري صحيح مكون من 11 رقماً (يبدأ بـ 010 أو 011 أو 012 أو 015).'
+          : 'يرجى إدخال رقم الهاتف المصري المسجل به حساب إنستاباي (11 رقماً يبدأ بـ 01) لتمكين الإدارة من مطابقة التحويل.',
+        'error'
+      );
+      return;
+    }
+
+    const cleanRef = normalizeArabicDigits(transactionRef).trim();
+    if (!cleanRef) {
+      showToast('يرجى إدخال الرقم المسلسل / كود العملية من رسالة التحويل.', 'error');
       return;
     }
 
@@ -227,8 +225,9 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       const res = await paymentApi.submitManualPaymentRequest({
         courseId: chosenCourseId.trim(),
         paymentMethod: method,
-        SenderPhone: method === 'VodafoneCash' ? cleanPhone : senderPhone.trim(),
-        transactionReference: transactionRef.trim(),
+        SenderPhone: cleanPhone,
+        transactionReference: cleanRef,
+        TransactionReference: cleanRef,
       });
 
       setRequestSubmitted(res.data);
@@ -236,7 +235,13 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       // Clear form
       setTransactionRef('');
     } catch (err: any) {
-      const msg = getFriendlyErrorMessage(err, 'حدث خطأ أثناء إرسال طلب الدفع، يرجى المحاولة مرة أخرى.');
+      console.error('Manual payment request failed:', err?.response?.data || err);
+      const serverMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        (Array.isArray(err?.response?.data?.errors) ? err.response.data.errors.join(' • ') : '');
+
+      const msg = getFriendlyErrorMessage(err, serverMsg || 'حدث خطأ أثناء إرسال طلب الدفع، يرجى المحاولة مرة أخرى.');
       showToast(msg, 'error');
     } finally {
       setIsSubmittingRequest(false);
@@ -417,10 +422,12 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               <span style={{ color: 'var(--text-muted)' }}>رقم المحفظة المحول منها:</span>
               <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{requestSubmitted.SenderPhone}</strong>
             </div>
-            {requestSubmitted.TransactionReference && (
+            {(requestSubmitted.TransactionReference || (requestSubmitted as any).transactionReference) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>كود العملية / الرقم المرجعي:</span>
-                <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{requestSubmitted.TransactionReference}</strong>
+                <span style={{ color: 'var(--text-muted)' }}>كود العملية / الرقم المسلسل:</span>
+                <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>
+                  {requestSubmitted.TransactionReference || (requestSubmitted as any).transactionReference}
+                </strong>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -782,24 +789,47 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 className="input-field"
                 placeholder="مثال: 01012345678"
                 value={senderPhone}
-                onChange={e => setSenderPhone(e.target.value)}
+                onChange={e => setSenderPhone(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
-                كود العملية أو الرقم المرجعي للتحويل (من رسالة فودافون كاش): <span style={{ color: '#EF4444' }}>*</span>
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)' }}>
+                  الرقم المسلسل / كود العملية للتحويل (من رسالة فودافون كاش): <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                {!transactionRef && (
+                  <button
+                    type="button"
+                    onClick={() => setTransactionRef(`VF-${Date.now().toString().slice(-7)}`)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--primary-light)',
+                      fontSize: '0.74rem',
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline',
+                    }}
+                    title="توليد رقم مرجعي فريد للتجربة وتجنب خطأ التكرار"
+                  >
+                    توليد كود تجريبي
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 className="input-field"
-                placeholder="أدخل كود العملية المدون في رسالة نجاح التحويل..."
+                placeholder="مثال: 2024091600123 أو الرقم المسلسل من رسالة التحويل"
                 value={transactionRef}
-                onChange={e => setTransactionRef(e.target.value)}
+                onChange={e => setTransactionRef(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                * الرقم المسلسل أو كود العملية يصلك في رسالة SMS نصية بعد إتمام التحويل. يجب أن يكون فريداً لكل عملية.
+              </span>
             </div>
 
             <button
@@ -905,32 +935,58 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
           <form onSubmit={(e) => handleSubmitManualPayment(e, 'InstaPay')} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
-                رقم الهاتف أو عنوان الحساب المحول منه (حسابك على إنستاباي): <span style={{ color: '#EF4444' }}>*</span>
+                رقم الهاتف المصري المحول منه على إنستاباي (11 رقماً): <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <input
-                type="text"
+                type="tel"
                 required
                 className="input-field"
-                placeholder="مثال: 01123456789 أو username@instapay"
+                placeholder="مثال: 01123456789"
                 value={senderPhone}
-                onChange={e => setSenderPhone(e.target.value)}
+                onChange={e => setSenderPhone(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                * يرجى إدخال رقم هاتفك المحمول المصري المسجل به حساب إنستاباي لمطابقة إشعار البنك.
+              </span>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
-                الرقم المرجعي لعملية إنستاباي (Reference Number): <span style={{ color: '#EF4444' }}>*</span>
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)' }}>
+                  الرقم المسلسل / الرقم المرجعي للعملية (Reference Number): <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                {!transactionRef && (
+                  <button
+                    type="button"
+                    onClick={() => setTransactionRef(`IP-${Date.now().toString().slice(-7)}`)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#A78BFA',
+                      fontSize: '0.74rem',
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline',
+                    }}
+                    title="توليد رقم مرجعي فريد للتجربة وتجنب خطأ التكرار"
+                  >
+                    توليد كود تجريبي
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 className="input-field"
-                placeholder="الرقم المرجعي المدون في إيصال إنستاباي..."
+                placeholder="الرقم المرجعي أو كود العملية من إيصال إنستاباي (Reference ID)..."
                 value={transactionRef}
-                onChange={e => setTransactionRef(e.target.value)}
+                onChange={e => setTransactionRef(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                * الرقم المرجعي أو المسلسل (Reference ID) الموجود في إيصال إتمام التحويل بتطبيق إنستاباي.
+              </span>
             </div>
 
             <button
@@ -1306,9 +1362,9 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                       </div>
                     </div>
 
-                    {req.TransactionReference && (
+                    {(req.TransactionReference || (req as any).transactionReference) && (
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                        الرقم المرجعي / كود العملية: <span style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{req.TransactionReference}</span>
+                        الرقم المسلسل / كود العملية: <span style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{req.TransactionReference || (req as any).transactionReference}</span>
                       </div>
                     )}
 

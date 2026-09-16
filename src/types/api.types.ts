@@ -590,6 +590,12 @@ export interface SubmitManualPaymentRequest {
   paymentMethod: 'VodafoneCash' | 'InstaPay' | string;
   SenderPhone: string;
   transactionReference?: string;
+  // PascalCase & alias compatibility
+  CourseId?: string;
+  PaymentMethod?: string;
+  senderPhone?: string;
+  TransactionReference?: string;
+  fileKey?: string;
 }
 
 export interface ManualPaymentRequest {

@@ -1,4 +1,5 @@
 import { apiClient } from './axios';
+import { normalizeArabicDigits } from '../utils/errors';
 import {
   CheckoutRequest,
   CheckoutResponse,
@@ -37,21 +38,71 @@ export const paymentApi = {
   /**
    * Submit a new manual payment request (Vodafone Cash / InstaPay receipt) for Admin review.
    * Endpoint: POST /api/v1/payment/requests
+   * Supports both camelCase (Swagger spec) and PascalCase (Mongoose schema) fields
+   * and normalizes Arabic-Indic numerals.
    */
   submitManualPaymentRequest: async (
     data: SubmitManualPaymentRequest
   ): Promise<{ status: string; message: string; data: ManualPaymentRequest }> => {
-    // Strictly format payload matching Swagger POST /payment/requests:
-    // { "courseId": "...", "paymentMethod": "VodafoneCash" | "InstaPay", "SenderPhone": "01...", "transactionReference": "..." }
-    const cleanPhone = String(data.SenderPhone || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
+    const rawPhone = normalizeArabicDigits(String(data.SenderPhone || data.senderPhone || ''));
+    let cleanPhone = rawPhone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('20') && cleanPhone.length === 13) {
+      cleanPhone = cleanPhone.slice(2);
+    }
+
+    const cleanRef = normalizeArabicDigits(String(data.transactionReference || data.TransactionReference || '')).trim();
+    const courseId = String(data.courseId || data.CourseId || '').trim();
+    const method = (data.paymentMethod === 'InstaPay' || data.PaymentMethod === 'InstaPay') ? 'InstaPay' : 'VodafoneCash';
+
+    // Primary payload providing both camelCase and PascalCase for maximum server compatibility
     const cleanPayload: Record<string, any> = {
-      courseId: String(data.courseId).trim(),
-      paymentMethod: data.paymentMethod === 'InstaPay' ? 'InstaPay' : 'VodafoneCash',
+      courseId,
+      CourseId: courseId,
+      paymentMethod: method,
+      PaymentMethod: method,
       SenderPhone: cleanPhone,
-      transactionReference: String(data.transactionReference || '').trim(),
+      senderPhone: cleanPhone,
+      transactionReference: cleanRef,
+      TransactionReference: cleanRef,
     };
-    const response = await apiClient.post<any>('/payment/requests', cleanPayload);
-    return response.data;
+
+    if (data.fileKey) {
+      cleanPayload.fileKey = data.fileKey;
+    }
+
+    try {
+      const response = await apiClient.post<any>('/payment/requests', cleanPayload);
+      return response.data;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const errMsg = String(err?.response?.data?.message || err?.response?.data?.error || '').toLowerCase();
+
+      // If rejected with 400 specifically due to strict rejection of additional properties,
+      // fallback to exact PascalCase (Mongoose schema) or exact Swagger fields:
+      if (status === 400 && (errMsg.includes('allowed') || errMsg.includes('extra') || errMsg.includes('unknown') || errMsg.includes('additional'))) {
+        try {
+          const pascalPayload = {
+            CourseId: courseId,
+            PaymentMethod: method,
+            SenderPhone: cleanPhone,
+            TransactionReference: cleanRef,
+          };
+          const res2 = await apiClient.post<any>('/payment/requests', pascalPayload);
+          return res2.data;
+        } catch {
+          const swaggerPayload = {
+            courseId,
+            paymentMethod: method,
+            SenderPhone: cleanPhone,
+            transactionReference: cleanRef,
+          };
+          const res3 = await apiClient.post<any>('/payment/requests', swaggerPayload);
+          return res3.data;
+        }
+      }
+
+      throw err;
+    }
   },
 
   /**

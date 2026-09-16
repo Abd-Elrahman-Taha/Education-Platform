@@ -350,6 +350,38 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
     return 'كود كارت الشحن غير صالح أو تم استخدامه مسبقاً.';
   }
 
+  // 9b. Manual Payment & Transaction Reference / Serial Errors
+  if (
+    lowerMsg.includes('transactionreference') ||
+    lowerMsg.includes('transaction reference') ||
+    lowerMsg.includes('transaction_reference') ||
+    lowerMsg.includes('serial') ||
+    lowerMsg.includes('reference number')
+  ) {
+    if (lowerMsg.includes('exist') || lowerMsg.includes('duplicate') || lowerMsg.includes('already') || status === 409) {
+      return 'الرقم المسلسل أو كود العملية هذا تم تسجيله مسبقاً في طلب آخر. يرجى إدخال كود العملية الحقيقي لعملية التحويل الحالية.';
+    }
+    if (lowerMsg.includes('required') || lowerMsg.includes('empty') || lowerMsg.includes('missing') || lowerMsg.includes('must be')) {
+      return 'يرجى إدخال الرقم المسلسل / كود العملية المدون في إشعار أو رسالة التحويل.';
+    }
+    return 'الرقم المسلسل أو كود العملية غير صالح، يرجى التأكد من كتابة كود العملية بشكل صحيح كما وردك في رسالة التحويل.';
+  }
+
+  if (
+    lowerMsg.includes('senderphone') ||
+    lowerMsg.includes('sender phone') ||
+    lowerMsg.includes('sender_phone')
+  ) {
+    return 'يرجى إدخال رقم محفظة مصري صحيح مكون من 11 رقماً (يبدأ بـ 010 أو 011 أو 012 أو 015).';
+  }
+
+  if (
+    (lowerMsg.includes('course') && (lowerMsg.includes('enrolled') || lowerMsg.includes('purchased') || lowerMsg.includes('already subscribed'))) ||
+    lowerMsg.includes('already enrolled')
+  ) {
+    return 'أنت مشترك بالفعل في هذا الكورس مسبقاً.';
+  }
+
   // 10. Rate Limiting
   if (status === 429 || lowerMsg.includes('too many requests') || lowerMsg.includes('rate limit')) {
     return 'تم إرسال عدة طلبات في وقت قصير، يرجى الانتظار قليلاً ثم المحاولة مجدداً.';
@@ -429,4 +461,16 @@ function isTechnicalText(text: string): boolean {
   ];
 
   return technicalTerms.some((term) => t.includes(term));
+}
+
+/**
+ * Normalizes Eastern Arabic (Arabic-Indic: ٠١٢٣٤٥٦٧٨٩) and Persian (۰۱۲۳۴۵۶۷۸۹) digits to standard ASCII digits (0-9).
+ */
+export function normalizeArabicDigits(str: string): string {
+  if (!str) return '';
+  const arabicIndic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  const easternPersian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  return String(str)
+    .replace(/[٠-٩]/g, (d) => String(arabicIndic.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String(easternPersian.indexOf(d)));
 }
