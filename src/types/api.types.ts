@@ -588,7 +588,8 @@ export interface WalletPurchaseResponse {
 export interface SubmitManualPaymentRequest {
   courseId: string;
   paymentMethod: 'VodafoneCash' | 'InstaPay' | string;
-  SenderPhone: string;
+  SenderPhone?: string;
+  Phone?: string;
   transactionReference?: string;
   // PascalCase & alias compatibility
   CourseId?: string;

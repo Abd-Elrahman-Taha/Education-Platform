@@ -225,7 +225,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       const res = await paymentApi.submitManualPaymentRequest({
         courseId: chosenCourseId.trim(),
         paymentMethod: method,
-        SenderPhone: cleanPhone,
+        Phone: cleanPhone,
         transactionReference: cleanRef,
       });
 
