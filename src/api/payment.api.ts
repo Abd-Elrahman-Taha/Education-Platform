@@ -44,7 +44,7 @@ export const paymentApi = {
   submitManualPaymentRequest: async (
     data: SubmitManualPaymentRequest
   ): Promise<{ status: string; message: string; data: ManualPaymentRequest }> => {
-    const rawPhone = normalizeArabicDigits(String(data.Phone || data.senderPhone || data.senderPhone || ''));
+    const rawPhone = normalizeArabicDigits(String(data.senderPhone || data.SenderPhone || data.Phone || ''));
     let cleanPhone = rawPhone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('20') && cleanPhone.length === 13) {
       cleanPhone = cleanPhone.slice(2);
@@ -54,13 +54,13 @@ export const paymentApi = {
     const courseId = String(data.courseId || data.CourseId || '').trim();
     const method = (data.paymentMethod === 'InstaPay' || data.PaymentMethod === 'InstaPay') ? 'InstaPay' : 'VodafoneCash';
 
-    // The backend strictly validates payload with Joi (stripUnknown: false).
-    // The schema requires "Phone" (not "senderPhone"):
+    // The request format verified and tested working on Postman:
+    // { "courseId": "...", "paymentMethod": "VodafoneCash", "transactionReference": "...", "senderPhone": "..." }
     const cleanPayload = {
       courseId,
       paymentMethod: method,
-      Phone: cleanPhone,
       transactionReference: cleanRef,
+      senderPhone: cleanPhone,
     };
 
     const response = await apiClient.post<any>('/payment/requests', cleanPayload);

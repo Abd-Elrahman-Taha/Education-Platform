@@ -225,7 +225,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       const res = await paymentApi.submitManualPaymentRequest({
         courseId: chosenCourseId.trim(),
         paymentMethod: method,
-        Phone: cleanPhone,
+        senderPhone: cleanPhone,
         transactionReference: cleanRef,
       });
 
@@ -393,7 +393,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             تم إرسال طلب السداد للإدارة بنجاح!
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-            تم تسجيل طلبك لتحويل <strong>{effectivePrice} ج.م</strong> بنجاح. يقوم فريق الإدارة الآن بمطابقة التحويل المستلم من رقم محفظتك <strong>({requestSubmitted.senderPhone})</strong>، وسيتم تفعيل الكورس في حسابك تلقائياً بمجرد التأكيد.
+            تم تسجيل طلبك لتحويل <strong>{effectivePrice} ج.م</strong> بنجاح. يقوم فريق الإدارة الآن بمطابقة التحويل المستلم من رقم محفظتك <strong>({requestSubmitted.senderPhone || (requestSubmitted as any).SenderPhone || (requestSubmitted as any).Phone})</strong>، وسيتم تفعيل الكورس في حسابك تلقائياً بمجرد التأكيد.
           </p>
 
           <div
@@ -419,7 +419,9 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>رقم المحفظة المحول منها:</span>
-              <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{requestSubmitted.senderPhone}</strong>
+              <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>
+                {requestSubmitted.senderPhone || (requestSubmitted as any).SenderPhone || (requestSubmitted as any).Phone}
+              </strong>
             </div>
             {(requestSubmitted.TransactionReference || (requestSubmitted as any).transactionReference) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>

@@ -3132,12 +3132,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                         <td style={{ padding: '0.85rem 1rem' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', direction: 'ltr' }}>
                             <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-bright)' }}>
-                              {req.senderPhone}
+                              {req.senderPhone || req.SenderPhone || '-'}
                             </span>
                             <button
                               type="button"
                               onClick={() => {
-                                navigator.clipboard.writeText(req.senderPhone);
+                                navigator.clipboard.writeText(req.senderPhone || req.SenderPhone || '');
                                 showToast('تم نسخ رقم المحفظة!', 'success');
                               }}
                               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}

@@ -588,15 +588,13 @@ export interface WalletPurchaseResponse {
 export interface SubmitManualPaymentRequest {
   courseId: string;
   paymentMethod: 'VodafoneCash' | 'InstaPay' | string;
-  senderPhone?: string;
+  senderPhone: string;
+  transactionReference: string;
+  SenderPhone?: string;
   Phone?: string;
-  transactionReference?: string;
-  // PascalCase & alias compatibility
   CourseId?: string;
   PaymentMethod?: string;
-  senderPhone?: string;
   TransactionReference?: string;
-  fileKey?: string;
 }
 
 export interface ManualPaymentRequest {
@@ -614,9 +612,13 @@ export interface ManualPaymentRequest {
     Price?: number;
     Thumbnail?: string;
   };
-  senderPhone: string;
+  SenderPhone?: string;
+  senderPhone?: string;
+  Phone?: string;
   PaymentMethod: 'VodafoneCash' | 'InstaPay' | string;
+  paymentMethod?: string;
   TransactionReference?: string;
+  transactionReference?: string;
   Status: 'Pending' | 'Approved' | 'Rejected' | string;
   RejectionReason?: string;
   createdAt?: string;
