@@ -22,7 +22,7 @@ export function useCheckout() {
     setCheckoutSuccess(null);
 
     try {
-      const res = await paymentApi.checkoutWallet({ courseId });
+      const res = await paymentApi.purchaseWithWallet({ courseId });
       const successMsg = res?.message || 'تم الاشتراك في الكورس بنجاح!';
       setCheckoutSuccess(successMsg);
 
@@ -31,10 +31,18 @@ export function useCheckout() {
 
       return res;
     } catch (err: any) {
-      const friendly = getFriendlyErrorMessage(
-        err,
-        'تعذر إتمام عملية الاشتراك، يرجى التأكد من رصيد المحفظة والمحاولة لاحقاً.'
-      );
+      const status = err?.response?.status;
+      let friendly = '';
+      if (status === 400) {
+        friendly = 'رصيد محفظتك غير كافٍ لإتمام عملية الشراء. يرجى شحن المحفظة بكارت شحن أولاً.';
+      } else if (status === 409) {
+        friendly = 'أنت مشترك بالفعل في هذا الكورس!';
+      } else {
+        friendly = getFriendlyErrorMessage(
+          err,
+          'تعذر إتمام عملية الاشتراك، يرجى التأكد من رصيد المحفظة والمحاولة لاحقاً.'
+        );
+      }
       setCheckoutError(friendly);
       throw err;
     } finally {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CreditCard, ShieldCheck, AlertCircle, Wallet, CheckCircle2, PlusCircle } from 'lucide-react';
+import { X, CreditCard, ShieldCheck, AlertCircle, Wallet, CheckCircle2, PlusCircle, Smartphone, Zap } from 'lucide-react';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useWalletBalance } from '../../hooks/useWalletBalance';
 import { useAuth } from '../../context/AuthContext';
@@ -284,11 +284,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   type="button"
                   className="btn btn-secondary"
                   disabled={isCheckingOut}
-                  onClick={() => initiateCourseCheckout(course._id)}
+                  onClick={() => {
+                    onClose();
+                    window.location.href = `/payment/gateway-egyptian?courseId=${course._id}`;
+                  }}
                   style={{ width: '100%', padding: '0.65rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}
                 >
-                  <CreditCard size={15} style={{ verticalAlign: 'middle', marginLeft: '4px' }} />
-                  الدفع عبر البطاقات البنكية الإلكترونية
+                  <Smartphone size={15} style={{ verticalAlign: 'middle', marginLeft: '4px', color: '#EF4444' }} />
+                  تحويل فودافون كاش / إنستاباي
                 </button>
               </div>
             </>

@@ -13,6 +13,7 @@ import { ParentPortalView } from './components/views/ParentPortalView';
 import { FAQView } from './components/views/FAQView';
 import { CommunityView } from './components/views/CommunityView';
 import { AdminView } from './components/views/AdminView';
+import { LeaderboardView } from './components/views/LeaderboardView';
 import { AuthModal } from './components/modals/AuthModal';
 import { SearchModal } from './components/modals/SearchModal';
 import { ShareModal } from './components/modals/ShareModal';
@@ -55,6 +56,8 @@ const ROUTE_TO_VIEW: Record<string, AppView> = {
   '/payment/gateway-egyptian': 'view-egyptian-gateway',
   '/gateway-egyptian': 'view-egyptian-gateway',
   '/faq': 'view-faq',
+  '/leaderboard': 'view-leaderboard',
+  '/honor-board': 'view-leaderboard',
 };
 
 const VIEW_TO_ROUTE: Record<AppView, string> = {
@@ -65,6 +68,7 @@ const VIEW_TO_ROUTE: Record<AppView, string> = {
   'view-exam-session': '/exams',
   'view-profile': '/profile',
   'view-student-dashboard': '/dashboard',
+  'view-leaderboard': '/leaderboard',
   'view-drm-player': '/lessons',
   'view-assessment': '/exams',
   'view-ai': '/ai',
@@ -469,6 +473,14 @@ export const AppContent: React.FC = () => {
         {currentView === 'view-community' && (
           <CommunityView
             onOpenShareModal={() => setIsShareModalOpen(true)}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          />
+        )}
+
+        {/* Leaderboard Hub */}
+        {currentView === 'view-leaderboard' && (
+          <LeaderboardView
+            onNavigateView={handleNavigateView}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}

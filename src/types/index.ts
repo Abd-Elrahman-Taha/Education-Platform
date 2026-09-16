@@ -60,6 +60,7 @@ export type AppView =
   | 'view-exam-session'
   | 'view-profile'
   | 'view-egyptian-gateway'
+  | 'view-leaderboard'
   | 'view-subject-calculus'
   | 'view-subject-geometry';
 
@@ -77,6 +78,7 @@ export interface User {
   subscribedYear?: AcademicYear | string;
   educationStage?: string;
   grade?: string;
+  walletBalance?: number;
   isSubscribed?: boolean;
   subscription?: {
     isActive: boolean;

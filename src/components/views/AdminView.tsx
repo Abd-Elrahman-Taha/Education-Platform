@@ -9,7 +9,7 @@ import {
   Edit3, Zap, ArrowUp, ArrowDown, ListOrdered,
   FileText, CheckSquare, Eye, AlertTriangle, AlertCircle,
   HelpCircle, RefreshCw, Crown, Lock, Shuffle, Target, RotateCcw, ShieldCheck, Lightbulb,
-  LayoutDashboard
+  LayoutDashboard, Smartphone, Send
 } from 'lucide-react';
 import { AcademicYear, ACADEMIC_YEAR_LABELS, AppView } from '../../types';
 import { useToast } from '../../context/ToastContext';
@@ -32,6 +32,7 @@ import {
   Question,
   QuestionType,
   ExamAttempt,
+  ManualPaymentRequest,
 } from '../../types/api.types';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 import { matchesAcademicYear } from '../../utils/courseFilter';
@@ -58,7 +59,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'admins'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'payment-requests' | 'admins'>('overview');
+
+  // ── MANUAL PAYMENT REQUESTS STATE ─────────────────────────────
+  const [paymentRequests, setPaymentRequests] = useState<ManualPaymentRequest[]>([]);
+  const [isPaymentRequestsLoading, setIsPaymentRequestsLoading] = useState(false);
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
+  const [searchPayment, setSearchPayment] = useState('');
+  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+  const [isProcessingPaymentId, setIsProcessingPaymentId] = useState<string | null>(null);
 
   // Redirect if user is not superadmin and attempts to open admins tab
   useEffect(() => {
@@ -588,16 +598,88 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     loadStudents();
     loadCourses();
     loadExams();
+    fetchPaymentRequests();
     if (isSuperAdmin) {
       loadAdmins();
     }
   }, [isSuperAdmin]);
+
+  const fetchPaymentRequests = async () => {
+    setIsPaymentRequestsLoading(true);
+    try {
+      const res = await paymentApi.getAdminPaymentRequests({ page: 1, limit: 100 });
+      setPaymentRequests(res?.data || []);
+    } catch (err: any) {
+      console.warn('Error loading admin payment requests:', err);
+    } finally {
+      setIsPaymentRequestsLoading(false);
+    }
+  };
+
+  const handleApprovePayment = async (requestId: string) => {
+    setIsProcessingPaymentId(requestId);
+    try {
+      const res = await paymentApi.approvePaymentRequest(requestId);
+      showToast(res?.message || 'تم قبول طلب الدفع وتفعيل الكورس للطالب بنجاح!', 'success');
+      await fetchPaymentRequests();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'حدث خطأ أثناء محاولة قبول الطلب.'), 'error');
+    } finally {
+      setIsProcessingPaymentId(null);
+    }
+  };
+
+  const handleRejectPayment = async () => {
+    if (!rejectingRequestId) return;
+    if (!rejectionReasonInput.trim()) {
+      showToast('يرجى كتابة سبب رفض الطلب.', 'error');
+      return;
+    }
+    setIsProcessingPaymentId(rejectingRequestId);
+    try {
+      const res = await paymentApi.rejectPaymentRequest(rejectingRequestId, rejectionReasonInput.trim());
+      showToast(res?.message || 'تم رفض طلب الدفع بنجاح.', 'info');
+      setRejectingRequestId(null);
+      setRejectionReasonInput('');
+      await fetchPaymentRequests();
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'حدث خطأ أثناء رفض الطلب.'), 'error');
+    } finally {
+      setIsProcessingPaymentId(null);
+    }
+  };
+
+  const pendingPaymentCount = useMemo(() => {
+    return paymentRequests.filter(r => r.Status === 'Pending' || r.Status === 'pending').length;
+  }, [paymentRequests]);
+
+  const filteredPaymentRequests = useMemo(() => {
+    return paymentRequests.filter(req => {
+      // Status filter
+      if (paymentStatusFilter !== 'all') {
+        if (req.Status?.toLowerCase() !== paymentStatusFilter.toLowerCase()) {
+          return false;
+        }
+      }
+      // Search filter (by sender phone, course title, student name, reference)
+      if (searchPayment.trim()) {
+        const q = searchPayment.trim().toLowerCase();
+        const phone = (req.SenderPhone || '').toLowerCase();
+        const ref = (req.TransactionReference || '').toLowerCase();
+        const courseTitle = ((typeof req.CourseId === 'object' ? req.CourseId?.Title : req.CourseId) || '').toLowerCase();
+        const studentName = ((typeof req.StudentId === 'object' ? req.StudentId?.FullName : req.StudentId) || '').toLowerCase();
+        return phone.includes(q) || ref.includes(q) || courseTitle.includes(q) || studentName.includes(q);
+      }
+      return true;
+    });
+  }, [paymentRequests, paymentStatusFilter, searchPayment]);
 
   // Reload data when switching tabs to ensure fresh data from API
   useEffect(() => {
     if (activeTab === 'exams') loadExams();
     if (activeTab === 'admins' && isSuperAdmin) loadAdmins();
     if (activeTab === 'students') loadStudents();
+    if (activeTab === 'payment-requests') fetchPaymentRequests();
   }, [activeTab, isSuperAdmin]);
 
   useEffect(() => {
@@ -1739,6 +1821,34 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             <span className="admin-tab-label-mobile">كروت الشحن</span>
           </button>
 
+          <button
+            type="button"
+            className={`admin-tab-btn ${activeTab === 'payment-requests' ? 'active' : ''}`}
+            onClick={() => setActiveTab('payment-requests')}
+            style={{
+              borderColor: activeTab === 'payment-requests' ? '#10B981' : undefined,
+            }}
+          >
+            <Smartphone size={16} color="#EF4444" />
+            <span className="admin-tab-label-desktop">طلبات التحويل (كاش / إنستاباي)</span>
+            <span className="admin-tab-label-mobile">طلبات الدفع</span>
+            {pendingPaymentCount > 0 && (
+              <span
+                className="admin-tab-badge"
+                style={{
+                  background: '#EF4444',
+                  color: '#fff',
+                  fontWeight: 900,
+                  fontSize: '0.72rem',
+                  padding: '0.1rem 0.45rem',
+                  borderRadius: '9999px',
+                }}
+              >
+                {pendingPaymentCount}
+              </span>
+            )}
+          </button>
+
           {isSuperAdmin && (
             <button
               type="button"
@@ -2782,6 +2892,319 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   <div key={idx}>{code}</div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 7: MANUAL PAYMENT REQUESTS (Vodafone Cash & InstaPay) ── */}
+      {activeTab === 'payment-requests' && (
+        <div className="glass-card" style={{ padding: '1.75rem' }}>
+          <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                <span className="gradient-badge" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(245, 158, 11, 0.2))', color: '#F59E0B' }}>
+                  <Smartphone size={14} /> Vodafone Cash &amp; InstaPay
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>مراجعة وتأكيد مدفوعات الطلاب</span>
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                طلبات التحويل اليدوي ({filteredPaymentRequests.length})
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
+                يقوم الطالب بتحويل سعر الكورس إلى رقم فودافون كاش أو إنستاباي، ثم يرسل الطلب هنا ليتم مراجعته واعتماده وتفعيل الكورس تلقائياً.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fetchPaymentRequests}
+                disabled={isPaymentRequestsLoading}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+              >
+                <RefreshCw size={14} className={isPaymentRequestsLoading ? 'spin' : ''} /> تحديث القائمة
+              </button>
+            </div>
+          </div>
+
+          {/* Filters & Search toolbar */}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Status Tabs/Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.03)', padding: '0.35rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+              <button
+                type="button"
+                onClick={() => setPaymentStatusFilter('Pending')}
+                className={`btn btn-sm ${paymentStatusFilter === 'Pending' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <Clock size={13} />
+                قيد المراجعة
+                {pendingPaymentCount > 0 && (
+                  <span style={{ background: '#EF4444', color: '#fff', padding: '0.1rem 0.4rem', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 800 }}>
+                    {pendingPaymentCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentStatusFilter('Approved')}
+                className={`btn btn-sm ${paymentStatusFilter === 'Approved' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <CheckCircle2 size={13} /> المقبولة
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentStatusFilter('Rejected')}
+                className={`btn btn-sm ${paymentStatusFilter === 'Rejected' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                <XCircle size={13} /> المرفوضة
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentStatusFilter('all')}
+                className={`btn btn-sm ${paymentStatusFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.8rem' }}
+              >
+                الكل ({paymentRequests.length})
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div style={{ position: 'relative', minWidth: '260px', flex: '1', maxWidth: '380px' }}>
+              <Search size={15} style={{ position: 'absolute', right: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                value={searchPayment}
+                onChange={e => setSearchPayment(e.target.value)}
+                placeholder="بحث برقم المحفظة، الطالب، الكورس..."
+                className="input-field"
+                style={{ width: '100%', paddingRight: '2.4rem', fontSize: '0.85rem' }}
+              />
+            </div>
+          </div>
+
+          {/* Table / Requests List */}
+          {isPaymentRequestsLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <RefreshCw size={28} className="spin" style={{ margin: '0 auto 1rem', display: 'block' }} />
+              جاري تحميل طلبات الدفع...
+            </div>
+          ) : filteredPaymentRequests.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.01)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+              <Smartphone size={36} style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.4 }} />
+              <p style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-bright)' }}>لا توجد طلبات دفع مطابقة</p>
+              <p style={{ fontSize: '0.85rem', margin: 0 }}>
+                {paymentStatusFilter === 'Pending' ? 'رائع! لا توجد طلبات معلقة بانتظار المراجعة حالياً.' : 'لم يتم العثور على أي طلبات تتماشى مع معايير البحث.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>الطالب</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>الكورس المطلوب</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>وسيلة الدفع</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>رقم هاتف المحوّل</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>الرقم المرجعي</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>التاريخ</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>الحالة</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPaymentRequests.map((req) => {
+                    const studentName = typeof req.StudentId === 'object' ? req.StudentId?.FullName : 'طالب';
+                    const studentEmail = typeof req.StudentId === 'object' ? req.StudentId?.Email : '';
+                    const studentPhone = typeof req.StudentId === 'object' ? req.StudentId?.PhoneNumber : '';
+                    const courseTitle = typeof req.CourseId === 'object' ? req.CourseId?.Title : (req.CourseId || 'كورس');
+                    const coursePrice = typeof req.CourseId === 'object' ? req.CourseId?.Price : null;
+                    const isVodafone = req.PaymentMethod?.toLowerCase().includes('vodafone');
+                    const isPending = req.Status === 'Pending' || req.Status === 'pending';
+                    const isApproved = req.Status === 'Approved' || req.Status === 'approved';
+                    const isRejected = req.Status === 'Rejected' || req.Status === 'rejected';
+                    const isBusy = isProcessingPaymentId === req._id;
+
+                    return (
+                      <tr
+                        key={req._id}
+                        style={{
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          background: isPending ? 'rgba(245, 158, 11, 0.02)' : undefined,
+                        }}
+                      >
+                        {/* Student */}
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-bright)' }}>{studentName}</div>
+                          {studentEmail && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{studentEmail}</div>}
+                          {studentPhone && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', direction: 'ltr', textAlign: 'right' }}>{studentPhone}</div>}
+                        </td>
+
+                        {/* Course */}
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-bright)' }}>{courseTitle}</div>
+                          {coursePrice !== null && coursePrice !== undefined && (
+                            <div style={{ fontSize: '0.78rem', color: '#10B981', fontWeight: 700 }}>
+                              {coursePrice} ج.م
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Method */}
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: isVodafone ? 'rgba(239, 68, 68, 0.15)' : 'rgba(139, 92, 246, 0.15)',
+                              color: isVodafone ? '#EF4444' : '#A78BFA',
+                              border: `1px solid ${isVodafone ? 'rgba(239, 68, 68, 0.3)' : 'rgba(139, 92, 246, 0.3)'}`,
+                            }}
+                          >
+                            <Smartphone size={12} />
+                            {isVodafone ? 'فودافون كاش' : 'إنستاباي (InstaPay)'}
+                          </span>
+                        </td>
+
+                        {/* Sender Phone */}
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', direction: 'ltr' }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-bright)' }}>
+                              {req.SenderPhone}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(req.SenderPhone);
+                                showToast('تم نسخ رقم المحفظة!', 'success');
+                              }}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
+                              title="نسخ الرقم"
+                            >
+                              <Copy size={13} />
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Reference */}
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          {req.TransactionReference ? (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', direction: 'ltr' }}>
+                              <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                {req.TransactionReference}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(req.TransactionReference || '');
+                                  showToast('تم نسخ الرقم المرجعي!', 'success');
+                                }}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
+                                title="نسخ المرجع"
+                              >
+                                <Copy size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>-</span>
+                          )}
+                        </td>
+
+                        {/* Date */}
+                        <td style={{ padding: '0.85rem 1rem', color: 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                          {req.createdAt ? new Date(req.createdAt).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                        </td>
+
+                        {/* Status */}
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          {isPending && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                              <Clock size={11} /> قيد المراجعة
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                              <CheckCircle2 size={11} /> تم القبول والتفعيل
+                            </span>
+                          )}
+                          {isRejected && (
+                            <div>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800, background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                <XCircle size={11} /> مرفوض
+                              </span>
+                              {req.RejectionReason && (
+                                <div style={{ fontSize: '0.7rem', color: '#EF4444', marginTop: '0.25rem', maxWidth: '160px' }}>
+                                  {req.RejectionReason}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                          {isPending ? (
+                            <div style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                disabled={isBusy}
+                                onClick={() => handleApprovePayment(req._id)}
+                                style={{
+                                  fontSize: '0.75rem',
+                                  padding: '0.3rem 0.75rem',
+                                  background: 'linear-gradient(135deg, #059669, #10B981)',
+                                  border: 'none',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                }}
+                                title="تأكيد استلام المبلغ وتفعيل الكورس للطالب فورياً"
+                              >
+                                <Check size={13} />
+                                {isBusy ? 'جاري...' : 'قبول'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-secondary"
+                                disabled={isBusy}
+                                onClick={() => {
+                                  setRejectingRequestId(req._id);
+                                  setRejectionReasonInput('');
+                                }}
+                                style={{
+                                  fontSize: '0.75rem',
+                                  padding: '0.3rem 0.75rem',
+                                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                                  color: '#EF4444',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                }}
+                                title="رفض الطلب مع كتابة السبب"
+                              >
+                                <X size={13} />
+                                رفض
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>مكتمل</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -4827,6 +5250,84 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: REJECT PAYMENT REQUEST ── */}
+      {rejectingRequestId && createPortal(
+        <div className="modal-backdrop" onClick={() => !isProcessingPaymentId && setRejectingRequestId(null)}>
+          <div
+            className="modal-box"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '480px', width: '92%', padding: '1.75rem' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}>
+                  <XCircle size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)' }}>رفض طلب التحويل</h3>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>سيصل سبب الرفض للطالب في صفحة الدفع</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectingRequestId(null)}
+                disabled={Boolean(isProcessingPaymentId)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+                سبب الرفض <span style={{ color: '#EF4444' }}>*</span>
+              </label>
+              <textarea
+                rows={3}
+                className="input-field"
+                style={{ width: '100%', resize: 'vertical', fontSize: '0.85rem' }}
+                placeholder="مثال: لم يتم استلام التحويل على رقم فودافون كاش الخاص بالمنصة، أو المبلغ المحول غير مطابق لسعر الكورس."
+                value={rejectionReasonInput}
+                onChange={e => setRejectionReasonInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={Boolean(isProcessingPaymentId)}
+                onClick={() => setRejectingRequestId(null)}
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={Boolean(isProcessingPaymentId) || !rejectionReasonInput.trim()}
+                onClick={handleRejectPayment}
+                style={{
+                  background: '#DC2626',
+                  color: '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontWeight: 700,
+                }}
+              >
+                {isProcessingPaymentId ? 'جاري الرفض...' : (
+                  <>
+                    <XCircle size={15} /> تأكيد الرفض
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>,
         document.body

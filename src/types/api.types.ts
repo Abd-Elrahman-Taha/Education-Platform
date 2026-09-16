@@ -575,6 +575,95 @@ export interface ScratchCardResponse {
   };
 }
 
+export interface WalletPurchaseRequest {
+  courseId: string;
+}
+
+export interface WalletPurchaseResponse {
+  status: string;
+  message: string;
+  data?: any;
+}
+
+export interface SubmitManualPaymentRequest {
+  courseId: string;
+  paymentMethod: 'VodafoneCash' | 'InstaPay' | string;
+  SenderPhone: string;
+  transactionReference?: string;
+  fileKey?: string;
+}
+
+export interface ManualPaymentRequest {
+  _id: string;
+  StudentId: string | {
+    _id: string;
+    FullName?: string;
+    Email?: string;
+    Phone?: string;
+    PhoneNumber?: string;
+  };
+  CourseId: string | {
+    _id: string;
+    Title?: string;
+    Price?: number;
+    Thumbnail?: string;
+  };
+  SenderPhone: string;
+  PaymentMethod: 'VodafoneCash' | 'InstaPay' | string;
+  TransactionReference?: string;
+  Status: 'Pending' | 'Approved' | 'Rejected' | string;
+  RejectionReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManualPaymentRequestsResponse {
+  status: string;
+  results: number;
+  pagination: PaginationMeta;
+  data: ManualPaymentRequest[];
+}
+
+export interface RejectPaymentRequest {
+  rejectionReason: string;
+}
+
+// ── Leaderboard Types ─────────────────────────────────────────────────────
+export interface LeaderboardStudent {
+  _id: string;
+  FullName: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  student: LeaderboardStudent;
+  totalScore: number;
+  achievedAt: string;
+}
+
+export interface LeaderboardResponse {
+  status: string;
+  results: number;
+  pagination: PaginationMeta;
+  data: {
+    filters: Record<string, any>;
+    leaderboard: LeaderboardEntry[];
+  };
+}
+
+export interface MyRankData {
+  rank: number;
+  totalScore: number;
+  totalStudents: number;
+  educationStage: string;
+  grade: string;
+}
+
+export interface MyRankResponse {
+  status: string;
+  data: MyRankData;
+}
+
 // ── Parent Portal Types (POST /parent-portal/lookup) ─────────
 export interface ParentPortalLookupRequest {
   nationalId: string; // Exactly 14 digits
