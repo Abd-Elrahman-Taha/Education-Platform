@@ -94,6 +94,15 @@ const getInitialState = () => {
   let initialLessonId: string | undefined;
   let initialView: AppView = 'view-landing';
 
+  // Check URL query parameters for courseId
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const qCourseId = searchParams.get('courseId');
+    if (qCourseId) {
+      initialCourseId = qCourseId;
+    }
+  } catch {}
+
   if (path.startsWith('/courses/') || path.startsWith('/course/')) {
     const rawParts = rawPath.split('/');
     initialCourseId = rawParts[2];
@@ -137,15 +146,20 @@ export const AppContent: React.FC = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Egyptian Payment Gateway state
-  const [selectedPaymentPackage, setSelectedPaymentPackage] = useState<SelectedPackagePayment>({
-    id: 'pkg-semester',
+  const [selectedPaymentPackage, setSelectedPaymentPackage] = useState<SelectedPackagePayment>(() => ({
+    id: initialState.initialCourseId || 'pkg-semester',
     title: 'باقة الترم الشاملة',
     price: 450,
     type: 'semester',
-  });
+    courseId: initialState.initialCourseId,
+  }));
 
   const handleProceedToPayment = (pkg: SelectedPackagePayment) => {
-    setSelectedPaymentPackage(pkg);
+    const enriched: SelectedPackagePayment = {
+      ...pkg,
+      courseId: pkg.courseId || selectedCourseId,
+    };
+    setSelectedPaymentPackage(enriched);
     handleNavigateView('view-egyptian-gateway');
   };
 
@@ -158,6 +172,9 @@ export const AppContent: React.FC = () => {
       expectedPath = `/courses/${selectedCourseId}/lessons/${selectedLessonId}`;
     } else if (currentView === 'view-exam-session' && selectedExamId) {
       expectedPath = `/exams/${selectedExamId}`;
+    } else if (currentView === 'view-egyptian-gateway') {
+      const cId = selectedPaymentPackage.courseId || selectedCourseId;
+      expectedPath = cId ? `/payment/gateway-egyptian?courseId=${cId}` : '/payment/gateway-egyptian';
     }
 
     const currentPath = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';

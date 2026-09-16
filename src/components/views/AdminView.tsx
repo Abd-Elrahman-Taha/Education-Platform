@@ -3068,11 +3068,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 </thead>
                 <tbody>
                   {(Array.isArray(filteredPaymentRequests) ? filteredPaymentRequests : []).map((req) => {
-                    const studentName = typeof req.StudentId === 'object' ? req.StudentId?.FullName : 'طالب';
-                    const studentEmail = typeof req.StudentId === 'object' ? req.StudentId?.Email : '';
-                    const studentPhone = typeof req.StudentId === 'object' ? req.StudentId?.PhoneNumber : '';
-                    const courseTitle = typeof req.CourseId === 'object' ? req.CourseId?.Title : (req.CourseId || 'كورس');
-                    const coursePrice = typeof req.CourseId === 'object' ? req.CourseId?.Price : null;
+                    const studentObj = typeof req.StudentId === 'object' ? req.StudentId : realStudents.find(s => s._id === req.StudentId);
+                    const studentName = studentObj?.FullName || 'طالب';
+                    const studentEmail = (studentObj as any)?.Email || '';
+                    const studentPhone = (studentObj as any)?.PhoneNumber || (studentObj as any)?.Phone || '';
+
+                    const courseObj = typeof req.CourseId === 'object' ? req.CourseId : realCourses.find(c => c._id === req.CourseId);
+                    const courseTitle = courseObj?.Title || (req.CourseId ? `كورس (${String(req.CourseId).slice(-6)})` : 'كورس');
+                    const coursePrice = courseObj?.Price ?? null;
                     const isVodafone = req.PaymentMethod?.toLowerCase().includes('vodafone');
                     const isPending = req.Status === 'Pending' || req.Status === 'pending';
                     const isApproved = req.Status === 'Approved' || req.Status === 'approved';

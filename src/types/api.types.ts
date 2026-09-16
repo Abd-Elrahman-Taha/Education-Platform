@@ -590,7 +590,6 @@ export interface SubmitManualPaymentRequest {
   paymentMethod: 'VodafoneCash' | 'InstaPay' | string;
   SenderPhone: string;
   transactionReference?: string;
-  fileKey?: string;
 }
 
 export interface ManualPaymentRequest {

@@ -22,9 +22,10 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { paymentApi } from '../../api/payment.api';
+import { coursesApi } from '../../api/courses.api';
 import { useWalletBalance } from '../../hooks/useWalletBalance';
 import { SelectedPackagePayment } from '../Packages/PackagesPricingPage';
-import { ManualPaymentRequest } from '../../types/api.types';
+import { Course, ManualPaymentRequest } from '../../types/api.types';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 
 interface EgyptianGatewayPageProps {
@@ -34,6 +35,19 @@ interface EgyptianGatewayPageProps {
 }
 
 type PaymentMethodTab = 'vodafone' | 'instapay' | 'scratch' | 'wallet' | 'history';
+
+const isValidObjectId = (id?: string | null): boolean => {
+  return typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id.trim());
+};
+
+const getUrlCourseId = (): string | undefined => {
+  try {
+    const param = new URLSearchParams(window.location.search).get('courseId');
+    return param && isValidObjectId(param) ? param : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
   selectedPackage,
@@ -46,6 +60,74 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
 
   const [activeTab, setActiveTab] = useState<PaymentMethodTab>('vodafone');
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Available courses state
+  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
+
+  // Determine initial courseId from package or URL
+  const initialCourseId = isValidObjectId(selectedPackage.courseId)
+    ? selectedPackage.courseId!
+    : isValidObjectId(selectedPackage.id)
+    ? selectedPackage.id
+    : (getUrlCourseId() || '');
+
+  const [chosenCourseId, setChosenCourseId] = useState<string>(initialCourseId);
+
+  // Sync if selectedPackage changes
+  useEffect(() => {
+    if (isValidObjectId(selectedPackage.courseId)) {
+      setChosenCourseId(selectedPackage.courseId!);
+    } else if (isValidObjectId(selectedPackage.id)) {
+      setChosenCourseId(selectedPackage.id);
+    }
+  }, [selectedPackage.courseId, selectedPackage.id]);
+
+  // Fetch available courses list
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingCourses(true);
+    coursesApi.getCourses({ limit: 100 })
+      .then((res) => {
+        if (!isMounted) return;
+        const list: Course[] = res.courses || (res.data as any)?.courses || [];
+        setAvailableCourses(list);
+
+        // If no valid course is chosen yet, auto-select matching student course
+        setChosenCourseId((current) => {
+          if (isValidObjectId(current)) return current;
+          const urlCId = getUrlCourseId();
+          if (isValidObjectId(urlCId)) return urlCId!;
+          if (list.length > 0) {
+            const studentGrade = currentUser?.grade || (currentUser as any)?.Grade;
+            const matched = studentGrade
+              ? list.find((c) => String(c.Grade || '').toLowerCase() === String(studentGrade).toLowerCase())
+              : null;
+            return (matched || list[0])._id;
+          }
+          return current;
+        });
+      })
+      .catch((err) => {
+        console.warn('Could not load courses list for gateway:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingCourses(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser]);
+
+  const activeCourse = availableCourses.find((c) => c._id === chosenCourseId);
+  const activeCourseTitle = activeCourse?.Title || (isValidObjectId(chosenCourseId) ? 'كورس تعليمي' : selectedPackage.title);
+  const effectivePrice = selectedPackage.type === 'course' && activeCourse?.Price !== undefined
+    ? activeCourse.Price
+    : selectedPackage.price;
+
+  const courseIdToPurchase = chosenCourseId;
+  const hasSufficientWallet = walletBalance >= effectivePrice;
 
   // Manual Payment Request Form State
   const [senderPhone, setSenderPhone] = useState(currentUser?.phone || '');
@@ -68,9 +150,6 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
 
   const PLATFORM_VODAFONE_NUMBER = '01030246983';
   const PLATFORM_INSTAPAY_IPA = 'edulearn@instapay';
-
-  const courseIdToPurchase = selectedPackage.courseId || selectedPackage.id;
-  const hasSufficientWallet = walletBalance >= selectedPackage.price;
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -113,10 +192,31 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
   // 1. Submit Manual Payment Request (Vodafone Cash / InstaPay)
   const handleSubmitManualPayment = async (e: React.FormEvent, method: 'VodafoneCash' | 'InstaPay') => {
     e.preventDefault();
-    if (!senderPhone.trim()) {
-      showToast('يرجى إدخال رقم المحفظة / الهاتف الذي قمت بالتحويل منه.', 'error');
+
+    if (!isValidObjectId(chosenCourseId)) {
+      showToast('يرجى اختيار الكورس المراد الاشتراك به أولاً لإتمام طلب الدفع.', 'error');
       return;
     }
+
+    const cleanPhone = senderPhone.replace(/\D/g, '');
+
+    if (method === 'VodafoneCash') {
+      if (!/^01[0125]\d{8}$/.test(cleanPhone)) {
+        showToast('يرجى إدخال رقم محفظة فودافون كاش مصري صحيح مكون من 11 رقماً (يبدأ بـ 010 أو 011 أو 012 أو 015).', 'error');
+        return;
+      }
+    } else {
+      // InstaPay
+      if (!senderPhone.trim()) {
+        showToast('يرجى إدخال رقم الهاتف أو عنوان InstaPay IPA المحول منه.', 'error');
+        return;
+      }
+      if (!senderPhone.includes('@') && !/^01[0125]\d{8}$/.test(cleanPhone)) {
+        showToast('يرجى إدخال رقم هاتف مصري صحيح (11 رقماً) أو عنوان إنستاباي IPA صالح.', 'error');
+        return;
+      }
+    }
+
     if (!transactionRef.trim()) {
       showToast('يرجى إدخال كود العملية أو الرقم المرجعي للتحويل.', 'error');
       return;
@@ -125,9 +225,9 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
     setIsSubmittingRequest(true);
     try {
       const res = await paymentApi.submitManualPaymentRequest({
-        courseId: courseIdToPurchase,
+        courseId: chosenCourseId.trim(),
         paymentMethod: method,
-        SenderPhone: senderPhone.trim(),
+        SenderPhone: method === 'VodafoneCash' ? cleanPhone : senderPhone.trim(),
         transactionReference: transactionRef.trim(),
       });
 
@@ -178,6 +278,10 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
 
   // 3. Purchase Course using Wallet
   const handleWalletPurchase = async () => {
+    if (!isValidObjectId(chosenCourseId)) {
+      showToast('يرجى اختيار الكورس المراد الاشتراك به أولاً.', 'error');
+      return;
+    }
     if (!hasSufficientWallet) {
       showToast('رصيدك بالمحفظة غير كافٍ للاشتراك. يمكنك شحن رصيدك أولاً عبر كارت الشحن أو فودافون كاش.', 'error');
       return;
@@ -185,7 +289,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
 
     setIsPurchasingWallet(true);
     try {
-      await paymentApi.purchaseWithWallet({ courseId: courseIdToPurchase });
+      await paymentApi.purchaseWithWallet({ courseId: chosenCourseId.trim() });
       setWalletSuccess(true);
       showToast('تم سداد قيمة الكورس وخصمها من المحفظة وتفعيل الاشتراك فوراً!', 'success');
 
@@ -235,13 +339,13 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             تم تفعيل الاشتراك في الكورس بنجاح!
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '2rem' }}>
-            تهانينا! تم خصم <strong>{selectedPackage.price} ج.م</strong> من رصيد محفظتك وتفعيل <strong>{selectedPackage.title}</strong> في حسابك فوراً.
+            تهانينا! تم خصم <strong>{effectivePrice} ج.م</strong> من رصيد محفظتك وتفعيل <strong>{activeCourseTitle}</strong> في حسابك فوراً.
           </p>
 
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => onPaymentSuccess(courseIdToPurchase)}
+            onClick={() => onPaymentSuccess(chosenCourseId)}
             style={{
               width: '100%',
               padding: '0.9rem',
@@ -285,7 +389,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             تم إرسال طلب السداد للإدارة بنجاح!
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-            تم تسجيل طلبك لتحويل <strong>{selectedPackage.price} ج.م</strong> بنجاح. يقوم فريق الإدارة الآن بمطابقة التحويل المستلم من رقم محفظتك <strong>({requestSubmitted.SenderPhone})</strong>، وسيتم تفعيل الكورس في حسابك تلقائياً بمجرد التأكيد.
+            تم تسجيل طلبك لتحويل <strong>{effectivePrice} ج.م</strong> بنجاح. يقوم فريق الإدارة الآن بمطابقة التحويل المستلم من رقم محفظتك <strong>({requestSubmitted.SenderPhone})</strong>، وسيتم تفعيل الكورس في حسابك تلقائياً بمجرد التأكيد.
           </p>
 
           <div
@@ -301,7 +405,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>الكورس:</span>
-              <strong style={{ color: 'var(--text-bright)' }}>{selectedPackage.title}</strong>
+              <strong style={{ color: 'var(--text-bright)' }}>{activeCourseTitle}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>طريقة التحويل:</span>
@@ -403,33 +507,70 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
         className="glass-card"
         style={{
           padding: '1.5rem 1.75rem',
-          marginBottom: '2rem',
+          marginBottom: '1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: '1.25rem',
           border: '1px solid rgba(16, 185, 129, 0.3)',
           background: 'rgba(16, 185, 129, 0.03)',
         }}
       >
-        <div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--primary-light)', fontWeight: 700 }}>
-            الكورس المطلوب الاشتراك به:
-          </span>
-          <h3 style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--text-bright)', margin: '0.2rem 0' }}>
-            {selectedPackage.title}
-          </h3>
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+        <div style={{ flex: 1, minWidth: '280px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--primary-light)', fontWeight: 700 }}>
+              الكورس المطلوب الاشتراك به:
+            </span>
+            {availableCourses.length > 1 && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                (اختر كورس من القائمة)
+              </span>
+            )}
+          </div>
+
+          {availableCourses.length > 0 ? (
+            <select
+              className="input-field"
+              value={chosenCourseId}
+              onChange={(e) => setChosenCourseId(e.target.value)}
+              style={{
+                width: '100%',
+                fontWeight: 800,
+                fontSize: '0.98rem',
+                color: 'var(--text-bright)',
+                background: 'var(--bg-glass)',
+                border: !isValidObjectId(chosenCourseId) ? '2px solid #EF4444' : '1px solid var(--border-glass)',
+                padding: '0.65rem 0.85rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+              }}
+            >
+              {!isValidObjectId(chosenCourseId) && (
+                <option value="">-- اضغط هنا لاختيار الكورس المطلوب --</option>
+              )}
+              {availableCourses.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.Title} {c.Grade ? `(الصف ${c.Grade})` : ''} - {c.Price ?? 150} ج.م
+                </option>
+              ))}
+            </select>
+          ) : (
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--text-bright)', margin: '0.2rem 0' }}>
+              {selectedPackage.title}
+            </h3>
+          )}
+
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
             الطالب: {currentUser?.name || 'حساب الطالب'} • {currentUser?.phone || ''}
-          </span>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
           <div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>سعر الكورس:</span>
             <span style={{ fontSize: '1.9rem', fontWeight: 900, color: '#10B981' }}>
-              {selectedPackage.price} <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>ج.م</span>
+              {effectivePrice} <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>ج.م</span>
             </span>
           </div>
 
@@ -443,6 +584,28 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Warning if no valid course chosen */}
+      {!isValidObjectId(chosenCourseId) && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.9rem 1.25rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            color: '#EF4444',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+          }}
+        >
+          <AlertCircle size={20} style={{ flexShrink: 0 }} />
+          <span>يرجى اختيار الكورس المراد الاشتراك به من القائمة أعلاه للمتابعة وإتمام الدفع.</span>
+        </div>
+      )}
 
       {/* Payment Method Selector Tabs */}
       <div style={{ marginBottom: '1.5rem' }}>
@@ -585,7 +748,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 {PLATFORM_VODAFONE_NUMBER}
               </div>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                المبلغ المطلوب تحويله: <strong style={{ color: '#10B981' }}>{selectedPackage.price} جنيه مصري</strong>
+                المبلغ المطلوب تحويله: <strong style={{ color: '#10B981' }}>{effectivePrice} جنيه مصري</strong>
               </span>
             </div>
 
@@ -603,7 +766,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '1.75rem', background: 'var(--bg-subtle)', padding: '1rem 1.25rem', borderRadius: '8px' }}>
             <strong style={{ color: 'var(--text-bright)', display: 'block', marginBottom: '0.3rem' }}>خطوات التحويل والتأكيد:</strong>
             1. اطلب <code style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px' }}>*9*7*الرقم*المبلغ#</code> من هاتفك أو افتح تطبيق أنا فودافون.<br />
-            2. حول مبلغ (<strong style={{ color: '#10B981' }}>{selectedPackage.price} ج.م</strong>) إلى الرقم: <strong style={{ color: 'var(--text-bright)' }}>{PLATFORM_VODAFONE_NUMBER}</strong>.<br />
+            2. حول مبلغ (<strong style={{ color: '#10B981' }}>{effectivePrice} ج.م</strong>) إلى الرقم: <strong style={{ color: 'var(--text-bright)' }}>{PLATFORM_VODAFONE_NUMBER}</strong>.<br />
             3. بعد إتمام التحويل، املأ النموذج بالأسفل برقم المحفظة التي حولت منها وكود العملية من رسالة فودافون، ثم اضغط <strong>"إرسال طلب الدفع"</strong>.
           </div>
 
@@ -641,7 +804,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
 
             <button
               type="submit"
-              disabled={isSubmittingRequest}
+              disabled={isSubmittingRequest || !isValidObjectId(chosenCourseId)}
               className="btn btn-primary"
               style={{
                 width: '100%',
@@ -653,15 +816,19 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 justifyContent: 'center',
                 gap: '0.5rem',
                 marginTop: '0.5rem',
-                background: 'linear-gradient(135deg, #EF4444, #DC2626)',
-                borderColor: '#EF4444',
+                background: !isValidObjectId(chosenCourseId) ? undefined : 'linear-gradient(135deg, #EF4444, #DC2626)',
+                borderColor: !isValidObjectId(chosenCourseId) ? undefined : '#EF4444',
+                opacity: !isValidObjectId(chosenCourseId) ? 0.6 : 1,
+                cursor: !isValidObjectId(chosenCourseId) ? 'not-allowed' : 'pointer',
               }}
             >
               {isSubmittingRequest ? (
                 <>جاري إرسال الطلب للإدارة...</>
+              ) : !isValidObjectId(chosenCourseId) ? (
+                <>يرجى اختيار الكورس أولاً</>
               ) : (
                 <>
-                  <Send size={18} /> إرسال إشعار التحويل وتأكيد الدفع للإدارة
+                  <Send size={18} /> إرسال إشعار التحويل وتأكيد الدفع للإدارة ({effectivePrice} ج.م)
                 </>
               )}
             </button>
@@ -711,7 +878,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 {PLATFORM_INSTAPAY_IPA}
               </div>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                المبلغ المطلوب تحويله: <strong style={{ color: '#10B981' }}>{selectedPackage.price} جنيه مصري</strong>
+                المبلغ المطلوب تحويله: <strong style={{ color: '#10B981' }}>{effectivePrice} جنيه مصري</strong>
               </span>
             </div>
 
@@ -731,7 +898,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             1. افتح تطبيق إنستاباي على هاتفك.<br />
             2. اختر <strong>"إرسال نقود"</strong> ثم <strong>"عنوان الدفع اللحظي IPA"</strong>.<br />
             3. ادخل العنوان: <strong style={{ color: 'var(--text-bright)' }}>{PLATFORM_INSTAPAY_IPA}</strong>.<br />
-            4. حوّل مبلغ (<strong style={{ color: '#10B981' }}>{selectedPackage.price} ج.م</strong>) وسجل بيانات التحويل بالأسفل لتفعيل الكورس.
+            4. حوّل مبلغ (<strong style={{ color: '#10B981' }}>{effectivePrice} ج.م</strong>) وسجل بيانات التحويل بالأسفل لتفعيل الكورس.
           </div>
 
           {/* Submission Form */}
@@ -768,7 +935,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
 
             <button
               type="submit"
-              disabled={isSubmittingRequest}
+              disabled={isSubmittingRequest || !isValidObjectId(chosenCourseId)}
               className="btn btn-primary"
               style={{
                 width: '100%',
@@ -780,15 +947,19 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 justifyContent: 'center',
                 gap: '0.5rem',
                 marginTop: '0.5rem',
-                background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
-                borderColor: '#8B5CF6',
+                background: !isValidObjectId(chosenCourseId) ? undefined : 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+                borderColor: !isValidObjectId(chosenCourseId) ? undefined : '#8B5CF6',
+                opacity: !isValidObjectId(chosenCourseId) ? 0.6 : 1,
+                cursor: !isValidObjectId(chosenCourseId) ? 'not-allowed' : 'pointer',
               }}
             >
               {isSubmittingRequest ? (
                 <>جاري إرسال الطلب للإدارة...</>
+              ) : !isValidObjectId(chosenCourseId) ? (
+                <>يرجى اختيار الكورس أولاً</>
               ) : (
                 <>
-                  <Send size={18} /> إرسال إشعار تحويل إنستاباي للإدارة
+                  <Send size={18} /> إرسال إشعار تحويل إنستاباي للإدارة ({effectivePrice} ج.م)
                 </>
               )}
             </button>
@@ -888,12 +1059,12 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               }}
             >
               <span style={{ fontSize: '0.9rem', color: 'var(--text-bright)', fontWeight: 700, display: 'block', marginBottom: '0.75rem' }}>
-                رصيدك الحالي ({walletBalance} ج.م) كافٍ الآن للاشتراك في <strong>{selectedPackage.title}</strong>!
+                رصيدك الحالي ({walletBalance} ج.م) كافٍ الآن للاشتراك في <strong>{activeCourseTitle}</strong>!
               </span>
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={isPurchasingWallet}
+                disabled={isPurchasingWallet || !isValidObjectId(chosenCourseId)}
                 onClick={handleWalletPurchase}
                 style={{
                   padding: '0.75rem 2rem',
@@ -906,7 +1077,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               >
                 {isPurchasingWallet ? 'جاري التفعيل...' : (
                   <>
-                    <Wallet size={16} /> تفعيل الكورس الآن بالرصيد ({selectedPackage.price} ج.م)
+                    <Wallet size={16} /> تفعيل الكورس الآن بالرصيد ({effectivePrice} ج.م)
                   </>
                 )}
               </button>
@@ -945,7 +1116,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>سعر الكورس:</span>
-              <strong style={{ fontSize: '1.2rem', color: 'var(--text-bright)' }}>{selectedPackage.price} ج.م</strong>
+              <strong style={{ fontSize: '1.2rem', color: 'var(--text-bright)' }}>{effectivePrice} ج.م</strong>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -958,7 +1129,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             <div style={{ borderTop: '1px dashed var(--border-glass)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>الرصيد المتبقي بعد الشراء:</span>
               <strong style={{ fontSize: '1.1rem', color: hasSufficientWallet ? 'var(--text-bright)' : 'var(--text-muted)' }}>
-                {hasSufficientWallet ? `${walletBalance - selectedPackage.price} ج.م` : 'غير كافٍ'}
+                {hasSufficientWallet ? `${walletBalance - effectivePrice} ج.م` : 'غير كافٍ'}
               </strong>
             </div>
           </div>
@@ -973,7 +1144,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={isPurchasingWallet}
+                disabled={isPurchasingWallet || !isValidObjectId(chosenCourseId)}
                 onClick={handleWalletPurchase}
                 style={{
                   width: '100%',
@@ -984,11 +1155,17 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
+                  opacity: !isValidObjectId(chosenCourseId) ? 0.6 : 1,
+                  cursor: !isValidObjectId(chosenCourseId) ? 'not-allowed' : 'pointer',
                 }}
               >
-                {isPurchasingWallet ? 'جاري الاشتراك...' : (
+                {isPurchasingWallet ? (
+                  'جاري الاشتراك...'
+                ) : !isValidObjectId(chosenCourseId) ? (
+                  'يرجى اختيار الكورس أولاً'
+                ) : (
                   <>
-                    <CheckCircle2 size={20} /> تأكيد الشراء الآن ({selectedPackage.price} ج.م)
+                    <CheckCircle2 size={20} /> تأكيد الشراء الآن ({effectivePrice} ج.م)
                   </>
                 )}
               </button>
@@ -1009,7 +1186,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
               >
                 <AlertCircle size={22} color="var(--accent)" style={{ flexShrink: 0 }} />
                 <div style={{ fontSize: '0.88rem', color: 'var(--text-bright)' }}>
-                  <strong>رصيد المحفظة غير كافٍ:</strong> تحتاج إلى شحن <strong>{selectedPackage.price - walletBalance} ج.م</strong> إضافية لإتمام الشراء عبر المحفظة.
+                  <strong>رصيد المحفظة غير كافٍ:</strong> تحتاج إلى شحن <strong>{effectivePrice - walletBalance} ج.م</strong> إضافية لإتمام الشراء عبر المحفظة.
                 </div>
               </div>
 
@@ -1085,7 +1262,9 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 const isApproved = req.Status === 'Approved' || req.Status === 'approved';
                 const isRejected = req.Status === 'Rejected' || req.Status === 'rejected';
 
-                const courseTitle = typeof req.CourseId === 'object' ? req.CourseId?.Title : (req.CourseId || 'كورس تعليمي');
+                const courseTitle = typeof req.CourseId === 'object' && req.CourseId?.Title
+                  ? req.CourseId.Title
+                  : (availableCourses.find(c => c._id === req.CourseId)?.Title || (typeof req.CourseId === 'string' && isValidObjectId(req.CourseId) ? 'كورس تعليمي' : String(req.CourseId || 'كورس تعليمي')));
 
                 return (
                   <div
@@ -1151,8 +1330,18 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                     )}
 
                     {isApproved && (
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.82rem', color: '#10B981' }}>
-                        ✓ تم تفعيل الكورس بنجاح ومتاح الآن في قائمة كورساتك ومحاضراتك.
+                      <div style={{ marginTop: '0.65rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ fontSize: '0.82rem', color: '#10B981' }}>
+                          ✓ تم تفعيل الكورس بنجاح ومتاح الآن في قائمة كورساتك ومحاضراتك.
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={() => onPaymentSuccess(typeof req.CourseId === 'object' ? req.CourseId?._id : req.CourseId)}
+                          style={{ fontSize: '0.78rem', padding: '0.35rem 0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                        >
+                          الانتقال للكورس <ArrowLeft size={13} />
+                        </button>
                       </div>
                     )}
                   </div>

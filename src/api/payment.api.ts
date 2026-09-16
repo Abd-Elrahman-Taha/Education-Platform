@@ -41,7 +41,16 @@ export const paymentApi = {
   submitManualPaymentRequest: async (
     data: SubmitManualPaymentRequest
   ): Promise<{ status: string; message: string; data: ManualPaymentRequest }> => {
-    const response = await apiClient.post<any>('/payment/requests', data);
+    // Strictly format payload matching Swagger POST /payment/requests:
+    // { "courseId": "...", "paymentMethod": "VodafoneCash" | "InstaPay", "SenderPhone": "01...", "transactionReference": "..." }
+    const cleanPhone = String(data.SenderPhone || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
+    const cleanPayload: Record<string, any> = {
+      courseId: String(data.courseId).trim(),
+      paymentMethod: data.paymentMethod === 'InstaPay' ? 'InstaPay' : 'VodafoneCash',
+      SenderPhone: cleanPhone,
+      transactionReference: String(data.transactionReference || '').trim(),
+    };
+    const response = await apiClient.post<any>('/payment/requests', cleanPayload);
     return response.data;
   },
 
@@ -98,7 +107,7 @@ export const paymentApi = {
   ): Promise<{ status: string; message: string; data: ManualPaymentRequest }> => {
     const response = await apiClient.patch<any>(
       `/payment/requests/${requestId}/reject`,
-      { rejectionReason }
+      { rejectionReason: String(rejectionReason || '').trim() }
     );
     return response.data;
   },
