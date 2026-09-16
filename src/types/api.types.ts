@@ -717,3 +717,53 @@ export interface ParentPortalLookupResponse {
   data: ParentPortalLookupData;
 }
 
+// ── Inquiries (Student → Admin Messaging) ─────────────────────────────────
+export type InquiryStatus = 'Open' | 'Answered';
+
+export interface InquiryRepliedBy {
+  _id: string;
+  FullName: string;
+  Role: string;
+}
+
+export interface InquiryStudentRef {
+  _id: string;
+  FullName: string;
+  Phone: string;
+}
+
+export interface Inquiry {
+  _id: string;
+  StudentId: InquiryStudentRef;
+  Subject: string;
+  Message: string;
+  Reply?: string;
+  Status: InquiryStatus;
+  RepliedBy?: InquiryRepliedBy;
+  RepliedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InquiriesListResponse {
+  status: string;
+  results: number;
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+  data: {
+    inquiries: Inquiry[];
+  };
+}
+
+export interface CreateInquiryRequest {
+  Subject: string;
+  Message: string;
+}
+
+export interface ReplyInquiryRequest {
+  Reply: string;
+}

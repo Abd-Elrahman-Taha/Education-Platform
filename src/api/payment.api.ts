@@ -113,16 +113,57 @@ export const paymentApi = {
   /**
    * Reject a manual payment request with a reason (Admin only).
    * Endpoint: PATCH /api/v1/payment/requests/{requestId}/reject
+   * Schema: { rejectionReason: string (minLength: 3, maxLength: 500) }
    */
   rejectPaymentRequest: async (
     requestId: string,
     rejectionReason: string
   ): Promise<{ status: string; message: string; data: ManualPaymentRequest }> => {
-    const response = await apiClient.patch<any>(
-      `/payment/requests/${requestId}/reject`,
-      { rejectionReason: String(rejectionReason || '').trim() }
-    );
-    return response.data;
+    const cleanId = String(requestId || '').trim();
+    const cleanReason = String(rejectionReason || '').trim();
+
+    try {
+      const response = await apiClient.patch<any>(
+        `/payment/requests/${cleanId}/reject`,
+        { rejectionReason: cleanReason }
+      );
+      return response.data;
+    } catch (primaryErr: any) {
+      console.warn('Primary PATCH /reject failed, checking fallbacks:', primaryErr?.response?.data || primaryErr?.message);
+
+      const status = primaryErr?.response?.status;
+      // If 400 Bad Request, test if backend expects alternate field casing (reason / RejectionReason)
+      if (status === 400) {
+        try {
+          const altRes1 = await apiClient.patch<any>(
+            `/payment/requests/${cleanId}/reject`,
+            { reason: cleanReason }
+          );
+          return altRes1.data;
+        } catch {}
+
+        try {
+          const altRes2 = await apiClient.patch<any>(
+            `/payment/requests/${cleanId}/reject`,
+            { RejectionReason: cleanReason }
+          );
+          return altRes2.data;
+        } catch {}
+      }
+
+      // If 404 or 405, try POST
+      if (status === 404 || status === 405) {
+        try {
+          const postRes = await apiClient.post<any>(
+            `/payment/requests/${cleanId}/reject`,
+            { rejectionReason: cleanReason }
+          );
+          return postRes.data;
+        } catch {}
+      }
+
+      throw primaryErr;
+    }
   },
 
   /**

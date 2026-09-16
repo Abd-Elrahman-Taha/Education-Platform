@@ -67,34 +67,43 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         <div
           className="modal-box"
           onClick={(e) => e.stopPropagation()}
-          style={{ maxWidth: '500px', padding: '1.75rem' }}
+          style={{
+            maxWidth: '460px',
+            width: '92%',
+            padding: '1.25rem 1.5rem',
+            maxHeight: 'min(92vh, 620px)',
+            overflowY: 'auto',
+          }}
         >
           <button className="modal-close" onClick={onClose}>
             <X size={18} />
           </button>
 
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          {/* Compact Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', paddingLeft: '1.5rem' }}>
             <div
               style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
                 background: 'rgba(8, 145, 178, 0.12)',
                 color: 'var(--primary-light)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 0.75rem',
+                flexShrink: 0,
               }}
             >
-              <Wallet size={28} />
+              <Wallet size={22} />
             </div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-              الاشتراك في الكورس
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-              الدفع الفوري من خلال رصيد محفظتك
-            </p>
+            <div>
+              <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, lineHeight: 1.2 }}>
+                الاشتراك في الكورس
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0.2rem 0 0' }}>
+                الدفع الفوري من خلال رصيد محفظتك
+              </p>
+            </div>
           </div>
 
           {/* Success State */}
@@ -102,30 +111,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div style={{ textAlign: 'center', padding: '1rem 0' }}>
               <div
                 style={{
-                  width: '64px',
-                  height: '64px',
+                  width: '56px',
+                  height: '56px',
                   borderRadius: '50%',
                   background: 'rgba(16, 185, 129, 0.15)',
                   color: '#10B981',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  margin: '0 auto 1rem',
+                  margin: '0 auto 0.75rem',
                 }}
               >
-                <CheckCircle2 size={36} />
+                <CheckCircle2 size={32} />
               </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#10B981', marginBottom: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#10B981', marginBottom: '0.35rem' }}>
                 {checkoutSuccess}
               </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
                 تم تفعيل اشتراكك بنجاح وفتح جميع محاضرات واختبارات الكورس!
               </p>
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={onClose}
-                style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}
+                style={{ width: '100%', padding: '0.65rem', fontSize: '0.9rem' }}
               >
                 بدء المشاهدة الآن
               </button>
@@ -138,17 +147,33 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   background: 'var(--bg-subtle)',
                   border: '1px solid var(--border-glass)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '1.25rem',
-                  marginBottom: '1.25rem',
+                  padding: '0.85rem 1rem',
+                  marginBottom: '0.85rem',
                 }}
               >
-                <div style={{ marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
-                    الكورس المختار:
-                  </span>
-                  <strong style={{ fontSize: '1.05rem', color: 'var(--text-bright)', display: 'block', marginTop: '0.25rem' }}>
-                    {course.Title}
-                  </strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', marginBottom: '0.55rem' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>
+                      الكورس المختار:
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: '0.95rem',
+                        color: 'var(--text-bright)',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={course.Title}
+                    >
+                      {course.Title}
+                    </strong>
+                  </div>
+                  <div style={{ textAlign: 'left', flexShrink: 0 }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>سعر الكورس:</span>
+                    <strong style={{ fontSize: '1.05rem', color: '#10B981' }}>{course.Price} ج.م</strong>
+                  </div>
                 </div>
 
                 <div
@@ -156,31 +181,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '0.65rem 0',
-                    borderTop: '1px solid var(--border-glass)',
-                  }}
-                >
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>سعر الكورس:</span>
-                  <strong style={{ fontSize: '1.15rem', color: '#10B981' }}>{course.Price} ج.م</strong>
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '0.65rem 0',
+                    paddingTop: '0.5rem',
                     borderTop: '1px dashed var(--border-glass)',
                   }}
                 >
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Wallet size={15} color="var(--primary-light)" />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Wallet size={14} color="var(--primary-light)" />
                     رصيدك الحالي بالمحفظة:
                   </span>
                   <strong
                     style={{
-                      fontSize: '1.15rem',
-                      color: hasSufficientBalance ? 'var(--text-bright)' : 'var(--danger)',
+                      fontSize: '1rem',
+                      color: hasSufficientBalance ? '#10B981' : 'var(--danger)',
                     }}
                   >
                     {walletBalance} ج.م
@@ -195,15 +207,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.5rem',
-                    padding: '0.75rem',
+                    padding: '0.6rem 0.8rem',
                     borderRadius: '8px',
                     background: 'rgba(239, 68, 68, 0.15)',
                     color: 'var(--danger)',
-                    fontSize: '0.82rem',
-                    marginBottom: '1rem',
+                    fontSize: '0.8rem',
+                    marginBottom: '0.75rem',
                   }}
                 >
-                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <AlertCircle size={15} style={{ flexShrink: 0 }} />
                   <span>{checkoutError}</span>
                 </div>
               )}
@@ -212,20 +224,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {!hasSufficientBalance ? (
                 <div
                   style={{
-                    background: 'rgba(234, 179, 8, 0.1)',
-                    border: '1px solid rgba(234, 179, 8, 0.3)',
+                    background: 'rgba(234, 179, 8, 0.08)',
+                    border: '1px solid rgba(234, 179, 8, 0.25)',
                     borderRadius: 'var(--radius-md)',
-                    padding: '0.85rem 1rem',
-                    marginBottom: '1.25rem',
-                    fontSize: '0.82rem',
+                    padding: '0.75rem 0.85rem',
+                    marginBottom: '0.85rem',
+                    fontSize: '0.8rem',
                     color: 'var(--text-bright)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <AlertCircle size={16} color="var(--accent)" style={{ flexShrink: 0 }} />
-                    <strong>رصيدك غير كافٍ للاشتراك مباشرة</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--accent)', fontWeight: 700 }}>
+                      <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                      <span>رصيدك غير كافٍ للاشتراك مباشرة</span>
+                    </div>
                   </div>
-                  <p style={{ margin: '0 0 0.75rem', color: 'var(--text-muted)' }}>
+                  <p style={{ margin: '0 0 0.55rem', color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.4 }}>
                     قيمة الكورس {course.Price} ج.م والمتبقي في محفظتك {walletBalance} ج.م. يمكنك شحن رصيدك بكارت شحن فوراً.
                   </p>
                   <button
@@ -234,33 +248,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     onClick={() => setIsScratchCardOpen(true)}
                     style={{
                       width: '100%',
-                      padding: '0.55rem',
-                      fontSize: '0.85rem',
+                      padding: '0.45rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '0.4rem',
+                      gap: '0.35rem',
                       background: 'rgba(234, 179, 8, 0.15)',
-                      borderColor: 'rgba(234, 179, 8, 0.4)',
+                      borderColor: 'rgba(234, 179, 8, 0.35)',
                       color: 'var(--accent)',
                     }}
                   >
-                    <PlusCircle size={15} /> شحن المحفظة بواسطة كارت شحن
+                    <PlusCircle size={14} /> شحن المحفظة بواسطة كارت شحن
                   </button>
                 </div>
               ) : (
                 <div
                   style={{
-                    fontSize: '0.78rem',
+                    fontSize: '0.75rem',
                     color: 'var(--text-muted)',
-                    marginBottom: '1.25rem',
-                    lineHeight: 1.5,
+                    marginBottom: '0.85rem',
+                    lineHeight: 1.4,
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: '0.4rem',
+                    gap: '0.35rem',
                   }}
                 >
-                  <ShieldCheck size={16} color="#10B981" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <ShieldCheck size={15} color="#10B981" style={{ flexShrink: 0, marginTop: '1px' }} />
                   <span>
                     سيتم خصم مبلغ <strong>{course.Price} ج.م</strong> تلقائياً من محفظتك وتفعيل الاشتراك فوراً من خلال النظام المعتمد.
                   </span>
@@ -268,13 +283,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               )}
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <button
                   type="button"
                   className="btn btn-primary"
                   disabled={isCheckingOut || !hasSufficientBalance}
                   onClick={handleWalletPurchase}
-                  style={{ width: '100%', padding: '0.8rem', fontSize: '0.95rem' }}
+                  style={{ width: '100%', padding: '0.65rem', fontSize: '0.88rem', fontWeight: 700 }}
                 >
                   {isCheckingOut ? 'جاري إتمام الاشتراك...' : 'تأكيد الاشتراك بواسطة المحفظة'}
                 </button>
@@ -288,9 +303,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     onClose();
                     window.location.href = `/payment/gateway-egyptian?courseId=${course._id}`;
                   }}
-                  style={{ width: '100%', padding: '0.65rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem',
+                  }}
                 >
-                  <Smartphone size={15} style={{ verticalAlign: 'middle', marginLeft: '4px', color: '#EF4444' }} />
+                  <Smartphone size={14} style={{ color: '#EF4444' }} />
                   تحويل فودافون كاش / إنستاباي
                 </button>
               </div>

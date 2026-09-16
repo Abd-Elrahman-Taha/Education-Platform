@@ -9,7 +9,7 @@ import {
   Edit3, Zap, ArrowUp, ArrowDown, ListOrdered,
   FileText, CheckSquare, Eye, AlertTriangle, AlertCircle,
   HelpCircle, RefreshCw, Crown, Lock, Shuffle, Target, RotateCcw, ShieldCheck, Lightbulb,
-  LayoutDashboard, Smartphone, Send
+  LayoutDashboard, Smartphone, Send, Inbox, Mail, MailOpen, MessageCircle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { AcademicYear, ACADEMIC_YEAR_LABELS, AppView } from '../../types';
 import { useToast } from '../../context/ToastContext';
@@ -20,6 +20,7 @@ import { lessonsApi } from '../../api/lessons.api';
 import { paymentApi } from '../../api/payment.api';
 import { examsApi, calculateNextOrderIndex } from '../../api/exams.api';
 import { enrollmentsApi } from '../../api/enrollments.api';
+import { inquiriesApi } from '../../api/inquiries.api';
 import {
   AdminStudent,
   UpdateStudentRequest,
@@ -33,6 +34,8 @@ import {
   QuestionType,
   ExamAttempt,
   ManualPaymentRequest,
+  Inquiry,
+  InquiryStatus,
 } from '../../types/api.types';
 import { getFriendlyErrorMessage } from '../../utils/errors';
 import { matchesAcademicYear } from '../../utils/courseFilter';
@@ -59,7 +62,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [selectedYear, setSelectedYear] = useState<AcademicYear | 'all'>('all');
 
   // Main active tab (strictly Admin domains, no Teacher role)
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'payment-requests' | 'admins'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'courses' | 'lessons' | 'exams' | 'scratch-cards' | 'payment-requests' | 'admins' | 'inquiries'>('overview');
 
   // ── MANUAL PAYMENT REQUESTS STATE ─────────────────────────────
   const [paymentRequests, setPaymentRequests] = useState<ManualPaymentRequest[]>([]);
@@ -69,6 +72,51 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
   const [isProcessingPaymentId, setIsProcessingPaymentId] = useState<string | null>(null);
+
+  // ── INQUIRIES STATE ───────────────────────────────────────────
+  const [allInquiries, setAllInquiries] = useState<Inquiry[]>([]);
+  const [isInquiriesLoading, setIsInquiriesLoading] = useState(false);
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<'all' | InquiryStatus>('all');
+  const [searchInquiry, setSearchInquiry] = useState('');
+  const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+  const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [expandedInquiryId, setExpandedInquiryId] = useState<string | null>(null);
+
+  // Auto-switch tab if navigated from notification bell or external trigger
+  useEffect(() => {
+    try {
+      const tabReq = localStorage.getItem('admin_active_tab');
+      if (tabReq === 'inquiries' || tabReq === 'payment-requests' || tabReq === 'students' || tabReq === 'courses' || tabReq === 'exams') {
+        setActiveTab(tabReq as any);
+        localStorage.removeItem('admin_active_tab');
+      }
+      const selInqId = sessionStorage.getItem('admin_selected_inquiry_id');
+      if (selInqId) {
+        setExpandedInquiryId(selInqId);
+      }
+    } catch {}
+  }, []);
+
+  // Handle auto-opening inquiry from notification once inquiries are loaded
+  useEffect(() => {
+    try {
+      const selInqId = sessionStorage.getItem('admin_selected_inquiry_id');
+      if (selInqId && allInquiries.length > 0) {
+        const target = allInquiries.find(i => i._id === selInqId);
+        if (target) {
+          setExpandedInquiryId(selInqId);
+          if (target.Status === 'Open') {
+            setSelectedInquiry(target);
+            setReplyText(target.Reply || '');
+            setIsReplyModalOpen(true);
+          }
+        }
+        sessionStorage.removeItem('admin_selected_inquiry_id');
+      }
+    } catch {}
+  }, [allInquiries]);
 
   // Redirect if user is not superadmin and attempts to open admins tab
   useEffect(() => {
@@ -599,6 +647,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     loadCourses();
     loadExams();
     fetchPaymentRequests();
+    loadInquiries();
     if (isSuperAdmin) {
       loadAdmins();
     }
@@ -649,19 +698,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
   const handleRejectPayment = async () => {
     if (!rejectingRequestId) return;
-    if (!rejectionReasonInput.trim()) {
+    const cleanReason = rejectionReasonInput.trim();
+    if (!cleanReason) {
       showToast('يرجى كتابة سبب رفض الطلب.', 'error');
+      return;
+    }
+    if (cleanReason.length < 3) {
+      showToast('يجب أن يحتوي سبب الرفض على 3 أحرف على الأقل.', 'error');
       return;
     }
     setIsProcessingPaymentId(rejectingRequestId);
     try {
-      const res = await paymentApi.rejectPaymentRequest(rejectingRequestId, rejectionReasonInput.trim());
+      const res = await paymentApi.rejectPaymentRequest(rejectingRequestId, cleanReason);
       showToast(res?.message || 'تم رفض طلب الدفع بنجاح.', 'info');
       setRejectingRequestId(null);
       setRejectionReasonInput('');
       await fetchPaymentRequests();
     } catch (err: any) {
-      showToast(getFriendlyErrorMessage(err, 'حدث خطأ أثناء رفض الطلب.'), 'error');
+      console.error('Failed to reject payment request:', err?.response?.data || err);
+      const serverMsg = err?.response?.data?.message || err?.backendMessage;
+      showToast(serverMsg || getFriendlyErrorMessage(err, 'حدث خطأ أثناء رفض الطلب.'), 'error');
     } finally {
       setIsProcessingPaymentId(null);
     }
@@ -701,7 +757,65 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (activeTab === 'admins' && isSuperAdmin) loadAdmins();
     if (activeTab === 'students') loadStudents();
     if (activeTab === 'payment-requests') fetchPaymentRequests();
+    if (activeTab === 'inquiries') loadInquiries();
   }, [activeTab, isSuperAdmin]);
+
+  const loadInquiries = async () => {
+    setIsInquiriesLoading(true);
+    try {
+      const { inquiries } = await inquiriesApi.getAllInquiries({ limit: 100 });
+      setAllInquiries(inquiries);
+    } catch (err: any) {
+      console.error('[Inquiries] Failed to fetch:', err);
+      setAllInquiries([]);
+    } finally {
+      setIsInquiriesLoading(false);
+    }
+  };
+
+  const handleOpenReplyModal = (inquiry: Inquiry) => {
+    setSelectedInquiry(inquiry);
+    setReplyText(inquiry.Reply || '');
+    setIsReplyModalOpen(true);
+  };
+
+  const handleSubmitReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInquiry || !replyText.trim() || isSubmittingReply) return;
+    setIsSubmittingReply(true);
+    try {
+      const updated = await inquiriesApi.replyToInquiry(selectedInquiry._id, { Reply: replyText.trim() });
+      setAllInquiries(prev => prev.map(i => i._id === updated._id ? updated : i));
+      showToast('تم إرسال الرد على الاستفسار بنجاح!', 'success');
+      setIsReplyModalOpen(false);
+      setSelectedInquiry(null);
+      setReplyText('');
+    } catch (err: any) {
+      showToast(getFriendlyErrorMessage(err, 'تعذر إرسال الرد، يرجى المحاولة مرة أخرى.'), 'error');
+    } finally {
+      setIsSubmittingReply(false);
+    }
+  };
+
+  const displayedInquiries = useMemo(() => {
+    return allInquiries.filter(i => {
+      if (inquiryStatusFilter !== 'all' && i.Status !== inquiryStatusFilter) return false;
+      if (searchInquiry.trim()) {
+        const q = searchInquiry.trim().toLowerCase();
+        const student = i.StudentId as any;
+        const name = (student?.FullName || '').toLowerCase();
+        const phone = (student?.Phone || '').toLowerCase();
+        const subject = (i.Subject || '').toLowerCase();
+        const message = (i.Message || '').toLowerCase();
+        const reply = (i.Reply || '').toLowerCase();
+        return name.includes(q) || phone.includes(q) || subject.includes(q) || message.includes(q) || reply.includes(q);
+      }
+      return true;
+    });
+  }, [allInquiries, inquiryStatusFilter, searchInquiry]);
+
+  const openInquiryCount = useMemo(() => allInquiries.filter(i => i.Status === 'Open').length, [allInquiries]);
+
 
   useEffect(() => {
     if (selectedCourseForLessons) {
@@ -1889,6 +2003,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               </span>
             </button>
           )}
+
+          <button
+            type="button"
+            className={`admin-tab-btn admin-tab-btn--full ${activeTab === 'inquiries' ? 'active' : ''}`}
+            onClick={() => setActiveTab('inquiries')}
+            style={{
+              background: activeTab === 'inquiries' ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(8, 145, 178, 0.35))' : undefined,
+              borderColor: activeTab === 'inquiries' ? 'rgba(6, 182, 212, 0.5)' : undefined,
+              color: activeTab === 'inquiries' ? '#06B6D4' : undefined,
+            }}
+          >
+            <Inbox size={16} color="#06B6D4" />
+            <span className="admin-tab-label-desktop">الاستفسارات والرسائل</span>
+            <span className="admin-tab-label-mobile">الاستفسارات</span>
+            {openInquiryCount > 0 && (
+              <span className="admin-tab-badge" style={{ background: '#EF4444', color: '#fff', fontWeight: 900, fontSize: '0.72rem', padding: '0.1rem 0.45rem', borderRadius: '9999px' }}>
+                {openInquiryCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1928,6 +2062,58 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 {realExams.length}
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>إدارة الأسئلة والمحاولات</span>
+            </div>
+
+            <div
+              className="glass-card"
+              style={{
+                padding: '1.5rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                border: openInquiryCount > 0 ? '1px solid rgba(6, 182, 212, 0.4)' : undefined,
+              }}
+              onClick={() => setActiveTab('inquiries')}
+              title="انقر للانتقال لتبويب الاستفسارات والرسائل"
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>استفسارات ورسائل الطلاب</span>
+                <Inbox size={18} color="#06B6D4" />
+              </div>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#06B6D4', margin: '0.35rem 0' }}>
+                {openInquiryCount}
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginRight: '0.4rem' }}>
+                  / {allInquiries.length} إجمالي
+                </span>
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: openInquiryCount > 0 ? '#EF4444' : 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
+                {openInquiryCount > 0 ? `● ${openInquiryCount} رسالة بانتظار رد الإدارة` : '✓ تم الرد على جميع الاستفسارات'}
+              </span>
+            </div>
+
+            <div
+              className="glass-card"
+              style={{
+                padding: '1.5rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                border: pendingPaymentCount > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : undefined,
+              }}
+              onClick={() => setActiveTab('payment-requests')}
+              title="انقر للانتقال لتبويب طلبات التحويل"
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>طلبات التحويل اليدوي</span>
+                <Smartphone size={18} color="#EF4444" />
+              </div>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#EF4444', margin: '0.35rem 0' }}>
+                {pendingPaymentCount}
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', marginRight: '0.4rem' }}>
+                  / {paymentRequests.length} إجمالي
+                </span>
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: pendingPaymentCount > 0 ? '#EF4444' : 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
+                {pendingPaymentCount > 0 ? `● ${pendingPaymentCount} طلب تحويل قيد المراجعة` : '✓ لا توجد طلبات معلقة'}
+              </span>
             </div>
 
             <div className="glass-card" style={{ padding: '1.5rem' }}>
@@ -3083,13 +3269,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     const isBusy = isProcessingPaymentId === req._id;
 
                     return (
-                      <tr
-                        key={req._id}
-                        style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.04)',
-                          background: isPending ? 'rgba(245, 158, 11, 0.02)' : undefined,
-                        }}
-                      >
+                      <React.Fragment key={req._id}>
+                        <tr
+                          style={{
+                            borderBottom: rejectingRequestId === req._id ? 'none' : '1px solid rgba(255,255,255,0.04)',
+                            background: rejectingRequestId === req._id ? 'rgba(239, 68, 68, 0.05)' : isPending ? 'rgba(245, 158, 11, 0.02)' : undefined,
+                          }}
+                        >
                         {/* Student */}
                         <td style={{ padding: '0.85rem 1rem' }}>
                           <div style={{ fontWeight: 700, color: 'var(--text-bright)' }}>{studentName}</div>
@@ -3254,6 +3440,97 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                           )}
                         </td>
                       </tr>
+                        {rejectingRequestId === req._id && (
+                          <tr style={{ background: 'rgba(239, 68, 68, 0.05)', borderBottom: '2px solid rgba(239, 68, 68, 0.3)' }}>
+                            <td colSpan={8} style={{ padding: '0.85rem 1.25rem' }}>
+                              <div
+                                style={{
+                                  background: 'var(--bg-surface)',
+                                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                                  borderRadius: '10px',
+                                  padding: '1.25rem',
+                                  boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+                                  maxWidth: '650px',
+                                  margin: '0 auto',
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}>
+                                      <XCircle size={18} />
+                                    </div>
+                                    <div>
+                                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-bright)' }}>
+                                        رفض طلب التحويل ({studentName})
+                                      </h4>
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        سيصل سبب الرفض للطالب في صفحة الدفع
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRejectingRequestId(null)}
+                                    disabled={Boolean(isProcessingPaymentId)}
+                                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </div>
+
+                                <div style={{ marginBottom: '1rem' }}>
+                                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>
+                                    سبب الرفض <span style={{ color: '#EF4444' }}>*</span> (3 أحرف على الأقل)
+                                  </label>
+                                  <textarea
+                                    rows={3}
+                                    className="input-field"
+                                    style={{ width: '100%', resize: 'vertical', fontSize: '0.85rem' }}
+                                    placeholder="مثال: لم يتم استلام التحويل على رقم فودافون كاش الخاص بالمنصة، أو المبلغ المحول غير مطابق لسعر الكورس."
+                                    value={rejectionReasonInput}
+                                    onChange={e => setRejectionReasonInput(e.target.value)}
+                                    autoFocus
+                                  />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    disabled={Boolean(isProcessingPaymentId)}
+                                    onClick={() => setRejectingRequestId(null)}
+                                  >
+                                    إلغاء
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    disabled={Boolean(isProcessingPaymentId) || rejectionReasonInput.trim().length < 3}
+                                    onClick={handleRejectPayment}
+                                    style={{
+                                      background: '#DC2626',
+                                      color: '#fff',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.4rem',
+                                      fontWeight: 700,
+                                      padding: '0.45rem 1rem',
+                                      borderRadius: '8px',
+                                      cursor: (isProcessingPaymentId || rejectionReasonInput.trim().length < 3) ? 'not-allowed' : 'pointer',
+                                    }}
+                                  >
+                                    {isProcessingPaymentId ? 'جاري الرفض...' : (
+                                      <>
+                                        <XCircle size={15} /> تأكيد الرفض
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -5310,7 +5587,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: REJECT PAYMENT REQUEST ── */}
       {rejectingRequestId && createPortal(
-        <div className="modal-backdrop" onClick={() => !isProcessingPaymentId && setRejectingRequestId(null)}>
+        <div
+          className="modal-overlay active"
+          onClick={() => !isProcessingPaymentId && setRejectingRequestId(null)}
+          style={{ zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
           <div
             className="modal-box"
             onClick={e => e.stopPropagation()}
@@ -5338,7 +5619,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
-                سبب الرفض <span style={{ color: '#EF4444' }}>*</span>
+                سبب الرفض <span style={{ color: '#EF4444' }}>*</span> (3 أحرف على الأقل)
               </label>
               <textarea
                 rows={3}
@@ -5363,7 +5644,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               <button
                 type="button"
                 className="btn"
-                disabled={Boolean(isProcessingPaymentId) || !rejectionReasonInput.trim()}
+                disabled={Boolean(isProcessingPaymentId) || rejectionReasonInput.trim().length < 3}
                 onClick={handleRejectPayment}
                 style={{
                   background: '#DC2626',
@@ -5372,6 +5653,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   alignItems: 'center',
                   gap: '0.4rem',
                   fontWeight: 700,
+                  cursor: (isProcessingPaymentId || rejectionReasonInput.trim().length < 3) ? 'not-allowed' : 'pointer',
                 }}
               >
                 {isProcessingPaymentId ? 'جاري الرفض...' : (
@@ -5381,6 +5663,217 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 )}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── TAB: INQUIRIES ──────────────────────────────────────── */}
+      {activeTab === 'inquiries' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <Inbox size={20} color="#06B6D4" /> الاستفسارات والرسائل الواردة
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
+                رسائل الطلاب الموجهة للإدارة — يمكنك الرد مباشرة من هنا
+              </p>
+            </div>
+            <button className="btn btn-secondary" onClick={loadInquiries} disabled={isInquiriesLoading} style={{ fontSize: '0.85rem' }}>
+              <RefreshCw size={14} /> تحديث
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+            <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--primary-light)' }}>{allInquiries.length}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>إجمالي الاستفسارات</div>
+            </div>
+            <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#EF4444' }}>{openInquiryCount}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>قيد الانتظار</div>
+            </div>
+            <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10B981' }}>{allInquiries.filter(i => i.Status === 'Answered').length}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>تم الرد عليها</div>
+            </div>
+          </div>
+
+          {/* Filter & Search Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button onClick={() => setInquiryStatusFilter('all')} className={`btn ${inquiryStatusFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}>
+                الكل ({allInquiries.length})
+              </button>
+              <button onClick={() => setInquiryStatusFilter('Open')} className={`btn ${inquiryStatusFilter === 'Open' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}>
+                قيد الانتظار ({openInquiryCount})
+              </button>
+              <button onClick={() => setInquiryStatusFilter('Answered')} className={`btn ${inquiryStatusFilter === 'Answered' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}>
+                تم الرد ({allInquiries.filter(i => i.Status === 'Answered').length})
+              </button>
+            </div>
+
+            <div style={{ position: 'relative', minWidth: '240px', flex: 1, maxWidth: '360px' }}>
+              <Search size={15} style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                className="input-field"
+                placeholder="بحث في الرسائل (اسم الطالب، هاتف، موضوع)..."
+                value={searchInquiry}
+                onChange={e => setSearchInquiry(e.target.value)}
+                style={{ width: '100%', paddingRight: '2.25rem', fontSize: '0.82rem' }}
+              />
+              {searchInquiry && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInquiry('')}
+                  style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          {isInquiriesLoading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <RefreshCw size={24} className="spin" style={{ marginBottom: '0.5rem' }} />
+              <div>جاري تحميل الاستفسارات...</div>
+            </div>
+          ) : displayedInquiries.length === 0 ? (
+            <div className="glass-card" style={{ padding: '3rem', textAlign: 'center' }}>
+              <Inbox size={40} color="var(--text-muted)" style={{ marginBottom: '1rem', opacity: 0.4 }} />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-muted)', margin: 0 }}>
+                {searchInquiry.trim() ? 'لا توجد نتائج مطابقة للبحث' : inquiryStatusFilter === 'Open' ? 'لا توجد استفسارات قيد الانتظار' : 'لا توجد استفسارات بعد'}
+              </h3>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {displayedInquiries.map(inq => {
+                const isAnswered = inq.Status === 'Answered';
+                const isExpanded = expandedInquiryId === inq._id;
+                const student = inq.StudentId as any;
+                return (
+                  <div key={inq._id} className="glass-card" style={{
+                    padding: '1.1rem 1.35rem',
+                    border: isAnswered ? '1px solid rgba(16,185,129,0.25)' : '1px solid rgba(239,68,68,0.25)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                          {isAnswered ? <MailOpen size={15} color="#10B981" /> : <Mail size={15} color="#EF4444" />}
+                          <strong style={{ fontSize: '0.95rem', color: 'var(--text-bright)' }}>{inq.Subject}</strong>
+                          <span style={{
+                            padding: '0.1rem 0.5rem', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 700,
+                            background: isAnswered ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                            color: isAnswered ? '#10B981' : '#EF4444',
+                            border: isAnswered ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)',
+                          }}>
+                            {isAnswered ? '✓ تم الرد' : '● قيد الانتظار'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <span><Users size={11} style={{ verticalAlign: 'middle' }} /> {student?.FullName || '—'} • {student?.Phone || '—'}</span>
+                          <span><Clock size={11} style={{ verticalAlign: 'middle' }} /> {new Date(inq.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }}
+                          onClick={() => handleOpenReplyModal(inq)}
+                        >
+                          <Send size={12} /> {isAnswered ? 'تعديل الرد' : 'رد'}
+                        </button>
+                        <button
+                          className="icon-btn"
+                          onClick={() => setExpandedInquiryId(isExpanded ? null : inq._id)}
+                          title="عرض التفاصيل"
+                        >
+                          {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-glass)' }}>
+                        <div style={{ marginBottom: '0.75rem' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>رسالة الطالب:</div>
+                          <div style={{ fontSize: '0.9rem', color: 'var(--text-bright)', lineHeight: 1.6, background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
+                            {inq.Message}
+                          </div>
+                        </div>
+                        {isAnswered && inq.Reply && (
+                          <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '8px', padding: '0.75rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#10B981', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <CheckCircle2 size={12} /> ردك
+                              {inq.RepliedAt && ` • ${new Date(inq.RepliedAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })}`}
+                            </div>
+                            <div style={{ fontSize: '0.9rem', color: 'var(--text-bright)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{inq.Reply}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── REPLY MODAL ─────────────────────────────────────────── */}
+      {isReplyModalOpen && selectedInquiry && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
+          zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '540px', padding: '2rem', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <MessageCircle size={18} color="#06B6D4" /> الرد على الاستفسار
+              </h2>
+              <button className="icon-btn" onClick={() => { setIsReplyModalOpen(false); setSelectedInquiry(null); setReplyText(''); }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Student info */}
+            <div style={{ background: 'var(--bg-subtle)', borderRadius: '10px', padding: '0.85rem', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
+              <div style={{ fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.3rem' }}>{selectedInquiry.Subject}</div>
+              <div style={{ color: 'var(--text-muted)', marginBottom: '0.5rem', fontSize: '0.78rem' }}>
+                <Users size={11} style={{ verticalAlign: 'middle' }} /> {(selectedInquiry.StudentId as any)?.FullName || '—'} • {(selectedInquiry.StudentId as any)?.Phone || '—'}
+              </div>
+              <div style={{ color: 'var(--text-bright)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selectedInquiry.Message}</div>
+            </div>
+
+            <form onSubmit={handleSubmitReply}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>ردك على الاستفسار</label>
+                <textarea
+                  required
+                  rows={5}
+                  className="input-field"
+                  style={{ width: '100%', resize: 'vertical' }}
+                  placeholder="اكتب ردك هنا بوضوح..."
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  minLength={5}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => { setIsReplyModalOpen(false); setSelectedInquiry(null); setReplyText(''); }} disabled={isSubmittingReply}>
+                  إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmittingReply || !replyText.trim()}>
+                  <Send size={15} /> {isSubmittingReply ? 'جاري الإرسال...' : 'إرسال الرد'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

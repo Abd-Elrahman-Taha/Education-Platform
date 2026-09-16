@@ -1778,6 +1778,24 @@ button.footer-link {
 
 .modal-overlay.active { opacity: 1; pointer-events: auto; }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(13, 31, 35, 0.88);
+  backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+[data-theme="light"] .modal-backdrop {
+  background: rgba(15, 23, 42, 0.65);
+}
+
 .modal-box {
   background: var(--bg-surface);
   border: 1px solid var(--border-glass-hover);
@@ -1790,6 +1808,36 @@ button.footer-link {
   animation: modalScaleUp 0.3s ease-out forwards;
   max-height: 90vh;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.modal-box::-webkit-scrollbar {
+  width: 5px;
+}
+.modal-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-box::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+.modal-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-height: 800px) {
+  .modal-box {
+    padding: 1.25rem 1.5rem;
+    max-height: 94vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-box {
+    padding: 1.15rem;
+    border-radius: var(--radius-lg);
+  }
 }
 
 @keyframes modalScaleUp {
