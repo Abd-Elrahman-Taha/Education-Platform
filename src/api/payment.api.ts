@@ -44,7 +44,7 @@ export const paymentApi = {
   submitManualPaymentRequest: async (
     data: SubmitManualPaymentRequest
   ): Promise<{ status: string; message: string; data: ManualPaymentRequest }> => {
-    const rawPhone = normalizeArabicDigits(String(data.Phone || data.SenderPhone || data.senderPhone || ''));
+    const rawPhone = normalizeArabicDigits(String(data.Phone || data.senderPhone || data.senderPhone || ''));
     let cleanPhone = rawPhone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('20') && cleanPhone.length === 13) {
       cleanPhone = cleanPhone.slice(2);
@@ -55,7 +55,7 @@ export const paymentApi = {
     const method = (data.paymentMethod === 'InstaPay' || data.PaymentMethod === 'InstaPay') ? 'InstaPay' : 'VodafoneCash';
 
     // The backend strictly validates payload with Joi (stripUnknown: false).
-    // The schema requires "Phone" (not "SenderPhone"):
+    // The schema requires "Phone" (not "senderPhone"):
     const cleanPayload = {
       courseId,
       paymentMethod: method,

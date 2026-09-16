@@ -588,7 +588,7 @@ export interface WalletPurchaseResponse {
 export interface SubmitManualPaymentRequest {
   courseId: string;
   paymentMethod: 'VodafoneCash' | 'InstaPay' | string;
-  SenderPhone?: string;
+  senderPhone?: string;
   Phone?: string;
   transactionReference?: string;
   // PascalCase & alias compatibility
@@ -614,7 +614,7 @@ export interface ManualPaymentRequest {
     Price?: number;
     Thumbnail?: string;
   };
-  SenderPhone: string;
+  senderPhone: string;
   PaymentMethod: 'VodafoneCash' | 'InstaPay' | string;
   TransactionReference?: string;
   Status: 'Pending' | 'Approved' | 'Rejected' | string;

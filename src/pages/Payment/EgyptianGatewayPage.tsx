@@ -130,7 +130,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
   const hasSufficientWallet = walletBalance >= effectivePrice;
 
   // Manual Payment Request Form State
-  const [senderPhone, setSenderPhone] = useState(currentUser?.phone || '');
+  const [senderPhone, setsenderPhone] = useState(currentUser?.phone || '');
   const [transactionRef, setTransactionRef] = useState('');
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState<ManualPaymentRequest | null>(null);
@@ -393,7 +393,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             تم إرسال طلب السداد للإدارة بنجاح!
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-            تم تسجيل طلبك لتحويل <strong>{effectivePrice} ج.م</strong> بنجاح. يقوم فريق الإدارة الآن بمطابقة التحويل المستلم من رقم محفظتك <strong>({requestSubmitted.SenderPhone})</strong>، وسيتم تفعيل الكورس في حسابك تلقائياً بمجرد التأكيد.
+            تم تسجيل طلبك لتحويل <strong>{effectivePrice} ج.م</strong> بنجاح. يقوم فريق الإدارة الآن بمطابقة التحويل المستلم من رقم محفظتك <strong>({requestSubmitted.senderPhone})</strong>، وسيتم تفعيل الكورس في حسابك تلقائياً بمجرد التأكيد.
           </p>
 
           <div
@@ -419,7 +419,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>رقم المحفظة المحول منها:</span>
-              <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{requestSubmitted.SenderPhone}</strong>
+              <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{requestSubmitted.senderPhone}</strong>
             </div>
             {(requestSubmitted.TransactionReference || (requestSubmitted as any).transactionReference) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
@@ -788,7 +788,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 className="input-field"
                 placeholder="مثال: 01012345678"
                 value={senderPhone}
-                onChange={e => setSenderPhone(normalizeArabicDigits(e.target.value))}
+                onChange={e => setsenderPhone(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
             </div>
@@ -942,7 +942,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                 className="input-field"
                 placeholder="مثال: 01123456789"
                 value={senderPhone}
-                onChange={e => setSenderPhone(normalizeArabicDigits(e.target.value))}
+                onChange={e => setsenderPhone(normalizeArabicDigits(e.target.value))}
                 style={{ width: '100%', fontSize: '0.92rem' }}
               />
               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
@@ -1337,7 +1337,7 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
                           {courseTitle}
                         </h4>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                          طريقة الدفع: {req.PaymentMethod === 'VodafoneCash' ? 'فودافون كاش' : req.PaymentMethod === 'InstaPay' ? 'إنستاباي' : req.PaymentMethod} • المحفظة المحول منها: <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{req.SenderPhone}</strong>
+                          طريقة الدفع: {req.PaymentMethod === 'VodafoneCash' ? 'فودافون كاش' : req.PaymentMethod === 'InstaPay' ? 'إنستاباي' : req.PaymentMethod} • المحفظة المحول منها: <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{req.senderPhone}</strong>
                         </span>
                       </div>
 

@@ -368,7 +368,7 @@ export function getFriendlyErrorMessage(error: any, fallback?: string): string {
   }
 
   if (
-    lowerMsg.includes('senderphone') ||
+    lowerMsg.includes('senderPhone') ||
     lowerMsg.includes('sender phone') ||
     lowerMsg.includes('sender_phone')
   ) {

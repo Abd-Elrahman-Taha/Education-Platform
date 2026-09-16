@@ -685,7 +685,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       // Search filter (by sender phone, course title, student name, reference)
       if (searchPayment.trim()) {
         const q = searchPayment.trim().toLowerCase();
-        const phone = (req.SenderPhone || '').toLowerCase();
+        const phone = (req.senderPhone || '').toLowerCase();
         const ref = (req.TransactionReference || (req as any).transactionReference || '').toLowerCase();
         const courseTitle = ((typeof req.CourseId === 'object' ? req.CourseId?.Title : req.CourseId) || '').toLowerCase();
         const studentName = ((typeof req.StudentId === 'object' ? req.StudentId?.FullName : req.StudentId) || '').toLowerCase();
@@ -3132,12 +3132,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                         <td style={{ padding: '0.85rem 1rem' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', direction: 'ltr' }}>
                             <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-bright)' }}>
-                              {req.SenderPhone}
+                              {req.senderPhone}
                             </span>
                             <button
                               type="button"
                               onClick={() => {
-                                navigator.clipboard.writeText(req.SenderPhone);
+                                navigator.clipboard.writeText(req.senderPhone);
                                 showToast('تم نسخ رقم المحفظة!', 'success');
                               }}
                               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
