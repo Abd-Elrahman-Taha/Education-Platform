@@ -8,8 +8,9 @@ import {
   GraduationCap, BookOpen, Clock, Award, Flame, Calendar,
   TrendingUp, CheckCircle, BarChart3, ArrowLeft, PlayCircle,
   FileCheck, AlertCircle, RefreshCw, Wallet, Sparkles, Plus,
-  Crown, Sliders
+  Crown, Sliders, CreditCard, History
 } from 'lucide-react';
+import { paymentApi } from '../../../api/payment.api';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Legend
@@ -59,6 +60,17 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
     queryFn: () => examsApi.getExamHistory(),
   });
   const examHistory = examHistoryRes?.data || [];
+
+  const { data: myRequestsRes } = useQuery({
+    queryKey: ['myPaymentRequestsDashboard'],
+    queryFn: () => paymentApi.getMyPaymentRequests({ limit: 10 }),
+    enabled: !isAdminUser,
+    retry: false,
+  });
+  const myRequests = Array.isArray(myRequestsRes?.data) ? myRequestsRes.data : [];
+  const pendingRequestsCount = myRequests.filter(
+    (r: any) => (r.Status || r.status || '').toLowerCase() === 'pending'
+  ).length;
 
   if (isDashLoading || isTimelineLoading || isEnrollmentsLoading) {
     return (
@@ -205,11 +217,127 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
             </button>
           </div>
 
+          <button
+            className="btn btn-secondary"
+            onClick={() => onNavigateView('view-egyptian-gateway')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.6rem 1.1rem',
+              fontWeight: 700,
+              background: 'rgba(8, 145, 178, 0.12)',
+              borderColor: 'rgba(8, 145, 178, 0.4)',
+              color: 'var(--primary-light)',
+            }}
+          >
+            <CreditCard size={18} /> الدفع والاشتراك
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              sessionStorage.setItem('payment_gateway_tab', 'history');
+              onNavigateView('view-egyptian-gateway');
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.6rem 1.1rem',
+              fontWeight: 700,
+              background: 'rgba(245, 158, 11, 0.12)',
+              borderColor: 'rgba(245, 158, 11, 0.4)',
+              color: '#F59E0B',
+            }}
+          >
+            <History size={18} /> طلبات التحويل
+            {pendingRequestsCount > 0 && (
+              <span
+                style={{
+                  background: '#F59E0B',
+                  color: '#000',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  borderRadius: '9999px',
+                  padding: '0.15rem 0.5rem',
+                  lineHeight: 1,
+                  marginRight: '0.2rem',
+                }}
+              >
+                {pendingRequestsCount}
+              </span>
+            )}
+          </button>
+
           <button className="btn btn-primary" onClick={() => onNavigateView('view-courses')}>
             <BookOpen size={18} /> تصفح جميع الكورسات
           </button>
         </div>
       </div>
+
+      {/* ── PENDING PAYMENT REQUESTS ALERT ── */}
+      {pendingRequestsCount > 0 && (
+        <div
+          className="glass-card"
+          style={{
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(8, 145, 178, 0.08))',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            borderRadius: 'var(--radius-md)',
+            padding: '1rem 1.5rem',
+            marginBottom: '2rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#F59E0B',
+                flexShrink: 0,
+              }}
+            >
+              <Clock size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, color: 'var(--text-bright)', fontSize: '0.95rem' }}>
+                لديك {pendingRequestsCount} {pendingRequestsCount === 1 ? 'طلب تحويل' : 'طلبات تحويل'} قيد المراجعة من قِبل إدارة المنصة
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                سيتم تفعيل الكورس فور مراجعة واعتماد إيصال التحويل (فودافون كاش أو إنستاباي).
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              sessionStorage.setItem('payment_gateway_tab', 'history');
+              onNavigateView('view-egyptian-gateway');
+            }}
+            style={{
+              borderColor: 'rgba(245, 158, 11, 0.4)',
+              color: '#F59E0B',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
+          >
+            <History size={15} /> عرض تفاصيل الطلب
+          </button>
+        </div>
+      )}
 
       {/* ── MY ENROLLED COURSES (GET /enrollments/my-courses) ── */}
       <div style={{ marginBottom: '2.5rem' }}>

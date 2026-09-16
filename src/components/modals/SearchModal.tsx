@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, X, BookOpen, Video, FileText, ArrowLeft } from 'lucide-react';
+import { Search, X, BookOpen, Video, FileText, ArrowLeft, CreditCard, History } from 'lucide-react';
 import { AppView } from '../../types';
 
 interface SearchModalProps {
@@ -25,7 +25,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
   if (!isOpen) return null;
 
   const quickLinks = [
-    { title: 'مشغل الفيديوهات المحمي DRM', type: 'video', view: 'view-drm-player' as AppView, desc: 'مشاهدة محاضرات الفيزياء بحماية العلامة المائية' },
+    { title: 'الدفع والاشتراك (سداد الكورسات)', type: 'payment', view: 'view-egyptian-gateway' as AppView, desc: 'سداد قيمة الكورسات بفودافون كاش وإنستاباي ورصيد المحفظة' },
+    { title: 'طلبات التحويل السابقة ومتابعة السداد', type: 'history', view: 'view-egyptian-gateway' as AppView, tab: 'history', desc: 'متابعة حالة مراجعة إيصالات فودافون كاش وإنستاباي' },
+    { title: 'مشغل الفيديوهات المحمي DRM', type: 'video', view: 'view-drm-player' as AppView, desc: 'مشاهدة محاضرات الرياضيات بحماية العلامة المائية' },
     { title: 'امتحانات البابل شيت والتصحيح', type: 'exam', view: 'view-assessment' as AppView, desc: 'اختبارات تفاعلية بنظام البابل شيت والشاشة المنقسمة' },
     { title: 'بوابة متابعة ولي الأمر', type: 'parent', view: 'view-parent-portal' as AppView, desc: 'استخراج تقارير الأداء ومنحنيات التقييم' },
     { title: 'مجتمع أسئلة الطلاب', type: 'community', view: 'view-community' as AppView, desc: 'طرح الاستفسارات والمناقشات العلمية' },
@@ -71,6 +73,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                 borderRadius: 'var(--radius-md)',
               }}
               onClick={() => {
+                if ((item as any).tab) {
+                  sessionStorage.setItem('payment_gateway_tab', (item as any).tab);
+                }
                 onNavigateView(item.view);
                 onClose();
               }}
@@ -80,12 +85,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onNav
                   width: '36px',
                   height: '36px',
                   borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(79, 70, 229, 0.15)',
-                  color: 'var(--primary-light)',
+                  background: item.type === 'payment' ? 'rgba(8, 145, 178, 0.18)' : item.type === 'history' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(79, 70, 229, 0.15)',
+                  color: item.type === 'payment' ? 'var(--primary-light)' : item.type === 'history' ? '#F59E0B' : 'var(--primary-light)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}>
+                  {item.type === 'payment' && <CreditCard size={18} />}
+                  {item.type === 'history' && <History size={18} />}
                   {item.type === 'video' && <Video size={18} />}
                   {item.type === 'exam' && <FileText size={18} />}
                   {item.type === 'parent' && <BookOpen size={18} />}

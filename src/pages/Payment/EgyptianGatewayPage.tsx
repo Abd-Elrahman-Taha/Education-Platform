@@ -58,7 +58,22 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
   const { showToast } = useToast();
   const { walletBalance, refetch: refetchBalance } = useWalletBalance();
 
-  const [activeTab, setActiveTab] = useState<PaymentMethodTab>('vodafone');
+  const getInitialTab = (): PaymentMethodTab => {
+    try {
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      if (urlTab === 'history' || urlTab === 'vodafone' || urlTab === 'instapay' || urlTab === 'scratch' || urlTab === 'wallet') {
+        return urlTab as PaymentMethodTab;
+      }
+      const savedTab = sessionStorage.getItem('payment_gateway_tab');
+      if (savedTab === 'history' || savedTab === 'vodafone' || savedTab === 'instapay' || savedTab === 'scratch' || savedTab === 'wallet') {
+        sessionStorage.removeItem('payment_gateway_tab');
+        return savedTab as PaymentMethodTab;
+      }
+    } catch {}
+    return 'vodafone';
+  };
+
+  const [activeTab, setActiveTab] = useState<PaymentMethodTab>(getInitialTab);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Available courses state
@@ -182,6 +197,10 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
       setIsLoadingRequests(false);
     }
   };
+
+  useEffect(() => {
+    loadMyRequests();
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'history') {
@@ -508,6 +527,106 @@ export const EgyptianGatewayPage: React.FC<EgyptianGatewayPageProps> = ({
             سداد الكورس عبر فودافون كاش، إنستاباي، كروت الشحن، أو رصيد المحفظة
           </span>
         </div>
+      </div>
+
+      {/* Primary Gateway Mode Switcher: Checkout vs My Requests History */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.65rem',
+          marginBottom: '1.5rem',
+          padding: '0.45rem',
+          background: 'var(--bg-glass-card)',
+          borderRadius: '14px',
+          border: '1px solid var(--border-glass)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            if (activeTab === 'history') setActiveTab('vodafone');
+          }}
+          style={{
+            flex: 1,
+            minWidth: '220px',
+            padding: '0.75rem 1.25rem',
+            borderRadius: '10px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 800,
+            fontSize: '0.92rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.2s ease',
+            background: activeTab !== 'history' ? 'linear-gradient(135deg, #10B981, #059669)' : 'transparent',
+            color: activeTab !== 'history' ? '#FFF' : 'var(--text-muted)',
+            boxShadow: activeTab !== 'history' ? '0 4px 16px rgba(16, 185, 129, 0.25)' : 'none',
+          }}
+        >
+          <CreditCard size={18} />
+          <span>طرق الدفع والاشتراك (سداد كورس)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('history');
+            loadMyRequests();
+          }}
+          style={{
+            flex: 1,
+            minWidth: '220px',
+            padding: '0.75rem 1.25rem',
+            borderRadius: '10px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 800,
+            fontSize: '0.92rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.2s ease',
+            background: activeTab === 'history' ? 'linear-gradient(135deg, #6366F1, #4F46E5)' : 'transparent',
+            color: activeTab === 'history' ? '#FFF' : 'var(--text-muted)',
+            boxShadow: activeTab === 'history' ? '0 4px 16px rgba(99, 102, 241, 0.25)' : 'none',
+          }}
+        >
+          <History size={18} />
+          <span>طلبات التحويل السابقة ومتابعة السداد</span>
+          {myRequests.length > 0 && (
+            <span
+              style={{
+                background: activeTab === 'history' ? 'rgba(255,255,255,0.25)' : 'rgba(99, 102, 241, 0.2)',
+                color: activeTab === 'history' ? '#FFF' : 'var(--primary-light)',
+                padding: '0.1rem 0.5rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+              }}
+            >
+              {myRequests.length}
+            </span>
+          )}
+          {myRequests.filter(r => r.Status === 'Pending' || r.Status === 'pending').length > 0 && (
+            <span
+              style={{
+                background: '#EF4444',
+                color: '#FFF',
+                padding: '0.1rem 0.45rem',
+                borderRadius: '9999px',
+                fontSize: '0.72rem',
+                fontWeight: 900,
+              }}
+              title="طلبات قيد المراجعة"
+            >
+              {myRequests.filter(r => r.Status === 'Pending' || r.Status === 'pending').length} قيد المراجعة
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Order & Wallet Summary Card */}

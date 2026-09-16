@@ -3,7 +3,7 @@ import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
   BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
   BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard,
-  HelpCircle, Shield, Edit3, Crown, Trophy
+  HelpCircle, Shield, Edit3, Crown, Trophy, CreditCard, History
 } from 'lucide-react';
 import { AppView, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -27,6 +27,7 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
@@ -38,6 +39,7 @@ const teacherNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
+  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
@@ -50,6 +52,7 @@ const adminNav: NavItem[] = [
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
@@ -62,6 +65,7 @@ const superAdminNav: NavItem[] = [
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-leaderboard',       label: 'لوحة الشرف', icon: Trophy },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
@@ -72,6 +76,7 @@ const superAdminNav: NavItem[] = [
 const parentLoggedInNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
@@ -79,6 +84,7 @@ const parentLoggedInNav: NavItem[] = [
 const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
+  { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
   { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
@@ -242,6 +248,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           {isAuthenticated && currentUser ? (
             <>
               <button
+                className="icon-btn desktop-only-btn"
+                onClick={() => {
+                  sessionStorage.setItem('payment_gateway_tab', 'history');
+                  handleNavClick('view-egyptian-gateway');
+                }}
+                title="طلبات التحويل السابقة وسجل السداد"
+              >
+                <History size={18} />
+              </button>
+              <button
                 className="icon-btn desktop-only-btn desktop-profile-btn"
                 onClick={() => handleNavClick('view-profile')}
                 title="الملف الشخصي وإعدادات الحساب"
@@ -347,6 +363,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="mobile-actions-row">
             {isAuthenticated && currentUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%' }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+                  onClick={() => {
+                    sessionStorage.setItem('payment_gateway_tab', 'history');
+                    handleNavClick('view-egyptian-gateway');
+                  }}
+                >
+                  <History size={16} color="var(--primary-light)" /> طلبات التحويل السابقة
+                </button>
                 <button
                   className="btn btn-secondary"
                   style={{ width: '100%', justifyContent: 'center' }}

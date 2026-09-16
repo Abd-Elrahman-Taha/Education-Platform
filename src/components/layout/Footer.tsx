@@ -61,6 +61,18 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateView, onOpenAuthModal 
               <button className="footer-link" onClick={() => handleNav('view-drm-player')}>
                 الدروس والمحاضرات
               </button>
+              <button className="footer-link" onClick={() => handleNav('view-egyptian-gateway')}>
+                الدفع والاشتراك (Checkout)
+              </button>
+              <button
+                className="footer-link"
+                onClick={() => {
+                  sessionStorage.setItem('payment_gateway_tab', 'history');
+                  handleNav('view-egyptian-gateway');
+                }}
+              >
+                طلبات التحويل السابقة
+              </button>
               <button className="footer-link" onClick={isAuthenticated ? () => handleNav('view-assessment') : onOpenAuthModal}>
                 سجل الامتحانات
               </button>

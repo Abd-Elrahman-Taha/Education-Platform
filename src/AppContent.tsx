@@ -53,6 +53,11 @@ const ROUTE_TO_VIEW: Record<string, AppView> = {
   '/packages': 'view-packages',
   '/pricing': 'view-packages',
   '/payment': 'view-packages',
+  '/checkout': 'view-egyptian-gateway',
+  '/payment/checkout': 'view-egyptian-gateway',
+  '/payment/requests': 'view-egyptian-gateway',
+  '/payment-requests': 'view-egyptian-gateway',
+  '/my-requests': 'view-egyptian-gateway',
   '/payment/gateway-egyptian': 'view-egyptian-gateway',
   '/gateway-egyptian': 'view-egyptian-gateway',
   '/faq': 'view-faq',
@@ -94,12 +99,19 @@ const getInitialState = () => {
   let initialLessonId: string | undefined;
   let initialView: AppView = 'view-landing';
 
-  // Check URL query parameters for courseId
+  // Check URL query parameters for courseId and tab
   try {
     const searchParams = new URLSearchParams(window.location.search);
     const qCourseId = searchParams.get('courseId');
     if (qCourseId) {
       initialCourseId = qCourseId;
+    }
+    const qTab = searchParams.get('tab');
+    if (qTab) {
+      sessionStorage.setItem('payment_gateway_tab', qTab);
+    }
+    if (path === '/payment/requests' || path === '/my-requests' || path === '/payment-requests') {
+      sessionStorage.setItem('payment_gateway_tab', 'history');
     }
   } catch {}
 
