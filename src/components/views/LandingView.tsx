@@ -86,10 +86,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
       q: 'كيف يحدد المعلم والإدارة صلاحيات الدروس والامتحانات؟',
       a: 'توفر لوحة تحكم المعلم إمكانية نشر أو إخفاء المحاضرات بنقرة واحدة، وتعيين دروس وباقات اشتراك مخصصة لكل طالب، مع الاطلاع على قائمة أوائل الطلاب المتفوقين.',
     },
-    {
-      q: 'هل يتوفر مساعد ذكي متخصص في حل مسائل الرياضيات؟',
-      a: 'نعم، يتضمن كل درس مساعد Syntax AI الذكي المدرب خصيصاً على تفكيك مسائل التفاضل والتكامل والهندسة الفراغية خطوة بخطوة مع توضيح القوانين والرسوم التوضيحية.',
-    },
   ];
 
   return (
@@ -222,7 +218,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onNavigateView, onOpen
       {/* ── 3. "WHY THIS PLATFORM?" (Requirement #4) ─────────── */}
       <section className="container" style={{ padding: '5rem 1.5rem 3rem' }}>
         <div className="section-header">
-          <span className="gradient-badge"><Award size={15} /> لماذا تختار منصة Syntax؟</span>
+          <span className="gradient-badge"><Award size={15} /> لماذا تختار منصة CodeWave؟</span>
           <h2 className="section-title">بيئة تعليمية متطورة مصممة خصيصاً للنجاح</h2>
           <p className="section-subtitle">
             نجمع بين قوة الشرح الرياضي الأكاديمي، أحدث تقنيات حماية البث، والتقييم الذكي لضمان أعلى درجات التفوق.

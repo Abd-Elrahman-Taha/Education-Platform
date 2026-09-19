@@ -563,8 +563,8 @@ export const AppContent: React.FC = () => {
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
-      {/* Floating AI Assistant Widget */}
-      <AITutorWidget />
+      {/* Floating AI Assistant Widget (hidden on landing/home page) */}
+      {currentView !== 'view-landing' && <AITutorWidget />}
 
       {/* Modals */}
       <AuthModal

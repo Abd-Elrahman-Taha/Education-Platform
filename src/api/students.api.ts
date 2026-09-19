@@ -82,6 +82,11 @@ export const studentsApi = {
     if (data.NationalId && typeof data.NationalId === 'string' && data.NationalId.trim()) {
       cleanPayload.NationalId = data.NationalId.trim();
     }
+    const pwd = data.password || data.Password;
+    if (pwd && typeof pwd === 'string' && pwd.trim()) {
+      cleanPayload.password = pwd.trim();
+      cleanPayload.Password = pwd.trim();
+    }
 
     if (Object.keys(cleanPayload).length === 0) {
       return {} as AdminStudent;
@@ -92,6 +97,29 @@ export const studentsApi = {
       cleanPayload
     );
     return response.data?.data?.student || (response.data as any)?.student || response.data;
+  },
+
+  /**
+   * Reset / change student password by Admin.
+   */
+  updateStudentPassword: async (userId: string, newPassword: string): Promise<any> => {
+    const cleanPwd = newPassword.trim();
+    try {
+      const res = await apiClient.patch(`/users/students/${userId}`, { password: cleanPwd, Password: cleanPwd });
+      return res.data;
+    } catch (err: any) {
+      try {
+        const res2 = await apiClient.patch(`/users/${userId}`, { password: cleanPwd, Password: cleanPwd });
+        return res2.data;
+      } catch {
+        try {
+          const res3 = await apiClient.patch(`/users/${userId}/password`, { newPassword: cleanPwd, password: cleanPwd });
+          return res3.data;
+        } catch {
+          throw err;
+        }
+      }
+    }
   },
 
   /**

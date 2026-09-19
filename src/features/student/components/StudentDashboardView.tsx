@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '../api/studentApi';
 import { enrollmentsApi } from '../../../api/enrollments.api';
+import { coursesApi } from '../../../api/courses.api';
 import { examsApi } from '../../exams/api/examsApi';
 import { AppView } from '../../../types';
 import {
@@ -72,6 +73,13 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
     (r: any) => (r.Status || r.status || '').toLowerCase() === 'pending'
   ).length;
 
+  const { data: allCoursesRes } = useQuery({
+    queryKey: ['allCoursesForCompCheck'],
+    queryFn: () => coursesApi.getCourses({ limit: 100 }),
+    enabled: !isAdminUser,
+    staleTime: 60000,
+  });
+
   if (isDashLoading || isTimelineLoading || isEnrollmentsLoading) {
     return (
       <div className="container fade-in-up" style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
@@ -102,6 +110,37 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
   const dash = dashboardRes.data;
   const timeline = timelineRes?.data;
   const enrolledList = enrollments || [];
+
+  const isComprehensive = (() => {
+    try {
+      const saved = localStorage.getItem('syntax_comprehensive_students');
+      const compList = saved ? JSON.parse(saved) : [];
+      const userId = (currentUser as any)?._id || currentUser?.id;
+      if (userId && compList.includes(userId)) return true;
+    } catch {}
+
+    const allCourses = allCoursesRes?.courses || [];
+    if (allCourses.length > 0 && enrolledList.length > 0) {
+      const userStage = (currentUser as any)?.educationStage || (currentUser as any)?.EducationStage || '';
+      const userGrade = (currentUser as any)?.grade || (currentUser as any)?.Grade || '';
+
+      const relevantCourses = allCourses.filter(c => {
+        const cStage = (c as any)?.EducationStage || (c as any)?.educationStage || '';
+        const cGrade = (c as any)?.Grade || (c as any)?.grade || '';
+        if (userStage && cStage && userStage !== cStage) return false;
+        if (userGrade && cGrade && userGrade !== cGrade) return false;
+        return true;
+      });
+
+      if (relevantCourses.length > 0) {
+        const enrolledCourseIds = new Set(enrolledList.map((e: any) => e.CourseId?._id || e.CourseId));
+        const allEnrolled = relevantCourses.every(c => enrolledCourseIds.has(c._id));
+        if (allEnrolled) return true;
+      }
+    }
+
+    return (currentUser as any)?.isComprehensive === true || (currentUser as any)?.IsComprehensive === true;
+  })();
 
   const realPassedExams = examHistory.filter(h => h.isPassed).length;
   const realAvgExamScore = examHistory.length > 0
@@ -148,10 +187,28 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
       {/* ── WELCOME BANNER ─────────────────────────────────── */}
       <div className="glass-card" style={{ padding: '2rem 2.5rem', marginBottom: '2rem', background: 'var(--banner-gradient)', border: '1px solid rgba(8,145,178,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
             <span style={{ background: 'rgba(8,145,178,0.25)', color: 'var(--primary-light)', padding: '0.3rem 0.85rem', borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 700 }}>
               لوحة التحكم الشخصية للتعليم
             </span>
+            {isComprehensive && (
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(16, 185, 129, 0.25))',
+                  color: '#F59E0B',
+                  border: '1px solid rgba(245, 158, 11, 0.5)',
+                  padding: '0.3rem 0.85rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                }}
+              >
+                ⭐ مشترك شامل (وصول كامل لكافة الكورسات والمحاضرات)
+              </span>
+            )}
           </div>
           <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-bright)', margin: 0 }}>
             مرحباً بك في لوحة تحليلاتك
@@ -341,10 +398,27 @@ export const StudentDashboardView: React.FC<Props> = ({ onNavigateView, onSelect
 
       {/* ── MY ENROLLED COURSES (GET /enrollments/my-courses) ── */}
       <div style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <BookOpen size={22} color="var(--primary-light)" /> كورساتي المشترك بها ({enrolledList.length})
-          </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <BookOpen size={22} color="var(--primary-light)" /> كورساتي المشترك بها ({enrolledList.length})
+            </h2>
+            {isComprehensive && (
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(16, 185, 129, 0.25))',
+                  color: '#F59E0B',
+                  border: '1px solid rgba(245, 158, 11, 0.5)',
+                  padding: '0.2rem 0.65rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                }}
+              >
+                ⭐ مشترك شامل
+              </span>
+            )}
+          </div>
           <button
             className="btn btn-secondary"
             style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}

@@ -30,7 +30,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateView, onOpenAuthModal 
             >
               <div className="logo-icon" style={{ width: '42px', height: '42px', fontSize: '1.4rem' }}>∫</div>
               <span style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                Syntax <span style={{ color: 'var(--secondary-light)', fontWeight: 400 }}>Math</span>
+                Code<span style={{ color: 'var(--secondary-light)', fontWeight: 400 }}>Wave</span>
               </span>
             </div>
 
@@ -122,7 +122,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateView, onOpenAuthModal 
         </div>
 
         <div className="footer-bottom" style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '1.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-          <span>© 2026 Syntax Math Educational Platform. جميع الحقوق محفوظة.</span>
+          <span>© 2026 CodeWave Educational Platform. جميع الحقوق محفوظة.</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--primary-light)', fontWeight: 600 }}>
             منصة التفاضل والتكامل والهندسة الفراغية للمرحلة الثانوية
           </span>

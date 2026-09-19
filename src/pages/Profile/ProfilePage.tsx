@@ -101,6 +101,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
       return;
     }
 
+    if (cleanParentPhone && cleanPhone === cleanParentPhone) {
+      setErrorMessage('رقم هاتف الطالب يجب أن يكون مختلفاً عن رقم هاتف ولي الأمر.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const res = await usersApi.updateMe({
@@ -127,6 +132,21 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
   const displayParentPhone = profileData?.ParentPhone || 'غير مسجل';
   const rawAcademicYear = profileData?.AcademicYear || currentUser?.academicYear || 'third_secondary';
   const displayAcademicYear = ACADEMIC_YEAR_LABELS[rawAcademicYear as AcademicYear] || rawAcademicYear;
+
+  const isComprehensive = (() => {
+    try {
+      const saved = localStorage.getItem('syntax_comprehensive_students');
+      const compList = saved ? JSON.parse(saved) : [];
+      const uid = profileData?._id || (currentUser as any)?._id || currentUser?.id;
+      if (uid && compList.includes(uid)) return true;
+    } catch {}
+    return (
+      (profileData as any)?.isComprehensive === true ||
+      (profileData as any)?.IsComprehensive === true ||
+      (currentUser as any)?.isComprehensive === true ||
+      (currentUser as any)?.IsComprehensive === true
+    );
+  })();
 
   if (isLoadingProfile) {
     return <LoadingSpinner message="جاري تحميل بيانات الملف الشخصي من الخادم..." />;
@@ -158,6 +178,24 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
                 </button>
               )}
               <span className="status-badge status-badge--active">حساب مفعل</span>
+              {isComprehensive && (
+                <span
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(16, 185, 129, 0.25))',
+                    color: '#F59E0B',
+                    border: '1px solid rgba(245, 158, 11, 0.5)',
+                    padding: '0.2rem 0.65rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}
+                >
+                  ⭐ مشترك شامل
+                </span>
+              )}
             </div>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
               رقم الهاتف: {displayPhone}
@@ -190,7 +228,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
           <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', marginBottom: '1.75rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                الاسم بالكامل (Full Name)
+                الاسم بالكامل
               </label>
               <input
                 type="text"
@@ -205,7 +243,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
 
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                رقم الهاتف (Phone)
+                رقم الهاتف
               </label>
               <input
                 type="tel"
@@ -221,7 +259,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
 
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                رقم هاتف ولي الأمر (Parent Phone)
+                رقم هاتف ولي الأمر
               </label>
               <input
                 type="tel"
@@ -236,7 +274,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
 
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                السنة الدراسية (Academic Year)
+                السنة الدراسية
               </label>
               <select
                 className="input-field"
@@ -285,6 +323,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', marginBottom: '1.75rem' }}>
             <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <ShieldCheck size={16} color={isComprehensive ? '#F59E0B' : 'var(--primary-light)'} />
+                <span>حالة الاشتراك:</span>
+              </div>
+              <strong style={{ fontSize: '0.9rem', color: isComprehensive ? '#F59E0B' : 'var(--text-bright)' }}>
+                {isComprehensive ? '⭐ مشترك شامل (وصول كامل)' : 'اشتراك عادي'}
+              </strong>
+            </div>
+
+            <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 <GraduationCap size={16} color="var(--primary-light)" />
                 <span>السنة الدراسية:</span>
               </div>
@@ -306,7 +354,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onLogoutSuccess, onPas
             <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 <Smartphone size={16} />
-                <span>معرّف الجهاز المعتمد (Device UUID):</span>
+                <span>معرّف الجهاز المعتمد:</span>
               </div>
               <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--primary-light)', direction: 'ltr' }}>
                 {deviceUuid.substring(0, 18)}...

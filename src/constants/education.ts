@@ -17,7 +17,7 @@ export interface StageDefinition {
 export const EDUCATION_STAGES: StageDefinition[] = [
   {
     key: 'Primary',
-    label: 'المرحلة الابتدائية (Primary)',
+    label: 'المرحلة الابتدائية',
     grades: [
       { value: '1', label: 'الصف الأول الابتدائي' },
       { value: '2', label: 'الصف الثاني الابتدائي' },
@@ -29,7 +29,7 @@ export const EDUCATION_STAGES: StageDefinition[] = [
   },
   {
     key: 'Secondary',
-    label: 'المرحلة الثانوية (Secondary)',
+    label: 'المرحلة الثانوية',
     grades: [
       { value: '1', label: 'الصف الأول الثانوي' },
       { value: '2', label: 'الصف الثاني الثانوي' },
@@ -38,7 +38,7 @@ export const EDUCATION_STAGES: StageDefinition[] = [
   },
   {
     key: 'University',
-    label: 'المرحلة الجامعية (University)',
+    label: 'المرحلة الجامعية',
     grades: [
       { value: '1', label: 'الفرقة الأولى' },
       { value: '2', label: 'الفرقة الثانية' },
@@ -48,7 +48,7 @@ export const EDUCATION_STAGES: StageDefinition[] = [
   },
   {
     key: 'Preparatory',
-    label: 'المرحلة الإعدادية (Preparatory)',
+    label: 'المرحلة الإعدادية',
     grades: [
       { value: '1', label: 'الصف الأول الإعدادي' },
       { value: '2', label: 'الصف الثاني الإعدادي' },

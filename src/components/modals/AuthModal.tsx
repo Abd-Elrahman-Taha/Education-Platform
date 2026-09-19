@@ -115,6 +115,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         setApiError('رقم هاتف ولي الأمر غير صحيح (يجب أن يكون 11 رقماً مصرياً ويبدأ بـ 01).');
         return;
       }
+      if (cleanPhone === cleanParentPhone) {
+        setApiError('رقم هاتف الطالب يجب أن يكون مختلفاً عن رقم هاتف ولي الأمر.');
+        return;
+      }
 
       // 5. Password: Required, 8–40 characters, at least one letter, at least one number
       if (!formData.password) {
@@ -310,7 +314,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           {activeTab === 'register' && (
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                الرقم القومي (National ID) <span style={{ color: 'var(--danger)' }}>*</span>
+                الرقم القومي <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <CreditCard size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -335,7 +339,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           {/* 3. Phone * */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-              رقم الهاتف (Phone) <span style={{ color: 'var(--danger)' }}>*</span>
+              رقم الهاتف <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <Phone size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -356,7 +360,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           {activeTab === 'register' && (
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                رقم هاتف ولي الأمر (Parent Phone) <span style={{ color: 'var(--danger)' }}>*</span>
+                رقم هاتف ولي الأمر <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <Phone size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -379,7 +383,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                  المرحلة التعليمية (Stage) <span style={{ color: 'var(--danger)' }}>*</span>
+                  المرحلة التعليمية <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <div style={{ position: 'relative' }}>
                   <GraduationCap size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
@@ -405,7 +409,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                  الصف الدراسي (Grade) <span style={{ color: 'var(--danger)' }}>*</span>
+                  الصف الدراسي <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <select
                   className="input-field"
@@ -426,7 +430,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           {/* 5. Password * */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-              كلمة المرور (Password) <span style={{ color: 'var(--danger)' }}>*</span>
+              كلمة المرور <span style={{ color: 'var(--danger)' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <Lock size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />

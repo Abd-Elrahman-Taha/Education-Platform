@@ -188,7 +188,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <div className="logo-icon">∫</div>
           <span>
-            Syntax <span style={{ color: 'var(--secondary-light)', fontWeight: 400 }}>Math</span>
+            Code<span style={{ color: 'var(--secondary-light)', fontWeight: 400 }}>Wave</span>
           </span>
         </a>
 

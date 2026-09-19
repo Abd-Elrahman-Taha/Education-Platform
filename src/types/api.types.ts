@@ -298,6 +298,8 @@ export interface UpdateStudentRequest {
   Phone?: string;
   ParentPhone?: string;
   NationalId?: string;
+  password?: string;
+  Password?: string;
 }
 
 export interface UpdateStudentStatusRequest {
