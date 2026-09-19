@@ -3,7 +3,6 @@ import { FileEdit, FileText, Radio } from 'lucide-react';
 import { AppView, UserRole } from './types';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
-import { AITutorWidget } from './components/layout/AITutorWidget';
 import { LandingView } from './components/views/LandingView';
 import { StudentDashboardView } from './features/student/components/StudentDashboardView';
 import { UnifiedLessonView } from './features/lessons/components/UnifiedLessonView';
@@ -20,7 +19,6 @@ import { ShareModal } from './components/modals/ShareModal';
 import { RoleGuard } from './components/layout/RoleGuard';
 import { useAuth } from './context/AuthContext';
 import { useToast } from './context/ToastContext';
-import { StandaloneAIView } from './features/ai/components/StandaloneAIView';
 
 // New LMS REST API Integrated Pages
 import { CoursesPage } from './pages/Courses/CoursesPage';
@@ -42,7 +40,6 @@ const ROUTE_TO_VIEW: Record<string, AppView> = {
   '/lectures': 'view-drm-player',
   '/exams': 'view-assessment',
   '/assessments': 'view-assessment',
-  '/ai': 'view-ai',
   '/community': 'view-community',
   '/parent-portal': 'view-parent-portal',
   '/admin': 'view-admin',
@@ -76,7 +73,7 @@ const VIEW_TO_ROUTE: Record<AppView, string> = {
   'view-leaderboard': '/leaderboard',
   'view-drm-player': '/lessons',
   'view-assessment': '/exams',
-  'view-ai': '/ai',
+  'view-ai': '/',
   'view-community': '/community',
   'view-parent-portal': '/parent-portal',
   'view-admin': '/admin',
@@ -473,11 +470,6 @@ export const AppContent: React.FC = () => {
           </RoleGuard>
         )}
 
-        {/* Dedicated Navbar AI Experience */}
-        {currentView === 'view-ai' && (
-          <StandaloneAIView onOpenAuthModal={() => setIsAuthModalOpen(true)} />
-        )}
-
         {/* Teacher Inbox */}
         {currentView === 'view-teacher-inbox' && (
           <RoleGuard
@@ -562,9 +554,6 @@ export const AppContent: React.FC = () => {
         onNavigateView={handleNavigateView}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
-
-      {/* Floating AI Assistant Widget (hidden on landing/home page) */}
-      {currentView !== 'view-landing' && <AITutorWidget />}
 
       {/* Modals */}
       <AuthModal

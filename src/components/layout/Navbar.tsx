@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Home, Video, FileSignature, ShieldCheck, Sliders, Search, LogIn, UserPlus,
-  BookOpen, ClipboardList, Radio, Bot, FileText, User, Users, Settings,
+  BookOpen, ClipboardList, Radio, FileText, User, Users, Settings,
   BarChart2, GraduationCap, LogOut, Sun, Moon, Menu, X, MessageSquare, Inbox, LayoutDashboard,
   HelpCircle, Shield, Edit3, Crown, Trophy, CreditCard, History
 } from 'lucide-react';
@@ -31,7 +31,6 @@ const studentNav: NavItem[] = [
   { id: 'view-student-dashboard', label: 'لوحة تحليلاتي', icon: LayoutDashboard },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
-  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
@@ -41,7 +40,6 @@ const teacherNav: NavItem[] = [
   { id: 'view-admin',             label: 'لوحة الإدارة', icon: Sliders },
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
-  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-teacher-inbox',     label: 'صندوق الرسائل', icon: Inbox },
 ];
@@ -54,7 +52,6 @@ const adminNav: NavItem[] = [
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
-  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
@@ -66,7 +63,6 @@ const superAdminNav: NavItem[] = [
   { id: 'view-drm-player',        label: 'المحاضرات', icon: Video },
   { id: 'view-assessment',        label: 'الامتحانات', icon: FileSignature },
   { id: 'view-teacher-inbox',     label: 'الرسائل', icon: Inbox },
-  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
@@ -74,7 +70,6 @@ const parentLoggedInNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
-  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
 ];
 
@@ -82,7 +77,6 @@ const guestNav: NavItem[] = [
   { id: 'view-landing',           label: 'الرئيسية', icon: Home },
   { id: 'view-courses',           label: 'الكورسات', icon: BookOpen },
   { id: 'view-egyptian-gateway',  label: 'الدفع والاشتراك', icon: CreditCard },
-  { id: 'view-ai',                label: 'المعلم AI', icon: Bot },
   { id: 'view-community',         label: 'المجتمع', icon: MessageSquare },
   { id: 'view-parent-portal',     label: 'بوابة ولي الأمر', icon: ShieldCheck },
 ];
