@@ -17,12 +17,14 @@ export function useCourseDetails(courseId?: string) {
     queryKey: ['course', courseId],
     queryFn: () => coursesApi.getCourseById(courseId!),
     enabled: !!courseId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const enrollmentsQuery = useQuery({
     queryKey: ['my-enrollments'],
     queryFn: () => enrollmentsApi.getMyCourses(),
     enabled: !!currentUser && !isAdminOrTeacher,
+    staleTime: 5 * 60 * 1000,
   });
 
   const isEnrolledViaList = !!enrollmentsQuery.data?.some((e) => {
@@ -45,6 +47,7 @@ export function useCourseDetails(courseId?: string) {
     },
     enabled: !!courseId,
     retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   const isEnrolled =

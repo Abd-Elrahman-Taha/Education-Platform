@@ -36,6 +36,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
   const { data: allCoursesData } = useQuery({
     queryKey: ['allCoursesForExamCards'],
     queryFn: () => coursesApi.getCourses(),
+    staleTime: 5 * 60 * 1000,
   });
   const allCourses = allCoursesData?.courses || [];
 
@@ -44,6 +45,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     queryKey: ['myEnrollmentsForExams'],
     queryFn: () => enrollmentsApi.getMyCourses(),
     enabled: isAuthenticated && !isTeacherOrAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Extract enrolled course IDs and full course objects
@@ -134,51 +136,52 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
       const allCourseIds = (allCourses || []).map((c: any) => c._id || c.id).filter(Boolean);
       const courseIdList = Array.from(new Set([...Array.from(enrolledCourseIds), ...allCourseIds]));
       if (courseIdList.length > 0) {
-        await Promise.all(
+        await Promise.allSettled(
           courseIdList.map(async courseId => {
             try {
               const lessons = await lessonsApi.getCourseLessons(courseId);
               if (Array.isArray(lessons)) {
-                for (const lesson of lessons) {
-                  // Query student lesson exams: GET /courses/{courseId}/lessons/{lessonId}/exams
-                  try {
-                    const lExams = await lessonsApi.getLessonExams(courseId, lesson._id);
-                    if (Array.isArray(lExams)) {
-                      for (const le of lExams) {
-                        if (le && le._id && !examMap.has(le._id)) {
-                          examMap.set(le._id, {
-                            _id: le._id,
-                            Title: le.Title || `امتحان: ${lesson.Title}`,
-                            CourseId: courseId,
-                            LessonId: lesson._id,
-                            DurationMinutes: le.DurationMinutes || 20,
-                            PassingScore: (le as any).PassingScore || 10,
-                            TotalPoints: le.TotalPoints,
-                            MaxAttempts: le.MaxAttempts || 0,
-                            Status: 'Published',
-                            IsRandomized: true,
-                            IsGated: false,
-                          } as Exam);
+                await Promise.allSettled(
+                  lessons.map(async lesson => {
+                    try {
+                      const lExams = await lessonsApi.getLessonExams(courseId, lesson._id);
+                      if (Array.isArray(lExams)) {
+                        for (const le of lExams) {
+                          if (le && le._id && !examMap.has(le._id)) {
+                            examMap.set(le._id, {
+                              _id: le._id,
+                              Title: le.Title || `امتحان: ${lesson.Title}`,
+                              CourseId: courseId,
+                              LessonId: lesson._id,
+                              DurationMinutes: le.DurationMinutes || 20,
+                              PassingScore: (le as any).PassingScore || 10,
+                              TotalPoints: le.TotalPoints,
+                              MaxAttempts: le.MaxAttempts || 0,
+                              Status: 'Published',
+                              IsRandomized: true,
+                              IsGated: false,
+                            } as Exam);
+                          }
                         }
                       }
-                    }
-                  } catch {}
+                    } catch {}
 
-                  if (lesson.PrerequisiteExamId && !examMap.has(lesson.PrerequisiteExamId)) {
-                    examMap.set(lesson.PrerequisiteExamId, {
-                      _id: lesson.PrerequisiteExamId,
-                      Title: `امتحان: ${lesson.Title || 'المحاضرة'}`,
-                      CourseId: courseId,
-                      LessonId: lesson._id,
-                      DurationMinutes: lesson.DurationMinutes || (lesson.DurationSeconds ? Math.round(lesson.DurationSeconds / 60) : 20),
-                      PassingScore: 10,
-                      MaxAttempts: 0,
-                      Status: 'Published',
-                      IsRandomized: true,
-                      IsGated: false,
-                    } as Exam);
-                  }
-                }
+                    if (lesson.PrerequisiteExamId && !examMap.has(lesson.PrerequisiteExamId)) {
+                      examMap.set(lesson.PrerequisiteExamId, {
+                        _id: lesson.PrerequisiteExamId,
+                        Title: `امتحان: ${lesson.Title || 'المحاضرة'}`,
+                        CourseId: courseId,
+                        LessonId: lesson._id,
+                        DurationMinutes: lesson.DurationMinutes || (lesson.DurationSeconds ? Math.round(lesson.DurationSeconds / 60) : 20),
+                        PassingScore: 10,
+                        MaxAttempts: 0,
+                        Status: 'Published',
+                        IsRandomized: true,
+                        IsGated: false,
+                      } as Exam);
+                    }
+                  })
+                );
               }
             } catch (err) {
               // Ignore forbidden error for courses student isn't enrolled in
@@ -189,6 +192,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
 
       return Array.from(examMap.values());
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const allRawExams: Exam[] = publishedExamsRes || [];
@@ -263,12 +267,14 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     queryKey: ['examHistory'],
     queryFn: examsApi.getExamHistory,
     enabled: isAuthenticated && !isTeacherOrAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: statsRes, isLoading: isStatsLoading } = useQuery({
     queryKey: ['examStats'],
     queryFn: examsApi.getExamStats,
     enabled: isAuthenticated && !isTeacherOrAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   const history = historyRes?.data || [];
@@ -277,12 +283,14 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     queryKey: ['courses'],
     queryFn: () => coursesApi.getCourses(),
     enabled: !isAuthenticated,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: studentsRes } = useQuery({
     queryKey: ['adminStudentsList'],
     queryFn: () => studentsApi.getStudents(),
     enabled: isTeacherOrAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   const rawStudents = studentsRes?.students || [];
@@ -416,7 +424,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
           border: '1px solid rgba(8,145,178,0.25)',
         }}>
           <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
-            لماذا امتحانات منصة Syntax Math التفاعلية؟
+            لماذا امتحانات منصة Code Wave التفاعلية؟
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginBottom: '1.75rem', lineHeight: 1.6 }}>
             نظام تقييم فوري بالذكاء الاصطناعي مع إظهار أسباب الخطأ، تقارير لحظية تُرسل لولي الأمر، ونظام فتح تدريجي للدروس.
@@ -437,17 +445,6 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     if (activeTab === 'completed') return true;
     return true;
   });
-
-  if (isHistoryLoading || isStatsLoading) {
-    return (
-      <div className="container fade-in-up" style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-        <div className="glass-card" style={{ padding: '3rem', maxWidth: '500px', margin: '0 auto' }}>
-          <div className="spinner" style={{ margin: '0 auto 1.5rem', width: '40px', height: '40px', border: '4px solid rgba(8,145,178,0.2)', borderTopColor: 'var(--primary-light)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)' }}>جاري استرجاع سجل وإحصائيات الامتحانات...</h3>
-        </div>
-      </div>
-    );
-  }
 
   // ── TEACHER / ADMIN VIEW: STUDENT EXAM ANALYTICS ───────────────
   if (isTeacherOrAdmin) {
@@ -968,7 +965,12 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
       </div>
 
       {/* ── EXAM STATISTICS SUMMARY ────────────────────────── */}
-      {stats && (
+      {isStatsLoading ? (
+        <div className="glass-card" style={{ padding: '1.25rem', textAlign: 'center', marginBottom: '2.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          <div className="spinner" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '0.5rem', width: '16px', height: '16px', border: '2px solid rgba(8,145,178,0.2)', borderTopColor: 'var(--primary-light)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+          جاري تحديث ملخص الإحصائيات...
+        </div>
+      ) : stats ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
           <div className="glass-card" style={{ padding: '1.25rem' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>إجمالي المحاولات</span>
@@ -1005,7 +1007,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* ── FILTER TABS ───────────────────────────────────── */}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -1036,7 +1038,12 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
       </div>
 
       {/* ── EXAM CARDS GRID ────────────────────────────────── */}
-      {filteredHistory.length === 0 ? (
+      {isHistoryLoading ? (
+        <div className="glass-card" style={{ padding: '3rem', textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 1rem', width: '32px', height: '32px', border: '3px solid rgba(8,145,178,0.2)', borderTopColor: 'var(--primary-light)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)' }}>جاري استرجاع سجل الاختبارات السابقة...</h3>
+        </div>
+      ) : filteredHistory.length === 0 ? (
         <div className="glass-card" style={{ padding: '3rem', textAlign: 'center' }}>
           <Award size={48} color="var(--text-muted)" style={{ margin: '0 auto 1rem' }} />
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-bright)' }}>لا توجد سجلات امتحانات في هذا التصنيف</h3>

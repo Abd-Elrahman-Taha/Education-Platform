@@ -4,61 +4,102 @@ import { lessonsApi } from '../../../api/lessons.api';
 import { ApiResponse } from '../../../api/client';
 import { ExamRecord, ExamStats } from '../../../types';
 
+// In-memory cache & deduplication to prevent repeated parallel scans
+let cachedExamsList: any[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes cache
+let inFlightDiscovery: Promise<any[]> | null = null;
+
+export function invalidateExamsDiscoveryCache() {
+  cachedExamsList = null;
+  cacheTimestamp = 0;
+}
+
 async function getStudentOrAdminExams(): Promise<any[]> {
-  const examsList: any[] = [];
-  const seen = new Set<string>();
+  const now = Date.now();
+  if (cachedExamsList && now - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedExamsList;
+  }
+  if (inFlightDiscovery) {
+    return inFlightDiscovery;
+  }
 
-  // 1. Discover exams via student's enrolled courses and lessons
-  try {
-    const enrollments = await enrollmentsApi.getMyCourses();
-    const courseIds = (enrollments || [])
-      .map((e: any) => {
-        const cid = typeof e.CourseId === 'object' && e.CourseId ? e.CourseId._id : e.CourseId;
-        return cid || e._id;
-      })
-      .filter(Boolean);
+  inFlightDiscovery = (async () => {
+    const examsList: any[] = [];
+    const seen = new Set<string>();
 
-    for (const cId of courseIds) {
-      try {
-        const lessons = await lessonsApi.getCourseLessons(cId);
-        if (Array.isArray(lessons)) {
-          for (const l of lessons) {
-            try {
-              const lExams = await lessonsApi.getLessonExams(cId, l._id);
-              if (Array.isArray(lExams)) {
-                for (const lx of lExams) {
-                  if (lx?._id && !seen.has(lx._id)) {
-                    seen.add(lx._id);
-                    examsList.push({ ...lx, CourseId: cId });
-                  }
+    try {
+      // 1. Discover exams via student's enrolled courses and lessons concurrently
+      const enrollments = await enrollmentsApi.getMyCourses().catch(() => []);
+      const courseIds: string[] = (enrollments || [])
+        .map((e: any) => {
+          const cid = typeof e.CourseId === 'object' && e.CourseId ? e.CourseId._id : e.CourseId;
+          return cid || e._id;
+        })
+        .filter(Boolean);
+
+      // Fetch lessons for all courses in parallel
+      const courseLessonsResults = await Promise.allSettled(
+        courseIds.map(async (cId) => {
+          const lessons = await lessonsApi.getCourseLessons(cId);
+          return { cId, lessons: Array.isArray(lessons) ? lessons : [] };
+        })
+      );
+
+      // Flatten lessons across all courses
+      const lessonsToQuery: { cId: string; lesson: any }[] = [];
+      for (const res of courseLessonsResults) {
+        if (res.status === 'fulfilled') {
+          for (const l of res.value.lessons) {
+            lessonsToQuery.push({ cId: res.value.cId, lesson: l });
+          }
+        }
+      }
+
+      // Fetch lesson exams in parallel
+      await Promise.allSettled(
+        lessonsToQuery.map(async ({ cId, lesson }) => {
+          try {
+            const lExams = await lessonsApi.getLessonExams(cId, lesson._id);
+            if (Array.isArray(lExams)) {
+              for (const lx of lExams) {
+                if (lx?._id && !seen.has(lx._id)) {
+                  seen.add(lx._id);
+                  examsList.push({ ...lx, CourseId: cId });
                 }
               }
-            } catch {}
-
-            if (l.PrerequisiteExamId && !seen.has(l.PrerequisiteExamId)) {
-              seen.add(l.PrerequisiteExamId);
-              examsList.push({ _id: l.PrerequisiteExamId, Title: l.Title, CourseId: cId });
             }
+          } catch {}
+
+          if (lesson.PrerequisiteExamId && !seen.has(lesson.PrerequisiteExamId)) {
+            seen.add(lesson.PrerequisiteExamId);
+            examsList.push({ _id: lesson.PrerequisiteExamId, Title: lesson.Title, CourseId: cId });
+          }
+        })
+      );
+    } catch {}
+
+    // 2. If nothing found or if admin, fallback to getExams
+    if (examsList.length === 0) {
+      try {
+        const examsRes = await backendExamsApi.getExams({ limit: 50 });
+        for (const e of examsRes.exams || []) {
+          if (e?._id && !seen.has(e._id)) {
+            seen.add(e._id);
+            examsList.push(e);
           }
         }
       } catch {}
     }
-  } catch {}
 
-  // 2. If nothing found or if admin, fallback to getExams
-  if (examsList.length === 0) {
-    try {
-      const examsRes = await backendExamsApi.getExams({ limit: 50 });
-      for (const e of examsRes.exams || []) {
-        if (e?._id && !seen.has(e._id)) {
-          seen.add(e._id);
-          examsList.push(e);
-        }
-      }
-    } catch {}
-  }
+    cachedExamsList = examsList;
+    cacheTimestamp = Date.now();
+    return examsList;
+  })().finally(() => {
+    inFlightDiscovery = null;
+  });
 
-  return examsList;
+  return inFlightDiscovery;
 }
 
 export const examsApi = {
@@ -127,10 +168,14 @@ export const examsApi = {
       let totalScoreSum = 0;
       let highestScore = 0;
 
-      for (const exam of examsList.slice(0, 10)) {
-        try {
-          const myAttempts = await backendExamsApi.getMyExamAttempts(exam._id);
-          for (const att of myAttempts) {
+      // Query attempts concurrently
+      const attemptsResults = await Promise.allSettled(
+        examsList.slice(0, 20).map(exam => backendExamsApi.getMyExamAttempts(exam._id))
+      );
+
+      for (const res of attemptsResults) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          for (const att of res.value) {
             totalAttempts++;
             const isPassed = att.status === 'Passed' || att.score >= att.passingScore;
             if (isPassed) passedCount++;
@@ -140,7 +185,7 @@ export const examsApi = {
             if (score > highestScore) highestScore = score;
             totalScoreSum += score;
           }
-        } catch {}
+        }
       }
 
       const avg = totalAttempts > 0 ? Math.round(totalScoreSum / totalAttempts) : 0;

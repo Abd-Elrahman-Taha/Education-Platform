@@ -25,6 +25,12 @@ interface Props {
   onOpenAuthModal?: () => void;
 }
 
+// Module-level in-memory cache for instant lectures view (0ms loading on navigation)
+const lessonsCache = new Map<string, Lesson[]>();
+let cachedCoursesList: Course[] = [];
+let cachedEnrolledCoursesList: Course[] = [];
+let cachedEnrolledIdsSet: Set<string> = new Set();
+
 export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateView, onOpenAuthModal }) => {
   const { showToast } = useToast();
   const { isAuthenticated, currentUser } = useAuth();
@@ -77,55 +83,73 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
   // Teacher/Admin: always authorized. Authenticated Student with access: authorized. Guest: preview only.
   const isAuthorized = isTeacherOrAdmin || (isAuthenticated && currentUser?.status !== 'blocked');
 
-  const [liveLessons, setLiveLessons] = useState<Lesson[]>([]);
-  const [loadingLessons, setLoadingLessons] = useState(false);
-  const [allCourses, setAllCourses] = useState<Course[]>([]);
-  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
-  const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<string>>(new Set());
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [liveLessons, setLiveLessons] = useState<Lesson[]>(() => {
+    if (activeLessonId) {
+      for (const list of lessonsCache.values()) {
+        if (list.some(l => l.id === activeLessonId)) return list;
+      }
+    }
+    const firstCourseId = cachedEnrolledCoursesList[0]?._id || cachedCoursesList[0]?._id;
+    if (firstCourseId && lessonsCache.has(firstCourseId)) {
+      return lessonsCache.get(firstCourseId)!;
+    }
+    return [];
+  });
+  const [loadingLessons, setLoadingLessons] = useState<boolean>(() => {
+    const firstCourseId = cachedEnrolledCoursesList[0]?._id || cachedCoursesList[0]?._id;
+    return !firstCourseId || !lessonsCache.has(firstCourseId);
+  });
+  const [allCourses, setAllCourses] = useState<Course[]>(cachedCoursesList);
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>(cachedEnrolledCoursesList);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<string>>(cachedEnrolledIdsSet);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(() => {
+    return cachedEnrolledCoursesList[0]?._id || cachedCoursesList[0]?._id || '';
+  });
 
   // Fetch live lessons from backend API for current academic year & subscribed courses
   useEffect(() => {
     let active = true;
-    setLoadingLessons(true);
+
+    // Fast path: if target course is already cached, show immediately
+    const targetId = selectedCourseId || cachedEnrolledCoursesList[0]?._id || cachedCoursesList[0]?._id;
+    if (targetId && lessonsCache.has(targetId)) {
+      setLiveLessons(lessonsCache.get(targetId)!);
+      setLoadingLessons(false);
+    } else if (liveLessons.length === 0) {
+      setLoadingLessons(true);
+    }
 
     const loadData = async () => {
       try {
-        // 1. Fetch courses list
-        const res = await coursesApi.getCourses({ limit: 100 });
-        const coursesList: Course[] = res.courses || (res.data as any)?.courses || [];
+        // 1 & 2: Concurrently fetch courses list and student enrollments
+        const [res, myEnrollments] = await Promise.all([
+          coursesApi.getCourses({ limit: 100 }).catch(() => ({ courses: [] as Course[], data: undefined })),
+          isAuthenticated
+            ? enrollmentsApi.getMyCourses({ limit: 100 }).catch(() => [])
+            : Promise.resolve([]),
+        ]);
+
         if (!active) return;
 
-        // 2. Fetch student enrolled courses if authenticated
-        let enrolledIds = new Set<string>();
-        let myEnrolledCourses: Course[] = [];
+        const coursesList: Course[] = (res as any).courses || ((res as any).data as any)?.courses || [];
+        const enrolledIds = new Set(
+          (myEnrollments || [])
+            .map((e: any) => typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId)
+            .filter(Boolean)
+        );
 
-        if (isAuthenticated) {
-          try {
-            const myEnrollments = await enrollmentsApi.getMyCourses({ limit: 100 });
-            enrolledIds = new Set(
-              myEnrollments
-                .map(e => typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any)._id : e.CourseId)
-                .filter(Boolean)
-            );
+        const enrolledFromEnrollments = (myEnrollments || [])
+          .map((e: any) => (typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any) : null))
+          .filter(Boolean);
 
-            // Populate courses from enrollments and coursesList
-            const enrolledFromEnrollments = myEnrollments
-              .map(e => (typeof e.CourseId === 'object' && e.CourseId ? (e.CourseId as any) : null))
-              .filter(Boolean);
-
-            const enrolledMap = new Map<string, Course>();
-            coursesList.forEach(c => {
-              if (enrolledIds.has(c._id)) enrolledMap.set(c._id, c);
-            });
-            enrolledFromEnrollments.forEach(c => {
-              if (c._id && !enrolledMap.has(c._id)) enrolledMap.set(c._id, c as Course);
-            });
-            myEnrolledCourses = Array.from(enrolledMap.values());
-          } catch (enrollErr) {
-            console.warn('[Lessons] Could not fetch enrollments:', enrollErr);
-          }
-        }
+        const enrolledMap = new Map<string, Course>();
+        coursesList.forEach(c => {
+          if (enrolledIds.has(c._id)) enrolledMap.set(c._id, c);
+        });
+        enrolledFromEnrollments.forEach(c => {
+          if (c._id && !enrolledMap.has(c._id)) enrolledMap.set(c._id, c as Course);
+        });
+        const myEnrolledCourses = Array.from(enrolledMap.values());
 
         // Combine all courses
         const combinedAllCourses = [...coursesList];
@@ -133,14 +157,17 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
           if (!combinedAllCourses.some(ac => ac._id === c._id)) combinedAllCourses.push(c);
         });
 
-        if (!active) return;
+        // Update module caches
+        cachedCoursesList = combinedAllCourses;
+        cachedEnrolledCoursesList = myEnrolledCourses;
+        cachedEnrolledIdsSet = enrolledIds;
+
         setAllCourses(combinedAllCourses);
         setEnrolledCourses(myEnrolledCourses);
         setEnrolledCourseIds(enrolledIds);
 
         // 3. Choose the active course: default to student's subscribed course!
         let activeCourse = selectedCourseId;
-        const availableCourses = myEnrolledCourses.length > 0 ? myEnrolledCourses : combinedAllCourses;
         if (!activeCourse || !combinedAllCourses.some(c => c._id === activeCourse)) {
           if (myEnrolledCourses.length > 0) {
             activeCourse = myEnrolledCourses[0]._id;
@@ -152,62 +179,72 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
           }
         }
 
-        // 4. Determine which courses to fetch lessons for:
-        // If activeCourse is selected, fetch lessons for activeCourse
+        // 4. Determine which courses to fetch lessons for
         const targetCourses = activeCourse
           ? combinedAllCourses.filter(c => c._id === activeCourse)
           : (myEnrolledCourses.length > 0 ? myEnrolledCourses : combinedAllCourses);
 
-        const gathered: Lesson[] = [];
-        for (const c of targetCourses) {
-          try {
-            const lessons = await apiLessonsApi.getCourseLessons(c._id);
-            if (Array.isArray(lessons)) {
-              const isSubscribedToThisCourse = isTeacherOrAdmin || enrolledIds.has(c._id);
-              lessons.forEach((l, idx) => {
-                gathered.push({
-                  id: l._id,
-                  title: l.Title || `المحاضرة ${idx + 1}`,
-                  subtitle: `المحاضرة #${(l.OrderIndex !== undefined ? l.OrderIndex : idx) + 1}`,
-                  description: l.Description || 'شرح تفصيلي للمحاضرة وتطبيقات مباشرة على المنهج المقرر.',
-                  subject: c.Title || 'الرياضيات',
-                  academicYear: selectedAcademicYear,
-                  videoUrl: (l as any).VideoStoragePath || l.VideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-                  duration: l.DurationMinutes ? `${l.DurationMinutes} دقيقة` : (l.DurationSeconds ? `${Math.round(l.DurationSeconds / 60)} دقيقة` : '45 دقيقة'),
-                  isLocked: isSubscribedToThisCourse ? false : (l.IsLocked ?? false),
-                  userExamPassed: false,
-                  pdfTitle: `ملزمة ${l.Title || 'المحاضرة'}.pdf`,
-                  pdfUrl: '#',
-                  pdfNotes: {
-                    title: `ملزمة ${l.Title || 'المحاضرة'}.pdf`,
-                    downloadUrl: '#',
-                    size: '4.5 MB',
-                  },
-                  homework: {
-                    id: `hw-${l._id}`,
-                    title: `واجب: ${l.Title || 'المحاضرة'}`,
-                    description: 'تطبيقات وتمارين على محتوى المحاضرة',
-                    dueDate: 'متاح دائماً',
-                    isSubmitted: false,
-                    score: 0,
-                    questions: [],
-                  },
-                  exam: l.PrerequisiteExamId
-                    ? {
-                        id: typeof l.PrerequisiteExamId === 'object' && l.PrerequisiteExamId !== null
-                          ? ((l.PrerequisiteExamId as any)._id || (l.PrerequisiteExamId as any).id)
-                          : l.PrerequisiteExamId,
-                        title: `امتحان: ${l.Title || 'المحاضرة'}`,
-                        durationMinutes: 15,
-                        passingScorePercentage: 60,
-                        questions: [],
-                      }
-                    : null,
-                } as any);
-              });
+        // Fetch lessons for all target courses in parallel
+        const targetLessonsResults = await Promise.allSettled(
+          targetCourses.map(async c => {
+            try {
+              const lessons = await apiLessonsApi.getCourseLessons(c._id);
+              return { course: c, lessons: Array.isArray(lessons) ? lessons : [] };
+            } catch {
+              return { course: c, lessons: [] };
             }
-          } catch (err) {
-            console.warn(`[Lessons] Failed to fetch lessons for course ${c._id}:`, err);
+          })
+        );
+
+        if (!active) return;
+
+        const gathered: Lesson[] = [];
+        for (const resItem of targetLessonsResults) {
+          if (resItem.status === 'fulfilled') {
+            const { course: c, lessons } = resItem.value;
+            const isSubscribedToThisCourse = isTeacherOrAdmin || enrolledIds.has(c._id);
+            const courseLessons: Lesson[] = lessons.map((l: any, idx: number) => ({
+              id: l._id,
+              title: l.Title || `المحاضرة ${idx + 1}`,
+              subtitle: `المحاضرة #${(l.OrderIndex !== undefined ? l.OrderIndex : idx) + 1}`,
+              description: l.Description || 'شرح تفصيلي للمحاضرة وتطبيقات مباشرة على المنهج المقرر.',
+              subject: c.Title || 'الرياضيات',
+              academicYear: selectedAcademicYear,
+              videoUrl: (l as any).VideoStoragePath || l.VideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+              duration: l.DurationMinutes ? `${l.DurationMinutes} دقيقة` : (l.DurationSeconds ? `${Math.round(l.DurationSeconds / 60)} دقيقة` : '45 دقيقة'),
+              isLocked: isSubscribedToThisCourse ? false : (l.IsLocked ?? false),
+              userExamPassed: false,
+              pdfTitle: `ملزمة ${l.Title || 'المحاضرة'}.pdf`,
+              pdfUrl: '#',
+              pdfNotes: {
+                title: `ملزمة ${l.Title || 'المحاضرة'}.pdf`,
+                downloadUrl: '#',
+                size: '4.5 MB',
+              },
+              homework: {
+                id: `hw-${l._id}`,
+                title: `واجب: ${l.Title || 'المحاضرة'}`,
+                description: 'تطبيقات وتمارين على محتوى المحاضرة',
+                dueDate: 'متاح دائماً',
+                isSubmitted: false,
+                score: 0,
+                questions: [],
+              },
+              exam: l.PrerequisiteExamId
+                ? {
+                    id: typeof l.PrerequisiteExamId === 'object' && l.PrerequisiteExamId !== null
+                      ? ((l.PrerequisiteExamId as any)._id || (l.PrerequisiteExamId as any).id)
+                      : l.PrerequisiteExamId,
+                    title: `امتحان: ${l.Title || 'المحاضرة'}`,
+                    durationMinutes: 15,
+                    passingScorePercentage: 60,
+                    questions: [],
+                  }
+                : null,
+            } as any));
+
+            lessonsCache.set(c._id, courseLessons);
+            gathered.push(...courseLessons);
           }
         }
 
@@ -215,7 +252,7 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
           setLiveLessons(gathered);
         }
       } catch (err) {
-        if (active) setLiveLessons([]);
+        // Retain existing liveLessons if error
       } finally {
         if (active) setLoadingLessons(false);
       }
