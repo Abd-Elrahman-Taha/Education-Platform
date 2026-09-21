@@ -9,3 +9,5 @@ export * from './enrollments.api';
 export * from './students.api';
 export * from './users.api';
 export * from './leaderboard.api';
+export * from './ai.api';
+

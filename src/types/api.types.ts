@@ -70,6 +70,7 @@ export interface UserProfileResponse {
     user: {
       _id: string;
       FullName: string;
+      StudentCode?: string;
       Phone: string;
       ParentPhone?: string;
       NationalId?: string;
@@ -260,9 +261,12 @@ export interface PromoteUserRoleRequest {
 export interface AdminStudent {
   _id: string;
   FullName: string;
+  StudentCode?: string;
   NationalId?: string;
   Phone: string;
   ParentPhone?: string;
+  EducationStage?: string;
+  Grade?: string;
   Role: 'Student' | 'Admin' | string;
   Status: 'Active' | 'SuspendedMultiDevice' | 'Blocked' | string;
   WalletBalance?: number;
@@ -769,3 +773,58 @@ export interface CreateInquiryRequest {
 export interface ReplyInquiryRequest {
   Reply: string;
 }
+
+// ── AI Question Generation ──────────────────────────────────────────────────
+export type AIGenerationStatus = 'Queued' | 'Processing' | 'Completed' | 'Failed';
+
+export interface UploadDocumentResponse {
+  message: string;
+  data: {
+    FileKey: string;
+    Purpose: string;
+    UploadId?: string;
+    _id?: string;
+    id?: string;
+    ExpiresAt?: string;
+  };
+}
+
+export interface CreateAIGenerationRequest {
+  UploadId: string;
+  ExamId?: string;
+  RequestedCount: number;
+  Notes?: string;
+  Ideas?: string;
+}
+
+export interface CreateAIGenerationResponse {
+  message: string;
+  data: {
+    generationId: string;
+    status: AIGenerationStatus | string;
+  };
+}
+
+export interface AIGeneratedQuestion {
+  QuestionText: string;
+  QuestionType: string;
+  Options?: string[];
+  CorrectAnswer?: string;
+  Points: number;
+}
+
+export interface AIGenerationStatusData {
+  generationId: string;
+  status: AIGenerationStatus;
+  requestedCount?: number;
+  generatedQuestions?: AIGeneratedQuestion[];
+  error?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AIGenerationStatusResponse {
+  message: string;
+  data: AIGenerationStatusData;
+}
+

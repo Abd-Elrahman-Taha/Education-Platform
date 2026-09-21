@@ -298,7 +298,7 @@ export const StandaloneExamsView: React.FC<StandaloneExamsViewProps> = ({ onOpen
     id: s._id,
     name: s.FullName || 'طالب مسجل',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80',
-    code: `CODE-${(s._id || '').slice(-5)}`,
+    code: s.StudentCode || s.studentCode || s.code || '—',
     academicYear: 'third_secondary' as AcademicYear,
     averageScore: 88,
     examResults: [

@@ -330,7 +330,8 @@ export const UnifiedLessonView: React.FC<Props> = ({ activeLessonId, onNavigateV
     let x = 30, y = 50, dx = 1.5, dy = 1.2;
     const rawName = currentUser?.name || '';
     const studentName = (rawName && /[^\d\s\+\-]/.test(rawName)) ? rawName : (currentUser?.phone ? `طالب • ${currentUser.phone.slice(-4)}` : 'طالب المنصة');
-    const studentCode = `ID: #${currentUser?.id?.slice(-5) || '94021'}`;
+    const rawStudentCode = currentUser?.studentCode || currentUser?.StudentCode;
+    const studentCode = rawStudentCode ? `ID: ${rawStudentCode}` : `ID: #${currentUser?.id?.slice(-5) || '94021'}`;
 
     const resizeCanvas = () => {
       if (canvas.parentElement) {

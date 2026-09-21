@@ -27,7 +27,8 @@ export const DRMPlayerView: React.FC = () => {
     let x = 40, y = 60, dx = 1.8, dy = 1.4;
 
     const studentName = currentUser?.name || 'طالب مشترك';
-    const studentCode = `CODE: #${currentUser?.id?.slice(-5) || '94021'}`;
+    const rawStudentCode = currentUser?.studentCode || currentUser?.StudentCode;
+    const studentCode = rawStudentCode ? `CODE: ${rawStudentCode}` : `CODE: #${currentUser?.id?.slice(-5) || '94021'}`;
     const ipAddress = 'IP: 197.34.88.12';
 
     const resizeCanvas = () => {

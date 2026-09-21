@@ -69,6 +69,8 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  studentCode?: string;
+  StudentCode?: string;
   nationalId?: string;
   role: UserRole;
   status: 'active' | 'blocked' | 'inactive';

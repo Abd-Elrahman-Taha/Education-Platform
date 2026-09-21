@@ -13,6 +13,7 @@ export interface StudentQueryParams {
   sort?: string;
   search?: string;
   Status?: string;
+  StudentCode?: string;
 }
 
 export const studentsApi = {
@@ -26,6 +27,7 @@ export const studentsApi = {
     if (params?.sort) queryParams.sort = params.sort;
     if (params?.search && params.search.trim()) queryParams.search = params.search.trim();
     if (params?.Status && params.Status !== 'all') queryParams.Status = params.Status;
+    if (params?.StudentCode && params.StudentCode.trim()) queryParams.StudentCode = params.StudentCode.trim();
 
     const response = await apiClient.get<StudentsListResponse>('/users/students', { params: queryParams });
     const students = response.data?.data?.students || (response.data as any)?.students || [];
@@ -101,25 +103,14 @@ export const studentsApi = {
 
   /**
    * Reset / change student password by Admin.
+   * Official backend endpoint: PATCH /users/students/:userId/password with { newPassword }
    */
   updateStudentPassword: async (userId: string, newPassword: string): Promise<any> => {
     const cleanPwd = newPassword.trim();
-    try {
-      const res = await apiClient.patch(`/users/students/${userId}`, { password: cleanPwd, Password: cleanPwd });
-      return res.data;
-    } catch (err: any) {
-      try {
-        const res2 = await apiClient.patch(`/users/${userId}`, { password: cleanPwd, Password: cleanPwd });
-        return res2.data;
-      } catch {
-        try {
-          const res3 = await apiClient.patch(`/users/${userId}/password`, { newPassword: cleanPwd, password: cleanPwd });
-          return res3.data;
-        } catch {
-          throw err;
-        }
-      }
-    }
+    const response = await apiClient.patch(`/users/students/${userId}/password`, {
+      newPassword: cleanPwd,
+    });
+    return response.data;
   },
 
   /**

@@ -7,7 +7,7 @@ import {
   Check, X, Sparkles, GraduationCap,
   BarChart2, Clock, Phone, Copy, Key, Layers,
   Edit3, Zap, ArrowUp, ArrowDown, ListOrdered,
-  FileText, CheckSquare, Eye, AlertTriangle, AlertCircle,
+  FileText, CheckSquare, Eye, EyeOff, AlertTriangle, AlertCircle,
   HelpCircle, RefreshCw, Crown, Lock, Shuffle, Target, RotateCcw, ShieldCheck, Lightbulb,
   LayoutDashboard, Smartphone, Send, Inbox, Mail, MailOpen, MessageCircle, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -21,6 +21,7 @@ import { paymentApi } from '../../api/payment.api';
 import { examsApi, calculateNextOrderIndex } from '../../api/exams.api';
 import { enrollmentsApi } from '../../api/enrollments.api';
 import { inquiriesApi } from '../../api/inquiries.api';
+import { aiApi } from '../../api/ai.api';
 import {
   AdminStudent,
   UpdateStudentRequest,
@@ -36,9 +37,10 @@ import {
   ManualPaymentRequest,
   Inquiry,
   InquiryStatus,
+  AIGenerationStatus,
 } from '../../types/api.types';
 import { getFriendlyErrorMessage } from '../../utils/errors';
-import { matchesAcademicYear } from '../../utils/courseFilter';
+import { matchesAcademicYear, normalizeStage, normalizeGrade } from '../../utils/courseFilter';
 
 import { EDUCATION_STAGES } from '../../constants/education';
 export { EDUCATION_STAGES };
@@ -131,6 +133,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [isStudentsLoading, setIsStudentsLoading] = useState(false);
   const [searchStudent, setSearchStudent] = useState('');
   const [studentStatusFilter, setStudentStatusFilter] = useState<'all' | 'Active' | 'Blocked' | 'SuspendedMultiDevice'>('all');
+  const [studentStageFilter, setStudentStageFilter] = useState<string>('all');
+  const [studentGradeFilter, setStudentGradeFilter] = useState<string>('all');
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+  const [resetPasswordStudent, setResetPasswordStudent] = useState<AdminStudent | null>(null);
+  const [newStudentPassword, setNewStudentPassword] = useState('');
+  const [showNewPasswordText, setShowNewPasswordText] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const searchReqIdRef = useRef(0);
 
   const [realCourses, setRealCourses] = useState<Course[]>([]);
@@ -207,17 +216,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
   const [aiExamForm, setAiExamForm] = useState({
     title: '',
     courseId: '',
-    educationStage: 'Secondary' as EducationStage,
-    grade: '3',
+    lessonId: '',
     durationMinutes: 30,
-    passingScore: 60,
-    questionsCount: 15,
-    questionType: 'MCQ',
-    difficulty: 'Medium',
-    textPrompt: '',
+    passingScore: 10,
+    requestedCount: 10,
+    notes: '',
+    ideas: '',
+    manualUploadId: '',
   });
   const [aiExamFile, setAiExamFile] = useState<File | null>(null);
   const [isGeneratingAIExam, setIsGeneratingAIExam] = useState(false);
+  const [aiGenerationStep, setAiGenerationStep] = useState<
+    'idle' | 'uploading' | 'creating_exam' | 'starting_generation' | 'polling' | 'completed' | 'failed'
+  >('idle');
+  const [aiGenerationStatus, setAiGenerationStatus] = useState<AIGenerationStatus | ''>('');
+  const [aiGenerationId, setAiGenerationId] = useState<string>('');
+  const [aiGenerationError, setAiGenerationError] = useState<string>('');
+  const [aiGeneratedQuestionsCount, setAiGeneratedQuestionsCount] = useState<number>(0);
+  const [createdAIExam, setCreatedAIExam] = useState<Exam | null>(null);
+  const [aiElapsedSeconds, setAiElapsedSeconds] = useState<number>(0);
+  const aiPollingRef = useRef<number | null>(null);
+  const aiTimerRef = useRef<number | null>(null);
 
   // Scratch Cards Generation State
   const [scratchAmount, setScratchAmount] = useState<number>(100);
@@ -373,13 +392,55 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
   };
 
-  // Instant in-memory filtering for students list (instant search, instant restore when cleared)
+  const formatStudentStageAndGrade = (student: AdminStudent): string => {
+    const stage = normalizeStage(student.EducationStage || (student as any).educationStage || (student.academicYear ? 'Secondary' : ''));
+    const grade = normalizeGrade(student.Grade || (student as any).grade || (student.academicYear === 'first_secondary' ? '1' : student.academicYear === 'second_secondary' ? '2' : student.academicYear === 'third_secondary' ? '3' : ''));
+
+    if (stage === 'Secondary') {
+      if (grade === '1') return 'ثانوي • الصف الأول';
+      if (grade === '2') return 'ثانوي • الصف الثاني';
+      if (grade === '3') return 'ثانوي • الصف الثالث';
+      return 'المرحلة الثانوية';
+    }
+    if (stage === 'Preparatory') {
+      if (grade === '1') return 'إعدادي • الصف الأول';
+      if (grade === '2') return 'إعدادي • الصف الثاني';
+      if (grade === '3') return 'إعدادي • الصف الثالث';
+      return 'المرحلة الإعدادية';
+    }
+    if (stage === 'Primary') {
+      if (grade) return `ابتدائي • الصف ${grade}`;
+      return 'المرحلة الابتدائية';
+    }
+    if (student.academicYear) {
+      if (student.academicYear === 'first_secondary') return 'ثانوي • الصف الأول';
+      if (student.academicYear === 'second_secondary') return 'ثانوي • الصف الثاني';
+      if (student.academicYear === 'third_secondary') return 'ثانوي • الصف الثالث';
+    }
+    return 'غير محدد';
+  };
+
+  // Instant in-memory filtering for students list (stage, grade, status, search, and student code)
   const displayedStudents = useMemo(() => {
     const master = allStudents.length > 0 ? allStudents : realStudents;
     let list = master;
 
     if (studentStatusFilter !== 'all') {
       list = list.filter(s => s.Status === studentStatusFilter);
+    }
+
+    if (studentStageFilter !== 'all') {
+      list = list.filter(s => {
+        const stStage = normalizeStage(s.EducationStage || (s as any).educationStage || (s.academicYear ? 'Secondary' : ''));
+        return stStage === studentStageFilter;
+      });
+    }
+
+    if (studentGradeFilter !== 'all') {
+      list = list.filter(s => {
+        const stGrade = normalizeGrade(s.Grade || (s as any).grade || (s.academicYear === 'first_secondary' ? '1' : s.academicYear === 'second_secondary' ? '2' : s.academicYear === 'third_secondary' ? '3' : ''));
+        return stGrade === studentGradeFilter;
+      });
     }
 
     const query = searchStudent.trim();
@@ -410,16 +471,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       const parentPhone = cleanDigits(student.ParentPhone || '');
       const nationalId = cleanDigits(student.NationalId || '');
       const role = (student.Role || '').toLowerCase();
+      const studentCode = ((student.StudentCode || (student as any).studentCode || (student as any).code || '') as string).toLowerCase();
 
       const matchesName = name.includes(queryArabic) || rawName.includes(queryLower);
       const matchesPhone = queryDigits ? phone.includes(queryDigits) : false;
       const matchesParentPhone = queryDigits ? parentPhone.includes(queryDigits) : false;
       const matchesNationalId = queryDigits ? nationalId.includes(queryDigits) : false;
       const matchesRole = role.includes(queryLower);
+      const matchesCode = studentCode ? studentCode.includes(queryLower) : false;
 
-      return matchesName || matchesPhone || matchesParentPhone || matchesNationalId || matchesRole;
+      return matchesName || matchesPhone || matchesParentPhone || matchesNationalId || matchesRole || matchesCode;
     });
-  }, [allStudents, realStudents, studentStatusFilter, searchStudent]);
+  }, [allStudents, realStudents, studentStatusFilter, studentStageFilter, studentGradeFilter, searchStudent]);
 
   const loadCourses = async () => {
     setIsCoursesLoading(true);
@@ -677,6 +740,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     if (isSuperAdmin) {
       loadAdmins();
     }
+    return () => {
+      stopAIPolling();
+    };
   }, [isSuperAdmin]);
 
   const fetchPaymentRequests = async () => {
@@ -1072,66 +1138,190 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
   };
 
+  const stopAIPolling = () => {
+    if (aiPollingRef.current) {
+      clearInterval(aiPollingRef.current);
+      aiPollingRef.current = null;
+    }
+    if (aiTimerRef.current) {
+      clearInterval(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+  };
+
+  const handleCloseAIExamModal = () => {
+    stopAIPolling();
+    setIsCreateAIExamOpen(false);
+    setIsGeneratingAIExam(false);
+    setAiGenerationStep('idle');
+    setAiGenerationError('');
+  };
+
   const handleGenerateAIExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aiExamForm.title.trim()) {
-      showToast('يرجى إدخال عنوان الاختبار.', 'error');
+      showToast('يرجى إدخال عنوان الاختبار أولاً', 'error');
       return;
     }
     if (!aiExamForm.courseId) {
-      showToast('يرجى اختيار الكورس التابع له الاختبار.', 'error');
+      showToast('يرجى اختيار الكورس التابع له الاختبار', 'error');
       return;
     }
-    if (!aiExamFile && !aiExamForm.textPrompt.trim()) {
-      showToast('يرجى رفع ملف الشرح/الأسئلة أو لصق النص لاستخراج الامتحان منه.', 'error');
+    if (!aiExamFile && !aiExamForm.manualUploadId.trim()) {
+      showToast('يرجى اختيار ملف الشرح (PDF) أو إدخال معرّف المستند المرفوع', 'error');
       return;
     }
+    const count = Math.min(Math.max(Number(aiExamForm.requestedCount) || 10, 1), 50);
 
+    stopAIPolling();
     setIsGeneratingAIExam(true);
-    try {
-      // Simulate AI analysis and extraction of questions from file/text
-      await new Promise(resolve => setTimeout(resolve, 1800));
+    setAiGenerationError('');
+    setAiElapsedSeconds(0);
+    setAiGeneratedQuestionsCount(0);
+    setCreatedAIExam(null);
 
-      const mockExamId = 'ai-exam-' + Date.now();
-      const linkedCourse = realCourses.find(c => c._id === aiExamForm.courseId);
-      const newAIExam: Exam = {
-        _id: mockExamId,
-        Title: `[AI] ${aiExamForm.title.trim()}`,
-        CourseId: aiExamForm.courseId,
-        DurationMinutes: aiExamForm.durationMinutes,
-        PassingScore: aiExamForm.passingScore,
-        MaxAttempts: 0,
-        Status: 'Published',
-        questionsCount: aiExamForm.questionsCount,
-        IsGated: false,
-        IsRandomized: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+    try {
+      // ── STEP 1: UPLOAD SOURCE DOCUMENT (PDF) ───────────────
+      let uploadId = aiExamForm.manualUploadId.trim();
+      if (aiExamFile) {
+        setAiGenerationStep('uploading');
+        try {
+          const uploadRes = await aiApi.uploadDocument(aiExamFile, 'AIGenerationDocument');
+          uploadId = (uploadRes?.UploadId || uploadRes?._id || uploadRes?.id || uploadRes?.FileKey || '').trim();
+          if (!uploadId) {
+            uploadId = ((uploadRes as any)?.fileKey || (uploadRes as any)?.fileId || '').trim();
+          }
+        } catch (uploadErr: any) {
+          const msg = uploadErr?.response?.data?.message || uploadErr?.message;
+          throw new Error(`فشل رفع ملف المستند (PDF): ${msg || 'خطأ أثناء رفع الملف'}`);
+        }
+      }
+
+      if (!uploadId) {
+        throw new Error('لم يتم استلام معرّف المستند من السيرفر. يرجى إعادة المحاولة.');
+      }
+
+      // ── STEP 2: CREATE DRAFT EXAM ──────────────────────────
+      setAiGenerationStep('creating_exam');
+      let draftExam: Exam;
+      try {
+        draftExam = await examsApi.createExam({
+          Title: aiExamForm.title.trim(),
+          CourseId: aiExamForm.courseId,
+          LessonId: aiExamForm.lessonId.trim() || undefined,
+          DurationMinutes: Number(aiExamForm.durationMinutes) || 30,
+          PassingScore: Number(aiExamForm.passingScore) || 10,
+          MaxAttempts: 0,
+          Status: 'Draft',
+          IsRandomized: true,
+          IsGated: false,
+        });
+      } catch (examErr: any) {
+        const msg = examErr?.response?.data?.message || examErr?.message;
+        throw new Error(`فشل إنشاء مسودة الاختبار: ${msg || 'خطأ في إنشاء الاختبار'}`);
+      }
+
+      if (!draftExam || !draftExam._id) {
+        throw new Error('تعذر إنشاء مسودة الاختبار في النظام.');
+      }
+      setCreatedAIExam(draftExam);
+
+      // ── STEP 3: START AI GENERATION TASK ────────────────────
+      setAiGenerationStep('starting_generation');
+      let generationRes: { generationId: string; status: string };
+      try {
+        generationRes = await aiApi.createGeneration({
+          UploadId: uploadId,
+          ExamId: draftExam._id,
+          RequestedCount: count,
+          Notes: aiExamForm.notes.trim() || undefined,
+          Ideas: aiExamForm.ideas.trim() || undefined,
+        });
+      } catch (genErr: any) {
+        if (genErr?.response?.status === 429) {
+          throw new Error('تم تجاوز الحد الأقصى لمهام الذكاء الاصطناعي المتزامنة (3 مهام). يرجى الانتظار حتى اكتمال المهام الجارية.');
+        }
+        const msg = genErr?.response?.data?.message || genErr?.message;
+        throw new Error(`فشل بدء مهمة الذكاء الاصطناعي: ${msg || 'خطأ في بدء التوليد'}`);
+      }
+
+      const generationId = generationRes?.generationId;
+      if (!generationId) {
+        throw new Error('لم يتم استلام معرّف مهمة التوليد (generationId) من السيرفر.');
+      }
+      setAiGenerationId(generationId);
+      setAiGenerationStatus((generationRes?.status as AIGenerationStatus) || 'Queued');
+      setAiGenerationStep('polling');
+
+      // Start elapsed seconds timer
+      aiTimerRef.current = window.setInterval(() => {
+        setAiElapsedSeconds(sec => sec + 1);
+      }, 1000);
+
+      // ── STEP 4: HTTP POLLING (EVERY 3 SECONDS) ──────────────
+      let isPollActive = true;
+      const pollGeneration = async () => {
+        if (!isPollActive) return;
+        try {
+          const statusRes = await aiApi.getGenerationStatus(generationId);
+          const currentStatus = statusRes?.status;
+          setAiGenerationStatus(currentStatus);
+
+          if (currentStatus === 'Completed') {
+            isPollActive = false;
+            stopAIPolling();
+            setAiGenerationStep('completed');
+            setIsGeneratingAIExam(false);
+
+            // Fetch actual generated questions mapped to the exam
+            try {
+              const examQuestions = await examsApi.getQuestions(draftExam._id);
+              const qCount = examQuestions?.length || statusRes?.generatedQuestions?.length || count;
+              setAiGeneratedQuestionsCount(qCount);
+              const updatedDraft = { ...draftExam, questionsCount: qCount };
+              setCreatedAIExam(updatedDraft);
+              setRealExams(prev => [updatedDraft, ...prev.filter(e => e._id !== draftExam._id)]);
+            } catch {
+              setAiGeneratedQuestionsCount(statusRes?.generatedQuestions?.length || count);
+              setRealExams(prev => [draftExam, ...prev.filter(e => e._id !== draftExam._id)]);
+            }
+
+            showToast(`تم توليد أسئلة الاختبار بنجاح بواسطة الذكاء الاصطناعي!`, 'success');
+          } else if (currentStatus === 'Failed') {
+            isPollActive = false;
+            stopAIPolling();
+            setAiGenerationStep('failed');
+            setIsGeneratingAIExam(false);
+            const failureReason = statusRes?.error || 'فشلت معالجة المستند بواسطة الذكاء الاصطناعي.';
+            setAiGenerationError(failureReason);
+            showToast(`فشل توليد الأسئلة: ${failureReason}`, 'error');
+          }
+        } catch (pollErr: any) {
+          console.warn('[AI Generation Polling Error]:', pollErr);
+          if (pollErr?.response?.status === 404 || pollErr?.response?.status === 403) {
+            isPollActive = false;
+            stopAIPolling();
+            setAiGenerationStep('failed');
+            setIsGeneratingAIExam(false);
+            const msg = pollErr?.response?.data?.message || 'تعذر استرجاع حالة مهمة التوليد';
+            setAiGenerationError(msg);
+            showToast(msg, 'error');
+          }
+        }
       };
 
-      setRealExams(prev => [newAIExam, ...prev]);
-      showToast(
-        `تم استخراج الأسئلة وتوليد الامتحان بالذكاء الاصطناعي بنجاح (${aiExamForm.questionsCount} سؤال)! (معاينة تجريبية لحين ربط الـ API)`,
-        'success'
-      );
-      setIsCreateAIExamOpen(false);
-      setAiExamFile(null);
-      setAiExamForm({
-        title: '',
-        courseId: realCourses[0]?._id || '',
-        educationStage: 'Secondary',
-        grade: '3',
-        durationMinutes: 30,
-        passingScore: 60,
-        questionsCount: 15,
-        questionType: 'MCQ',
-        difficulty: 'Medium',
-        textPrompt: '',
-      });
+      // Poll every 3 seconds
+      aiPollingRef.current = window.setInterval(pollGeneration, 3000);
+      // Run first check after 2 seconds
+      setTimeout(pollGeneration, 2000);
+
     } catch (err: any) {
-      showToast('حدث خطأ أثناء توليد الامتحان بالذكاء الاصطناعي.', 'error');
-    } finally {
+      stopAIPolling();
       setIsGeneratingAIExam(false);
+      setAiGenerationStep('failed');
+      const errMessage = err?.message || 'حدث خطأ غير متوقع أثناء بدء توليد الامتحان.';
+      setAiGenerationError(errMessage);
+      showToast(errMessage, 'error');
     }
   };
 
@@ -1313,13 +1503,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
         }
       }
 
-      // If new password provided, also call updateStudentPassword directly to guarantee it is applied
+      // If new password provided, call updateStudentPassword directly to guarantee it is applied
       if (newPassword) {
         try {
           await studentsApi.updateStudentPassword(studentId, newPassword);
-          showToast('تم تحديث كلمة مرور الطالب بنجاح!', 'info');
+          showToast('تم تغيير كلمة مرور الطالب بنجاح!', 'success');
         } catch (pwErr: any) {
           console.warn('Password update directly error:', pwErr);
+          showToast(getFriendlyErrorMessage(pwErr, 'تعذر تحديث كلمة المرور.'), 'error');
         }
       }
 
@@ -1383,6 +1574,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
       showToast(getFriendlyErrorMessage(err, 'تعذر حفظ تعديل بيانات الحساب، يرجى مراجعة المدخلات والمحاولة مجدداً'), 'error');
     } finally {
       setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleOpenResetPasswordModal = (student: AdminStudent) => {
+    setResetPasswordStudent(student);
+    setNewStudentPassword('');
+    setShowNewPasswordText(false);
+    setIsResetPasswordModalOpen(true);
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordStudent) return;
+    const cleanPwd = newStudentPassword.trim();
+    if (!cleanPwd || cleanPwd.length < 6) {
+      showToast('يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل.', 'error');
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      await studentsApi.updateStudentPassword(resetPasswordStudent._id, cleanPwd);
+      showToast(`تم تغيير كلمة مرور الطالب (${resetPasswordStudent.FullName}) بنجاح!`, 'success');
+      setIsResetPasswordModalOpen(false);
+      setResetPasswordStudent(null);
+      setNewStudentPassword('');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message;
+      showToast(getFriendlyErrorMessage(err, msg || 'تعذر تغيير كلمة المرور، يرجى المحاولة لاحقاً.'), 'error');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -2313,10 +2534,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           <div className="admin-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                الطلاب المسجلون في المنظومة ({displayedStudents.length}{(searchStudent.trim() || studentStatusFilter !== 'all') && (allStudents.length > 0 || realStudents.length > 0) ? ` من ${allStudents.length || realStudents.length}` : ''})
+                الطلاب المسجلون في المنظومة ({displayedStudents.length}{(searchStudent.trim() || studentStatusFilter !== 'all' || studentStageFilter !== 'all' || studentGradeFilter !== 'all') && (allStudents.length > 0 || realStudents.length > 0) ? ` من ${allStudents.length || realStudents.length}` : ''})
               </h2>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                إدارة كاملة لحسابات الطلاب، تفعيل الحسابات، الحظر، والحذف الآمن
+                إدارة كاملة لحسابات الطلاب، تصفية حسب المرحلة والسنة الدراسية، تغيير كلمات المرور، وتفعيل الحسابات
               </span>
             </div>
 
@@ -2331,13 +2552,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
           </div>
 
           {/* Search & Filter Toolbar */}
-          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
               <Search size={16} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 className="input-field"
-                placeholder="بحث بالاسم أو رقم الهاتف..."
+                placeholder="بحث بالاسم، رقم الهاتف، أو كود الطالب..."
                 style={{ width: '100%', paddingRight: '40px', paddingLeft: searchStudent ? '38px' : '14px', fontSize: '0.88rem' }}
                 value={searchStudent}
                 onChange={e => setSearchStudent(e.target.value)}
@@ -2367,9 +2588,60 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               )}
             </div>
 
+            {/* Stage Filter */}
             <select
               className="input-field"
-              style={{ fontSize: '0.85rem', width: 'auto' }}
+              style={{ fontSize: '0.85rem', width: 'auto', minWidth: '150px' }}
+              value={studentStageFilter}
+              onChange={e => {
+                setStudentStageFilter(e.target.value);
+                setStudentGradeFilter('all');
+              }}
+            >
+              <option value="all">جميع المراحل التعليمية</option>
+              <option value="Secondary">المرحلة الثانوية</option>
+              <option value="Preparatory">المرحلة الإعدادية</option>
+              <option value="Primary">المرحلة الابتدائية</option>
+            </select>
+
+            {/* Grade Filter */}
+            <select
+              className="input-field"
+              style={{ fontSize: '0.85rem', width: 'auto', minWidth: '150px' }}
+              value={studentGradeFilter}
+              onChange={e => setStudentGradeFilter(e.target.value)}
+            >
+              <option value="all">جميع الصفوف الدراسية</option>
+              {studentStageFilter === 'Secondary' || studentStageFilter === 'all' ? (
+                <>
+                  <option value="1">الصف الأول الثانوي</option>
+                  <option value="2">الصف الثاني الثانوي</option>
+                  <option value="3">الصف الثالث الثانوي</option>
+                </>
+              ) : null}
+              {studentStageFilter === 'Preparatory' ? (
+                <>
+                  <option value="1">الصف الأول الإعدادي</option>
+                  <option value="2">الصف الثاني الإعدادي</option>
+                  <option value="3">الصف الثالث الإعدادي</option>
+                </>
+              ) : null}
+              {studentStageFilter === 'Primary' ? (
+                <>
+                  <option value="1">الصف الأول الابتدائي</option>
+                  <option value="2">الصف الثاني الابتدائي</option>
+                  <option value="3">الصف الثالث الابتدائي</option>
+                  <option value="4">الصف الرابع الابتدائي</option>
+                  <option value="5">الصف الخامس الابتدائي</option>
+                  <option value="6">الصف السادس الابتدائي</option>
+                </>
+              ) : null}
+            </select>
+
+            {/* Status Filter */}
+            <select
+              className="input-field"
+              style={{ fontSize: '0.85rem', width: 'auto', minWidth: '130px' }}
               value={studentStatusFilter}
               onChange={e => setStudentStatusFilter(e.target.value as any)}
             >
@@ -2392,6 +2664,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   <tr>
                     <th>كود الطالب</th>
                     <th>اسم الطالب</th>
+                    <th>المرحلة والصف الدراسي</th>
                     <th>الهاتف</th>
                     <th>هاتف ولي الأمر</th>
                     <th>الاشتراك</th>
@@ -2406,7 +2679,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     const isAdmin = (student.Role || '').toLowerCase() === 'admin';
                     const isComp = comprehensiveStudentIds.has(student._id);
                     const isSub = !!student.isSubscribed || enrolledStudentIds.has(student._id) || isComp;
-                    const studentCode = (student as any).code || (student as any).StudentCode || (student._id ? `#${student._id.slice(-6).toUpperCase()}` : '—');
+                    const studentCode = student.StudentCode || (student as any).studentCode || (student as any).code || '—';
 
                     return (
                       <tr key={student._id}>
@@ -2430,6 +2703,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                         </td>
                         <td>
                           <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{student.FullName}</strong>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              color: 'var(--text-bright)',
+                              background: 'rgba(8, 145, 178, 0.08)',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(8, 145, 178, 0.2)',
+                              display: 'inline-block',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {formatStudentStageAndGrade(student)}
+                          </span>
                         </td>
                         <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.Phone}</td>
                         <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.ParentPhone || '—'}</td>
@@ -2569,6 +2859,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                               title="تعديل بيانات الطالب ورقم الهاتف"
                             >
                               <Edit3 size={13} color="var(--primary-light)" /> تعديل
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.35)' }}
+                              onClick={() => handleOpenResetPasswordModal(student)}
+                              title="تغيير كلمة مرور الطالب"
+                            >
+                              <Key size={13} color="#F59E0B" /> كلمة المرور
                             </button>
                             <button
                               type="button"
@@ -2933,6 +3232,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => {
+                  stopAIPolling();
+                  setAiGenerationStep('idle');
+                  setAiGenerationError('');
+                  setCreatedAIExam(null);
                   if (realCourses.length > 0 && !aiExamForm.courseId) {
                     setAiExamForm(prev => ({ ...prev, courseId: realCourses[0]._id }));
                   }
@@ -4460,7 +4763,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   تعديل بيانات الطالب
                 </h2>
                 <span style={{ fontSize: '0.78rem', color: 'var(--primary-light)', fontFamily: 'monospace', fontWeight: 700 }}>
-                  كود الطالب: {(editingStudent as any)?.code || (editingStudent as any)?.StudentCode || `#${editingStudent._id.slice(-6).toUpperCase()}`}
+                  كود الطالب: {editingStudent.StudentCode || (editingStudent as any)?.studentCode || (editingStudent as any)?.code || '—'}
                 </span>
               </div>
             </div>
@@ -4601,6 +4904,121 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                   style={{ flex: 2 }}
                 >
                   {isSubmittingEdit ? 'جاري حفظ التعديلات...' : 'حفظ التعديلات'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: RESET STUDENT PASSWORD (PATCH /users/students/:userId/password) ────── */}
+      {isResetPasswordModalOpen && resetPasswordStudent && createPortal(
+        <div className="modal-overlay active" onClick={() => !isResettingPassword && setIsResetPasswordModalOpen(false)} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px', padding: '1.75rem' }}>
+            <button className="modal-close" disabled={isResettingPassword} onClick={() => setIsResetPasswordModalOpen(false)}><X size={18} /></button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.15)',
+                color: '#F59E0B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Key size={22} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
+                  تغيير كلمة مرور الطالب
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  تعيين كلمة مرور جديدة لحساب الطالب مباشرة
+                </span>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--card-bg, rgba(255,255,255,0.03))', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.85rem 1rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>اسم الطالب:</span>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-bright)' }}>{resetPasswordStudent.FullName}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>كود الطالب:</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--primary-light)', fontFamily: 'monospace', fontWeight: 700 }}>
+                  {resetPasswordStudent.StudentCode || (resetPasswordStudent as any)?.studentCode || (resetPasswordStudent as any)?.code || '—'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>رقم الهاتف:</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{resetPasswordStudent.Phone}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>
+                  كلمة المرور الجديدة *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showNewPasswordText ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    placeholder="أدخل كلمة المرور الجديدة (6 أحرف على الأقل)..."
+                    className="input-field"
+                    style={{ width: '100%', paddingLeft: '40px' }}
+                    value={newStudentPassword}
+                    onChange={e => setNewStudentPassword(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPasswordText(!showNewPasswordText)}
+                    style={{
+                      position: 'absolute',
+                      left: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title={showNewPasswordText ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  >
+                    {showNewPasswordText ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
+                  سيتم تغيير كلمة المرور فورياً عبر النظام ولن يتمكن الطالب من الدخول بكلمة المرور القديمة.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={isResettingPassword}
+                  style={{ flex: 1 }}
+                  onClick={() => setIsResetPasswordModalOpen(false)}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isResettingPassword || !newStudentPassword.trim() || newStudentPassword.trim().length < 6}
+                  style={{ flex: 2, background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderColor: '#D97706' }}
+                >
+                  {isResettingPassword ? 'جاري التحديث...' : 'تأكيد تغيير كلمة المرور'}
                 </button>
               </div>
             </form>
@@ -4983,9 +5401,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
 
       {/* ── MODAL: CREATE EXAM WITH AI ───────────────────────── */}
       {isCreateAIExamOpen && createPortal(
-        <div className="modal-overlay active" style={{ zIndex: 99999 }}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '620px', padding: '1.75rem', maxHeight: '92vh', overflowY: 'auto' }}>
-            <button className="modal-close" onClick={() => setIsCreateAIExamOpen(false)}><X size={18} /></button>
+        <div className="modal-overlay active" onClick={() => !isGeneratingAIExam && handleCloseAIExamModal()} style={{ zIndex: 99999 }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px', padding: '1.75rem', maxHeight: '92vh', overflowY: 'auto' }}>
+            <button className="modal-close" disabled={isGeneratingAIExam} onClick={handleCloseAIExamModal}><X size={18} /></button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
               <div style={{
@@ -4998,229 +5416,512 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               </div>
               <div>
                 <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-bright)', margin: 0 }}>
-                  توليد امتحان بالذكاء الاصطناعي (AI Exam Generator)
+                  توليد امتحان بالذكاء الاصطناعي (AI MCQ Generation)
                 </h2>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  ارفع ملف الشرح أو بنك الأسئلة وسيتكفل الـ AI باستخراج الأسئلة وتوليد الخيارات تلقائياً
+                  ارفع ملف الشرح (PDF) وسيتكفل الـ AI باستخراج وتوليد أسئلة الاختيار من متعدد وربطها بالاختبار فورياً
                 </span>
               </div>
             </div>
 
-            <form onSubmit={handleGenerateAIExam} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عنوان الاختبار *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: اختبار تفاعلي ذكي على الدرس الثاني"
-                  className="input-field"
-                  style={{ width: '100%' }}
-                  value={aiExamForm.title}
-                  onChange={e => setAiExamForm({ ...aiExamForm, title: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الكورس التابع له الاختبار *</label>
-                <select
-                  className="input-field"
-                  style={{ width: '100%' }}
-                  value={aiExamForm.courseId}
-                  onChange={e => setAiExamForm({ ...aiExamForm, courseId: e.target.value })}
-                  required
-                >
-                  <option value="">اختر الكورس...</option>
-                  {realCourses.map(c => (
-                    <option key={c._id} value={c._id}>{c.Title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            {/* ── STEP 1: FORM INPUTS (IDLE STATE) ── */}
+            {aiGenerationStep === 'idle' && (
+              <form onSubmit={handleGenerateAIExam} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>مدة الاختبار (بالدقائق)</label>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عنوان الاختبار *</label>
                   <input
-                    type="number"
+                    type="text"
                     required
-                    min={1}
+                    placeholder="مثال: اختبار ذكي على الفصل الأول - فيزياء الحركة"
                     className="input-field"
                     style={{ width: '100%' }}
-                    value={aiExamForm.durationMinutes}
-                    onChange={e => setAiExamForm({ ...aiExamForm, durationMinutes: Number(e.target.value) })}
+                    value={aiExamForm.title}
+                    onChange={e => setAiExamForm({ ...aiExamForm, title: e.target.value })}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>درجة النجاح</label>
-                  <input
-                    type="number"
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>الكورس التابع له الاختبار *</label>
+                  <select
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    value={aiExamForm.courseId}
+                    onChange={e => setAiExamForm({ ...aiExamForm, courseId: e.target.value })}
                     required
-                    min={0}
-                    className="input-field"
-                    style={{ width: '100%' }}
-                    value={aiExamForm.passingScore}
-                    onChange={e => setAiExamForm({ ...aiExamForm, passingScore: Number(e.target.value) })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عدد الأسئلة المطلوبة</label>
-                  <select
-                    className="input-field"
-                    style={{ width: '100%' }}
-                    value={aiExamForm.questionsCount}
-                    onChange={e => setAiExamForm({ ...aiExamForm, questionsCount: Number(e.target.value) })}
                   >
-                    <option value={5}>5 أسئلة (اختبار سريع)</option>
-                    <option value={10}>10 أسئلة (اختبار درس)</option>
-                    <option value={15}>15 سؤالاً (اختبار وحدة)</option>
-                    <option value={20}>20 سؤالاً (اختبار شامل)</option>
-                    <option value={30}>30 سؤالاً (نموذج محاكاة للثانوية)</option>
+                    <option value="">اختر الكورس...</option>
+                    {realCourses.map(c => (
+                      <option key={c._id} value={c._id}>{c.Title}</option>
+                    ))}
                   </select>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>نوع الأسئلة المستخرجة</label>
-                  <select
-                    className="input-field"
-                    style={{ width: '100%' }}
-                    value={aiExamForm.questionType}
-                    onChange={e => setAiExamForm({ ...aiExamForm, questionType: e.target.value })}
-                  >
-                    <option value="MCQ">اختيار من متعدد (MCQ)</option>
-                    <option value="TrueFalse">صواب وخطأ (True/False)</option>
-                    <option value="Mixed">تشكيلة مختلطة (MCQ + مقالي)</option>
-                  </select>
-                </div>
-              </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>عدد الأسئلة (1 - 50) *</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={50}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                      value={aiExamForm.requestedCount}
+                      onChange={e => setAiExamForm({ ...aiExamForm, requestedCount: Math.min(Math.max(Number(e.target.value) || 1, 1), 50) })}
+                    />
+                  </div>
 
-              {/* File Upload Zone */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                  ملف الشرح أو بنك الأسئلة (PDF, Word, TXT, صور)
-                </label>
-                <div
-                  style={{
-                    border: '2px dashed rgba(139, 92, 246, 0.4)',
-                    borderRadius: '10px',
-                    padding: '1.25rem',
-                    textAlign: 'center',
-                    background: 'rgba(139, 92, 246, 0.04)',
-                    cursor: 'pointer',
-                    position: 'relative',
-                  }}
-                  onClick={() => document.getElementById('ai-file-input')?.click()}
-                >
-                  <input
-                    id="ai-file-input"
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt,image/*"
-                    style={{ display: 'none' }}
-                    onChange={e => {
-                      if (e.target.files && e.target.files[0]) {
-                        setAiExamFile(e.target.files[0]);
-                      }
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>مدة الاختبار (بالدقائق)</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                      value={aiExamForm.durationMinutes}
+                      onChange={e => setAiExamForm({ ...aiExamForm, durationMinutes: Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>درجة النجاح</label>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                      value={aiExamForm.passingScore}
+                      onChange={e => setAiExamForm({ ...aiExamForm, passingScore: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+
+                {/* File Upload Zone for PDF */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                    ملف الشرح أو الأسئلة (PDF Document) *
+                  </label>
+                  <div
+                    style={{
+                      border: '2px dashed rgba(139, 92, 246, 0.45)',
+                      borderRadius: '10px',
+                      padding: '1.4rem',
+                      textAlign: 'center',
+                      background: 'rgba(139, 92, 246, 0.04)',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      transition: 'border-color 0.2s',
                     }}
-                  />
-                  {aiExamFile ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                      <FileText size={20} color="#A78BFA" />
-                      <span style={{ fontWeight: 700, color: 'var(--text-bright)', fontSize: '0.9rem' }}>{aiExamFile.name}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({(aiExamFile.size / 1024).toFixed(1)} KB)</span>
-                      <button
-                        type="button"
-                        onClick={(ev) => { ev.stopPropagation(); setAiExamFile(null); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0 4px' }}
-                        title="إزالة الملف"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <FileText size={28} color="#A78BFA" style={{ margin: '0 auto 0.4rem', opacity: 0.8 }} />
-                      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-bright)' }}>اضغط هنا لاختيار ملف أو قم بسحبه وإفلاته</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>يدعم ملفات PDF، Word، Text، أو صور المسائل الرياضية</div>
-                    </div>
-                  )}
+                    onClick={() => document.getElementById('ai-file-input')?.click()}
+                  >
+                    <input
+                      id="ai-file-input"
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      style={{ display: 'none' }}
+                      onChange={e => {
+                        if (e.target.files && e.target.files[0]) {
+                          setAiExamFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    {aiExamFile ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
+                        <FileText size={22} color="#A78BFA" />
+                        <span style={{ fontWeight: 700, color: 'var(--text-bright)', fontSize: '0.92rem' }}>{aiExamFile.name}</span>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>({(aiExamFile.size / 1024).toFixed(1)} KB)</span>
+                        <button
+                          type="button"
+                          onClick={(ev) => { ev.stopPropagation(); setAiExamFile(null); }}
+                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0 4px' }}
+                          title="إزالة الملف"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <FileText size={32} color="#A78BFA" style={{ margin: '0 auto 0.4rem', opacity: 0.85 }} />
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-bright)' }}>اضغط هنا لاختيار ملف PDF أو قم بسحبه وإفلاته</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>يقبل مستندات PDF لشرح الدروس أو بنوك الأسئلة للمنهج الدراسي</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Optional Text Prompt */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
-                  أو الصق نص الشرح أو الأسئلة يدوياً هنا:
-                </label>
-                <textarea
-                  className="input-field"
-                  rows={3}
-                  placeholder="يمكنك لصق مسائل محددة، نظريات، أو شرح الدرس هنا ليقوم الذكاء الاصطناعي بصياغة الامتحان منها مباشرة..."
-                  style={{ width: '100%', resize: 'vertical', fontSize: '0.85rem' }}
-                  value={aiExamForm.textPrompt}
-                  onChange={e => setAiExamForm({ ...aiExamForm, textPrompt: e.target.value })}
-                />
-              </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                      ملاحظات وتوجيهات للـ AI (Notes - اختياري)
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="مثال: Focus on chapter 3 / التركيز على قوانين نيوتن"
+                      style={{ width: '100%', fontSize: '0.82rem' }}
+                      value={aiExamForm.notes}
+                      onChange={e => setAiExamForm({ ...aiExamForm, notes: e.target.value })}
+                    />
+                  </div>
 
-              <div style={{
-                background: 'rgba(139, 92, 246, 0.08)',
-                border: '1px solid rgba(139, 92, 246, 0.25)',
-                borderRadius: '8px',
-                padding: '0.75rem 1rem',
-                fontSize: '0.8rem',
-                color: 'var(--text-muted)',
-                lineHeight: 1.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
-              }}>
-                <Lightbulb size={16} color="#A78BFA" style={{ flexShrink: 0 }} />
-                <span>سيقوم الذكاء الاصطناعي بتحليل الملف واستخراج الأسئلة وخيارات الإجابة تلقائياً وحفظها في بنك أسئلة الاختبار فوراً.</span>
-              </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+                      أفكار وصياغة الأسئلة (Ideas - اختياري)
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="مثال: Include trick questions / تنوع في الصعوبة"
+                      style={{ width: '100%', fontSize: '0.82rem' }}
+                      value={aiExamForm.ideas}
+                      onChange={e => setAiExamForm({ ...aiExamForm, ideas: e.target.value })}
+                    />
+                  </div>
+                </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                {/* Advanced UploadId Fallback/Override */}
+                <details style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  <summary style={{ cursor: 'pointer', userSelect: 'none', color: 'var(--primary-light)', fontWeight: 600 }}>
+                    إعدادات متقدمة (تخصيص UploadId يدوياً)
+                  </summary>
+                  <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--card-bg, rgba(255,255,255,0.03))', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                      معرف المستند في قاعدة البيانات (UploadId ObjectId)
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="اتركه فارغاً ليتم استخدام معرّف الملف المرفوع تلقائياً..."
+                      style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace' }}
+                      value={aiExamForm.manualUploadId}
+                      onChange={e => setAiExamForm({ ...aiExamForm, manualUploadId: e.target.value })}
+                    />
+                  </div>
+                </details>
+
+                <div style={{
+                  background: 'rgba(139, 92, 246, 0.08)',
+                  border: '1px solid rgba(139, 92, 246, 0.25)',
+                  borderRadius: '8px',
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.8rem',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <Lightbulb size={16} color="#A78BFA" style={{ flexShrink: 0 }} />
+                  <span>سيتم رفع ملف الـ PDF كمسار ذكاء اصطناعي، وإنشاء مسودة الاختبار تلقائياً، ومتابعة توليد الأسئلة خطوة بخطوة.</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={handleCloseAIExamModal}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn"
+                    disabled={!aiExamFile && !aiExamForm.manualUploadId.trim()}
+                    style={{
+                      flex: 2,
+                      background: 'linear-gradient(135deg, #8B5CF6, #0891B2)',
+                      color: '#FFF',
+                      border: 'none',
+                      fontWeight: 700,
+                      padding: '0.75rem',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: (!aiExamFile && !aiExamForm.manualUploadId.trim()) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      opacity: (!aiExamFile && !aiExamForm.manualUploadId.trim()) ? 0.6 : 1,
+                    }}
+                  >
+                    <Sparkles size={16} />
+                    <span>بدء توليد الاختبار بالذكاء الاصطناعي</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── STEP 2: LIVE PROGRESS & POLLING PANEL ── */}
+            {(aiGenerationStep === 'uploading' ||
+              aiGenerationStep === 'creating_exam' ||
+              aiGenerationStep === 'starting_generation' ||
+              aiGenerationStep === 'polling') && (
+              <div style={{ padding: '1.5rem 0.5rem', textAlign: 'center' }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  border: '2px solid rgba(139, 92, 246, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1.25rem',
+                  position: 'relative'
+                }}>
+                  <RefreshCw size={28} color="#A78BFA" className="spin" />
+                </div>
+
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.4rem' }}>
+                  {aiGenerationStep === 'uploading' && 'جاري رفع ملف المستند (PDF) إلى السيرفر...'}
+                  {aiGenerationStep === 'creating_exam' && 'جاري تهيئة مسودة الاختبار في النظام...'}
+                  {aiGenerationStep === 'starting_generation' && 'جاري جدولة مهمة الذكاء الاصطناعي في طابور المعالجة...'}
+                  {aiGenerationStep === 'polling' && (
+                    aiGenerationStatus === 'Queued'
+                      ? 'مهمة التوليد في قائمة الانتظار بالسيرفر (Queued)...'
+                      : 'جاري قراءة الملف وتوليد الأسئلة والخيارات بالـ AI (Processing)...'
+                  )}
+                </h3>
+
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                  الوقت المستغرق: <strong style={{ color: 'var(--text-bright)', fontFamily: 'monospace' }}>{aiElapsedSeconds} ثانية</strong> • يتم التحقق دورياً كل 3 ثوانٍ
+                </p>
+
+                {/* Visual Step Tracker */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.65rem',
+                  maxWidth: '440px',
+                  margin: '0 auto 1.5rem',
+                  textAlign: 'right'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem' }}>
+                    {aiGenerationStep !== 'uploading' ? (
+                      <CheckCircle2 size={18} color="#10B981" />
+                    ) : (
+                      <RefreshCw size={16} color="#A78BFA" className="spin" />
+                    )}
+                    <span style={{ color: aiGenerationStep !== 'uploading' ? 'var(--text-bright)' : '#A78BFA', fontWeight: 600 }}>
+                      1. رفع ملف الـ PDF كمسار ذكاء اصطناعي (AIGenerationDocument)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem' }}>
+                    {aiGenerationStep === 'starting_generation' || aiGenerationStep === 'polling' ? (
+                      <CheckCircle2 size={18} color="#10B981" />
+                    ) : aiGenerationStep === 'creating_exam' ? (
+                      <RefreshCw size={16} color="#A78BFA" className="spin" />
+                    ) : (
+                      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border-color)' }} />
+                    )}
+                    <span style={{ color: aiGenerationStep === 'starting_generation' || aiGenerationStep === 'polling' ? 'var(--text-bright)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      2. إنشاء مسودة الاختبار في الكورس (Draft Exam)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem' }}>
+                    {aiGenerationStep === 'polling' ? (
+                      <CheckCircle2 size={18} color="#10B981" />
+                    ) : aiGenerationStep === 'starting_generation' ? (
+                      <RefreshCw size={16} color="#A78BFA" className="spin" />
+                    ) : (
+                      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border-color)' }} />
+                    )}
+                    <span style={{ color: aiGenerationStep === 'polling' ? 'var(--text-bright)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      3. إرسال طلب التوليد وبدء مهمة المعالجة (POST /ai/generations)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem' }}>
+                    {aiGenerationStep === 'polling' ? (
+                      <RefreshCw size={16} color="#A78BFA" className="spin" />
+                    ) : (
+                      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border-color)' }} />
+                    )}
+                    <span style={{ color: aiGenerationStep === 'polling' ? '#A78BFA' : 'var(--text-muted)', fontWeight: 700 }}>
+                      4. استخراج وتوليد أسئلة الـ MCQ وربطها بالاختبار ({aiGenerationStatus || 'Queued'})
+                    </span>
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => setIsCreateAIExamOpen(false)}
+                  onClick={handleCloseAIExamModal}
+                  style={{ fontSize: '0.82rem' }}
                 >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="btn"
-                  disabled={isGeneratingAIExam || (!aiExamFile && !aiExamForm.textPrompt.trim())}
-                  style={{
-                    flex: 2,
-                    background: 'linear-gradient(135deg, #8B5CF6, #0891B2)',
-                    color: '#FFF',
-                    border: 'none',
-                    fontWeight: 700,
-                    padding: '0.7rem',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: isGeneratingAIExam ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                >
-                  {isGeneratingAIExam ? (
-                    <>
-                      <RefreshCw size={16} className="spin" />
-                      <span>جاري معالجة الملف وتوليد الأسئلة...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={16} />
-                      <span>توليد ونشر الامتحان بالـ AI</span>
-                    </>
-                  )}
+                  متابعة في الخلفية وإغلاق النافذة
                 </button>
               </div>
-            </form>
+            )}
+
+            {/* ── STEP 3: COMPLETED SUCCESS SCREEN ── */}
+            {aiGenerationStep === 'completed' && (
+              <div style={{ padding: '1.25rem 0.5rem', textAlign: 'center' }}>
+                <div style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10B981',
+                  border: '2px solid rgba(16, 185, 129, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1rem'
+                }}>
+                  <CheckCircle2 size={32} />
+                </div>
+
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-bright)', marginBottom: '0.35rem' }}>
+                  تم توليد الامتحان والأسئلة بنجاح!
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                  قام الذكاء الاصطناعي باستخراج الأسئلة وتحديد الإجابات الصحيحة وربطها باختبار المسودة في النظام.
+                </p>
+
+                <div style={{
+                  background: 'var(--card-bg, rgba(255,255,255,0.03))',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  padding: '1rem 1.25rem',
+                  maxWidth: '460px',
+                  margin: '0 auto 1.5rem',
+                  textAlign: 'right'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>عنوان الاختبار:</span>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-bright)' }}>{createdAIExam?.Title || aiExamForm.title}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>عدد الأسئلة المولدة:</span>
+                    <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 700 }}>{aiGeneratedQuestionsCount} أسئلة MCQ</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>حالة الاختبار الحالية:</span>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.5rem',
+                      borderRadius: '6px',
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: '#F59E0B'
+                    }}>
+                      مسودة (Draft) - جاهز للمراجعة
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>مدة الاختبار:</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{createdAIExam?.DurationMinutes || aiExamForm.durationMinutes} دقيقة</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', maxWidth: '460px', margin: '0 auto', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ flex: 1, minWidth: '160px', background: 'linear-gradient(135deg, #8B5CF6, #0891B2)' }}
+                    onClick={() => {
+                      if (createdAIExam) {
+                        handleCloseAIExamModal();
+                        handleOpenQuestionsModal(createdAIExam);
+                      }
+                    }}
+                  >
+                    <ListOrdered size={16} /> مراجعة وتعديل الأسئلة
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ flex: 1, minWidth: '160px', background: 'linear-gradient(135deg, #10B981, #059669)' }}
+                    onClick={async () => {
+                      if (createdAIExam) {
+                        handleCloseAIExamModal();
+                        await handleUpdateExamStatus(createdAIExam, 'Published');
+                      }
+                    }}
+                  >
+                    <Sparkles size={16} /> نشر الاختبار للطلاب الآن
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%' }}
+                    onClick={handleCloseAIExamModal}
+                  >
+                    إغلاق
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── STEP 4: FAILED ERROR SCREEN ── */}
+            {aiGenerationStep === 'failed' && (
+              <div style={{ padding: '1.25rem 0.5rem', textAlign: 'center' }}>
+                <div style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  color: 'var(--danger)',
+                  border: '2px solid rgba(239, 68, 68, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 1rem'
+                }}>
+                  <AlertTriangle size={32} />
+                </div>
+
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--danger)', marginBottom: '0.35rem' }}>
+                  تعذر استكمال توليد الاختبار بالذكاء الاصطناعي
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                  حدث خطأ أثناء معالجة المستند أو توليد الأسئلة من السيرفر.
+                </p>
+
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '0.85rem 1rem',
+                  fontSize: '0.82rem',
+                  color: 'var(--danger)',
+                  maxWidth: '460px',
+                  margin: '0 auto 1.5rem',
+                  lineHeight: 1.5
+                }}>
+                  {aiGenerationError || 'خطأ غير محدد، يرجى مراجعة إعدادات المستند والمحاولة لاحقاً.'}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', maxWidth: '460px', margin: '0 auto' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={handleCloseAIExamModal}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ flex: 2, background: 'linear-gradient(135deg, #8B5CF6, #0891B2)' }}
+                    onClick={() => {
+                      setAiGenerationStep('idle');
+                      setAiGenerationError('');
+                    }}
+                  >
+                    <RotateCcw size={15} /> تعديل وإعادة المحاولة
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body
