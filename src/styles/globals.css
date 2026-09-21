@@ -1677,57 +1677,108 @@ button.footer-link {
 .user-table-wrapper {
   overflow-x: auto;
   border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.08));
+  background: var(--bg-surface, #0d1e24);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
 }
 
 .user-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  min-width: 900px;
+  min-width: 980px;
 }
 
 .user-table thead tr {
-  background: var(--bg-surface-elevated);
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--border-glass, rgba(255, 255, 255, 0.08));
 }
 
-.user-table th,
-.user-table td {
-  padding: 0.9rem 1rem;
+.user-table th {
+  padding: 0.85rem 1rem;
   text-align: right;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
-.user-table th { border-bottom: 1px solid var(--border-glass); }
-
-.user-table tbody tr { border-bottom: 1px solid var(--border-glass); transition: background var(--transition-fast); }
-.user-table tbody tr:nth-child(even) { background: rgba(45, 74, 83, 0.15); }
-[data-theme="light"] .user-table tbody tr:nth-child(even) { background: rgba(15, 23, 42, 0.02); }
-.user-table tbody tr:hover { background: rgba(8, 145, 178, 0.08); }
-
-.user-table-avatar {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--border-glass);
+.user-table td {
+  padding: 0.75rem 1rem;
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.user-actions-cell { display: flex; gap: 0.4rem; align-items: center; }
+.user-table tbody tr {
+  transition: background 0.15s ease;
+}
 
-.action-btn {
-  padding: 0.3rem 0.65rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition: all var(--transition-fast);
+.user-table tbody tr:hover {
+  background: rgba(8, 145, 178, 0.05);
+}
+
+.table-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
 }
+.table-action-btn:hover {
+  transform: translateY(-1px);
+}
+.table-action-btn.edit:hover {
+  color: var(--primary-light, #0891B2);
+  background: rgba(8, 145, 178, 0.15);
+  border-color: rgba(8, 145, 178, 0.4);
+}
+.table-action-btn.key:hover {
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.table-action-btn.gift:hover {
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.table-action-btn.zap:hover {
+  color: #A78BFA;
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+.table-action-btn.shield:hover {
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.table-action-btn.status:hover {
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.table-action-btn.status-blocked:hover {
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.table-action-btn.danger:hover {
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+ 
 
 .status-badge {
   display: inline-flex; align-items: center; gap: 0.3rem;

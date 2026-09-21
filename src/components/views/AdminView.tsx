@@ -392,6 +392,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
     }
   };
 
+  const getInitials = (name?: string): string => {
+    if (!name) return 'ط';
+    const clean = name.trim();
+    const parts = clean.split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return clean.slice(0, 2).toUpperCase();
+  };
+
+  const getAvatarGradient = (str?: string): string => {
+    const gradients = [
+      'linear-gradient(135deg, #0891B2, #0E7490)',
+      'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+      'linear-gradient(135deg, #F59E0B, #D97706)',
+      'linear-gradient(135deg, #10B981, #047857)',
+      'linear-gradient(135deg, #EC4899, #BE185D)',
+      'linear-gradient(135deg, #3B82F6, #1D4ED8)',
+    ];
+    if (!str) return gradients[0];
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return gradients[Math.abs(hash) % gradients.length];
+  };
+
   const formatStudentStageAndGrade = (student: AdminStudent): string => {
     const stage = normalizeStage(student.EducationStage || (student as any).educationStage || (student.academicYear ? 'Secondary' : ''));
     const grade = normalizeGrade(student.Grade || (student as any).grade || (student.academicYear === 'first_secondary' ? '1' : student.academicYear === 'second_secondary' ? '2' : student.academicYear === 'third_secondary' ? '3' : ''));
@@ -2551,6 +2578,154 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
             </button>
           </div>
 
+          {/* Quick Metrics Bar */}
+          {(() => {
+            const studentSource = allStudents.length ? allStudents : realStudents;
+            const totalCount = studentSource.length;
+            const activeCount = studentSource.filter(s => s.Status === 'Active').length;
+            const compCount = comprehensiveStudentIds.size;
+            const enrolledCount = studentSource.filter(s => !!s.isSubscribed || enrolledStudentIds.has(s._id) || comprehensiveStudentIds.has(s._id)).length;
+
+            return (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '1rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <div
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(8, 145, 178, 0.25)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '10px',
+                      background: 'rgba(8, 145, 178, 0.15)',
+                      color: 'var(--primary-light)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>إجمالي الطلاب</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-bright)' }}>{totalCount}</div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '10px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10B981',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>الحسابات النشطة</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10B981' }}>{activeCount}</div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '10px',
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: '#F59E0B',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>اشتراك شامل</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#F59E0B' }}>{compCount}</div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(139, 92, 246, 0.25)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '10px',
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      color: '#A78BFA',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>مسجلون بكورسات</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#A78BFA' }}>{enrolledCount}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Search & Filter Toolbar */}
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
@@ -2662,15 +2837,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
               <table className="user-table">
                 <thead>
                   <tr>
-                    <th>كود الطالب</th>
-                    <th>اسم الطالب</th>
-                    <th>المرحلة والصف الدراسي</th>
-                    <th>الهاتف</th>
-                    <th>هاتف ولي الأمر</th>
-                    <th>الاشتراك</th>
-                    <th>الدور</th>
-                    <th>الحالة</th>
-                    <th>الإجراءات</th>
+                    <th style={{ width: '24%' }}>الطالب وكود القيد</th>
+                    <th style={{ width: '16%' }}>المرحلة والصف الدراسي</th>
+                    <th style={{ width: '13%' }}>رقم الهاتف</th>
+                    <th style={{ width: '13%' }}>هاتف ولي الأمر</th>
+                    <th style={{ width: '12%' }}>الاشتراك</th>
+                    <th style={{ width: '10%' }}>الحساب والدور</th>
+                    <th style={{ width: '12%', textAlign: 'center' }}>الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2684,63 +2857,124 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                     return (
                       <tr key={student._id}>
                         <td>
-                          <span
-                            style={{
-                              fontFamily: 'monospace',
-                              fontWeight: 700,
-                              fontSize: '0.82rem',
-                              color: 'var(--primary-light)',
-                              background: 'rgba(8, 145, 178, 0.1)',
-                              padding: '0.2rem 0.55rem',
-                              borderRadius: '6px',
-                              border: '1px solid rgba(8, 145, 178, 0.25)',
-                              letterSpacing: '0.05em',
-                              display: 'inline-block',
-                            }}
-                          >
-                            {studentCode}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div
+                              style={{
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '50%',
+                                background: getAvatarGradient(student.FullName || student._id),
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#FFFFFF',
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                letterSpacing: '0.5px',
+                                flexShrink: 0,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                              }}
+                            >
+                              {getInitials(student.FullName)}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: 0 }}>
+                              <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {student.FullName}
+                              </strong>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontWeight: 700,
+                                    fontSize: '0.72rem',
+                                    color: 'var(--primary-light)',
+                                    background: 'rgba(8, 145, 178, 0.12)',
+                                    padding: '0.1rem 0.45rem',
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(8, 145, 178, 0.25)',
+                                    letterSpacing: '0.04em',
+                                    display: 'inline-block',
+                                  }}
+                                >
+                                  {studentCode}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
                         </td>
                         <td>
-                          <strong style={{ fontSize: '0.9rem', color: 'var(--text-bright)' }}>{student.FullName}</strong>
-                        </td>
-                        <td>
                           <span
                             style={{
-                              fontSize: '0.8rem',
+                              fontSize: '0.78rem',
                               fontWeight: 700,
                               color: 'var(--text-bright)',
                               background: 'rgba(8, 145, 178, 0.08)',
-                              padding: '0.2rem 0.55rem',
+                              padding: '0.25rem 0.6rem',
                               borderRadius: '6px',
                               border: '1px solid rgba(8, 145, 178, 0.2)',
-                              display: 'inline-block',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
                               whiteSpace: 'nowrap',
                             }}
                           >
+                            <GraduationCap size={13} color="var(--primary-light)" />
                             {formatStudentStageAndGrade(student)}
                           </span>
                         </td>
-                        <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.Phone}</td>
-                        <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.ParentPhone || '—'}</td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              fontSize: '0.82rem',
+                              color: 'var(--text-muted)',
+                              fontFamily: 'monospace',
+                            }}
+                          >
+                            <Phone size={12} color="var(--primary-light)" style={{ opacity: 0.8 }} />
+                            {student.Phone}
+                          </span>
+                        </td>
+                        <td>
+                          {student.ParentPhone ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                fontSize: '0.82rem',
+                                color: 'var(--text-muted)',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              <Users size={12} style={{ opacity: 0.6 }} />
+                              {student.ParentPhone}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>—</span>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                             {isComp ? (
                               <span
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '0.25rem',
-                                  padding: '0.2rem 0.65rem',
+                                  padding: '0.2rem 0.6rem',
                                   borderRadius: '9999px',
-                                  fontSize: '0.75rem',
+                                  fontSize: '0.74rem',
                                   fontWeight: 800,
                                   background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(16, 185, 129, 0.2))',
                                   color: '#F59E0B',
                                   border: '1px solid rgba(245, 158, 11, 0.4)',
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
-                                <Sparkles size={12} color="#F59E0B" /> مشترك شامل
+                                <Sparkles size={11} color="#F59E0B" /> شامل
                               </span>
                             ) : isSub ? (
                               <span
@@ -2748,16 +2982,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '0.25rem',
-                                  padding: '0.2rem 0.6rem',
+                                  padding: '0.2rem 0.55rem',
                                   borderRadius: '9999px',
-                                  fontSize: '0.75rem',
+                                  fontSize: '0.74rem',
                                   fontWeight: 700,
                                   background: 'rgba(16, 185, 129, 0.15)',
                                   color: '#10B981',
                                   border: '1px solid rgba(16, 185, 129, 0.3)',
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
-                                <CheckCircle2 size={12} /> مشترك
+                                <CheckCircle2 size={11} /> مشترك
                               </span>
                             ) : (
                               <span
@@ -2765,125 +3000,129 @@ export const AdminView: React.FC<AdminViewProps> = ({ onNavigateView }) => {
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '0.25rem',
-                                  padding: '0.2rem 0.6rem',
+                                  padding: '0.2rem 0.55rem',
                                   borderRadius: '9999px',
-                                  fontSize: '0.75rem',
+                                  fontSize: '0.74rem',
                                   fontWeight: 700,
-                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  background: 'rgba(239, 68, 68, 0.12)',
                                   color: '#EF4444',
-                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
-                                <XCircle size={12} /> غير مشترك
+                                <XCircle size={11} /> غير مشترك
                               </span>
                             )}
                             <button
                               type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.2rem 0.55rem', fontSize: '0.7rem' }}
+                              className="table-action-btn zap"
+                              style={{ width: '28px', height: '28px' }}
                               onClick={() => handleToggleSubscription(student)}
                               title={isSub ? 'إلغاء الاشتراك' : 'تفعيل الاشتراك لكافة كورسات سنته الدراسية'}
                             >
-                              {isSub ? 'إلغاء' : <><Zap size={11} color="#F59E0B" /> تفعيل</>}
+                              <Zap size={13} color={isSub ? 'var(--text-muted)' : '#F59E0B'} fill={isSub ? 'none' : '#F59E0B'} />
                             </button>
                           </div>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.25rem',
-                                padding: '0.2rem 0.6rem',
-                                borderRadius: '9999px',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                background: isAdmin ? 'rgba(245, 158, 11, 0.15)' : 'rgba(8, 145, 178, 0.15)',
-                                color: isAdmin ? '#F59E0B' : 'var(--primary-light)',
-                                border: `1px solid ${isAdmin ? 'rgba(245, 158, 11, 0.3)' : 'rgba(8, 145, 178, 0.3)'}`,
-                              }}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span
+                                style={{
+                                  width: '7px',
+                                  height: '7px',
+                                  borderRadius: '50%',
+                                  backgroundColor: isActive ? '#10B981' : '#EF4444',
+                                  boxShadow: isActive ? '0 0 6px #10B981' : '0 0 6px #EF4444',
+                                  display: 'inline-block',
+                                }}
+                              />
+                              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: isActive ? '#10B981' : '#EF4444' }}>
+                                {isActive ? 'نشط' : student.Status || 'محظور'}
+                              </span>
+                            </div>
+                            <div>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem',
+                                  padding: '0.12rem 0.45rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 700,
+                                  background: isAdmin ? 'rgba(245, 158, 11, 0.12)' : 'rgba(8, 145, 178, 0.1)',
+                                  color: isAdmin ? '#F59E0B' : 'var(--primary-light)',
+                                  border: `1px solid ${isAdmin ? 'rgba(245, 158, 11, 0.3)' : 'rgba(8, 145, 178, 0.2)'}`,
+                                }}
+                              >
+                                {isAdmin ? <><Crown size={10} color="#F59E0B" /> مدير</> : 'طالب'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
+                            <button
+                              type="button"
+                              className="table-action-btn gift"
+                              onClick={() => handleOpenManualEnroll(student)}
+                              title="منح حق الوصول لكورس (AdminGift)"
                             >
-                              {isAdmin ? (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                  <Crown size={12} color="#F59E0B" /> مدير
-                                </span>
-                              ) : 'طالب'}
-                            </span>
+                              <BookOpen size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="table-action-btn edit"
+                              onClick={() => handleOpenEditStudent(student)}
+                              title="تعديل بيانات الطالب ورقم الهاتف"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="table-action-btn key"
+                              onClick={() => handleOpenResetPasswordModal(student)}
+                              title="تغيير كلمة مرور الطالب"
+                            >
+                              <Key size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className={`table-action-btn ${isActive ? 'status-blocked' : 'status'}`}
+                              onClick={() => handleToggleStudentStatus(student)}
+                              title={isActive ? 'حظر الحساب' : 'تفعيل الحساب'}
+                            >
+                              {isActive ? <Ban size={14} /> : <CheckCircle2 size={14} />}
+                            </button>
                             {isSuperAdmin && (
                               !isAdmin ? (
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+                                  className="table-action-btn shield"
                                   onClick={() => handleOpenPromoteModal(student)}
                                   title="ترقية الطالب إلى مدير (SuperAdmin only)"
                                 >
-                                  <Shield size={11} /> ترقية لمدير
+                                  <Shield size={14} />
                                 </button>
                               ) : (
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                                  className="table-action-btn shield"
                                   onClick={() => handleToggleRole(student)}
                                   title="تحويل لحساب طالب"
                                 >
-                                  تحويل لطالب
+                                  <Crown size={14} />
                                 </button>
                               )
                             )}
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`status-badge ${isActive ? 'status-badge--active' : 'status-badge--blocked'}`}>
-                            {isActive ? 'نشط (Active)' : student.Status}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                             <button
                               type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#10B981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
-                              onClick={() => handleOpenManualEnroll(student)}
-                              title="منح حق الوصول لكورس (AdminGift)"
-                            >
-                              <BookOpen size={13} /> منح كورس
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                              onClick={() => handleOpenEditStudent(student)}
-                              title="تعديل بيانات الطالب ورقم الهاتف"
-                            >
-                              <Edit3 size={13} color="var(--primary-light)" /> تعديل
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#F59E0B', borderColor: 'rgba(245, 158, 11, 0.35)' }}
-                              onClick={() => handleOpenResetPasswordModal(student)}
-                              title="تغيير كلمة مرور الطالب"
-                            >
-                              <Key size={13} color="#F59E0B" /> كلمة المرور
-                            </button>
-                            <button
-                              type="button"
-                              className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'}`}
-                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
-                              onClick={() => handleToggleStudentStatus(student)}
-                            >
-                              {isActive ? <><Ban size={13} color="var(--danger)" /> حظر</> : <><CheckCircle2 size={13} color="#10B981" /> تفعيل</>}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)' }}
+                              className="table-action-btn danger"
                               onClick={() => handleDeleteStudent(student)}
+                              title="حذف الطالب نهائياً"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </td>
